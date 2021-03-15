@@ -38,12 +38,12 @@ srcdir = .
 include $(top_srcdir)/build/var.mk
 
 PROGRAM = pip-exec
-PROGRAMS = $(PROGRAM) printpipmode pip_unpie pipcc pipfc
+PROGRAMS = $(PROGRAM) printpipmode pip_unpie pipcc pipfc pip-tgkill
 PROGRAMS_TO_INSTALL = $(PROGRAMS) pip-mode pip-check pip-man pips 
 EXTRA_PROGRAMS = pip-exec.to-install printpipmode.to-install
 
 MAN1_SRCS = pip-exec.c pipcc pipfc pip-mode.in pip-check.in pip-man.in \
-	pips-doxygen.c printpipmode.c
+	pips-doxygen.c printpipmode.c 
 
 CPPFLAGS += $(PIP_CPPFLAGS) $(DBGFLAG)
 
@@ -84,6 +84,9 @@ pipfc: pipcc.in
 	chmod +x pipfc
 
 pip_unpie: pip_unpie.c
+	$(CC) -g -O2 -Wall $< -o $@
+
+pip-tgkill: pip-tgkill.c
 	$(CC) -g -O2 -Wall $< -o $@
 
 post-clean-hook:

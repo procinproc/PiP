@@ -37,8 +37,7 @@
 
 #include <pip/pip_internal.h>
 
-static void
-pip_set_exit_status( pip_task_t *task, int status ) {
+void pip_set_exit_status( pip_task_t *task, int status ) {
   ENTER;
   if( !task->flag_exit ) {
     task->flag_exit = PIP_EXITED;
@@ -48,6 +47,18 @@ pip_set_exit_status( pip_task_t *task, int status ) {
   }
   DBGF( "status: 0x%x(0x%x)", status, task->status );
   RETURNV;
+}
+
+void pip_task_signaled( pip_task_t *task, int status ) {
+  int sig = WTERMSIG( status );
+  pip_warn_mesg( "PiP Task [%d] terminated by '%s' (%d) signal",
+		       task->pipid, strsignal(sig), sig );
+}
+
+void pip_annul_task( pip_task_t *task ) {
+  task->type      = PIP_TYPE_NULL;
+  task->thread    = 0;
+  task->tid       = 0;
 }
 
 void pip_finalize_task( pip_task_t *task ) {
@@ -161,18 +172,25 @@ pip_wait_syscall( pip_task_t *task, int flag_blk ) {
     DBGF( "waitpid(tid=%d,status=0x%x)=%d (err=%d)",
 	  task->tid, status, tid, err );
 
-    if( !err && WIFSIGNALED( status ) ) {
-      int sig = WTERMSIG( status );
-      pip_warn_mesg( "PiP Task [%d] terminated by '%s' (%d) signal",
-		     task->pipid, strsignal(sig), sig );
-	pip_set_exit_status( task, status );
+    if( !err ) {
+      pip_set_exit_status( task, status );
+      if( WIFSIGNALED( status ) ) {
+	pip_task_signaled( task, status );
+      }
     }
   }
   if( !err ) {
     DBGF( "PIPID:%d terminated", task->pipid );
-    task->type      = PIP_TYPE_NULL;
-    task->thread    = 0;
-    task->tid       = 0;
+    free( task->onstart_script );
+    task->onstart_script = NULL;
+    if( task->pid_onstart > 0 ) {
+      do {
+	errno = 0;
+	(void) waitpid( task->pid_onstart, NULL, 0 );
+      } while( errno == EINTR );
+      DBGF( "PIPID:%d on_start (%d) terminates", task->pipid, task->pid_onstart );
+    }
+    pip_annul_task( task );
   }
   RETURN( err );
 }
@@ -200,9 +218,9 @@ static int pip_wait_task( pip_task_t *task ) {
       }
     }
   }
-  RETURN( 0 );			/* not yet */
+  RETURN_NE( 0 );		/* not yet */
  found:
-  RETURN( 1 );
+  RETURN_NE( 1 );
 }
 
 static int pip_nonblocking_waitany( void ) {

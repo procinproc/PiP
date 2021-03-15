@@ -76,12 +76,12 @@ int pip_kill_all_tasks( void ) {
       for( i=0; i<pip_root->ntasks; i++ ) {
 	pipid = i;
 	if( pip_check_pipid( &pipid ) == 0 ) {
+	  pip_task_t *task = &pip_root->tasks[pipid];
 	  if( pip_is_threaded_() ) {
-	    pip_task_t *task = &pip_root->tasks[pipid];
 	    task->status = PIP_W_EXITCODE( 0, SIGTERM );
-	    (void) pip_kill( pipid, SIGQUIT );
+	    (void) pip_raise_signal( task, SIGQUIT );
 	  } else {
-	    (void) pip_kill( pipid, SIGKILL );
+	    (void) pip_raise_signal( task, SIGKILL );
 	  }
 	}
       }

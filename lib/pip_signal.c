@@ -36,39 +36,33 @@
 #include <pip/pip_internal.h>
 #include <sys/syscall.h>
 
-int pip_tgkill( int tgid, int tid, int signal ) {
-  return (int) syscall( (long int) SYS_tgkill, tgid, tid, signal );
-}
-
-int pip_kill( int pipid, int signal ) {
+int pip_kill( int pipid, int signo ) {
   int err;
-  if( pip_root == NULL             ) RETURN( EPERM  );
-  if( signal < 0 || signal > _NSIG ) RETURN( EINVAL );
+  if( pip_root == NULL           ) RETURN( EPERM  );
+  if( signo < 0 || signo > _NSIG ) RETURN( EINVAL );
   if( ( err = pip_check_pipid( &pipid ) ) == 0 ) {
-    err = pip_raise_signal( pip_get_task_( pipid ), signal );
+    err = pip_raise_signal( pip_get_task_( pipid ), signo );
   }
   RETURN( err );
 }
 
 int pip_sigmask( int how, const sigset_t *sigmask, sigset_t *oldmask ) {
-  int err;
+  int err = 0;
   if( pip_is_threaded_() ) {
     err = pthread_sigmask( how, sigmask, oldmask );
-  } else {
-    errno = 0;
-    (void) sigprocmask( how, sigmask, oldmask );
+  } else if( sigprocmask(  how, sigmask, oldmask ) != 0 ) {
     err = errno;
   }
   return( err );
 }
 
-int pip_signal_wait( int signal ) {
+int pip_signal_wait( int signo ) {
   sigset_t 	sigset;
   int 		sig, err = 0;
 
   ASSERT( sigemptyset( &sigset ) == 0 );
   if( pip_is_threaded_() ) {
-    ASSERT( sigaddset( &sigset, signal ) == 0 );
+    ASSERT( sigaddset( &sigset, signo ) == 0 );
     errno = 0;
     sigwait( &sigset, &sig );
     err = errno;

@@ -71,21 +71,12 @@
 #include <link.h>
 
 #include <pip/pip_config.h>
-
 #include <pip/pip_dlfcn.h>
 #include <pip/pip_machdep.h>
 #include <pip/pip_clone.h>
 #include <pip/pip_debug.h>
 
-/** BLT/ULP UNsupported version (RELEASED as PiP v2)
-#define PIP_BASE_VERSION	(0x3000U)
-**/
-/** ULP supported version -- abandoned to release
-**/
-#define PIP_BASE_VERSION	(0x2000U)
-/** The very first stable release version -- No, this was not stable !!
-#define PIP_BASE_VERSION	(0x1000U)
-**/
+#define PIP_BASE_VERSION	(0x2100U)
 
 #define PIP_API_VERSION		PIP_BASE_VERSION
 
@@ -99,14 +90,12 @@
 
 #define PIP_PIPID_NONE		(-999)
 
-#define PIP_LD_SOLIBS		{ NULL }
-
 #define PIP_EXITED		(1)
 #define PIP_EXIT_WAITED		(2)
 #define PIP_ABORT		(9)
 
 #define PIP_STACK_SIZE		(8*1024*1024LU) /* 8 MiB */
-#define PIP_STACK_SIZE_MIN	(1*1024*1024LU) /* 1 MiB */
+#define PIP_STACK_SIZE_MIN	(4*1024*1024LU) /* 1 MiB */
 #define PIP_STACK_SIZE_MAX	(16*1024*1024*1024LU) /* 16 GiB */
 #define PIP_STACK_ALIGN		(256)
 
@@ -204,12 +193,18 @@ typedef struct pip_task {
 
   struct pip_gdbif_task	*gdbif_task;
 
-  pid_t			tid;	/* PID in process mode */
+  pid_t			pid;	/* PID in process mode */
+  pid_t			tid;	/* TID in process mode */
   pthread_t		thread;	/* thread */
   pip_spawnhook_t	hook_before;
   pip_spawnhook_t	hook_after;
   void			*hook_arg;
   void			*sigalt_stack;
+  /* stop_on_start */
+  pid_t			pid_onstart;
+  char			*onstart_script;
+  /* reserved for future use */
+  void			*__reserved__[16];
 } pip_task_t;
 
 extern pip_task_t	*pip_task;
@@ -227,7 +222,7 @@ typedef struct pip_env {
   char	*gdb_signals;
   char	*show_maps;
   char	*show_pips;
-  char	*__reserved__[10];
+  char	*__reserved__[16];
 } pip_env_t;
 
 typedef struct pip_root {
@@ -265,6 +260,9 @@ typedef struct pip_root {
   size_t		stack_size;
   pip_task_t		*task_root; /* points to tasks[ntasks] */
   pip_spinlock_t	lock_tasks; /* lock for finding a new task id */
+  /* reserved for future use */
+  void			*__reserved__[16];
+  /* tasks */
   pip_task_t		tasks[];
 } pip_root_t;
 
@@ -331,7 +329,6 @@ extern int __attribute__ ((visibility ("default")))
 pip_init_task_implicitly( pip_root_t *root, pip_task_t *task );
 extern void pip_reset_task_struct( pip_task_t* )PIP_PRIVATE;
 extern pid_t pip_gettid( void );
-extern int  pip_tgkill( int, int, int );
 extern int  pip_tkill( int, int );
 
 extern void pip_page_alloc( size_t, void** ) PIP_PRIVATE;
@@ -354,6 +351,13 @@ extern void pip_set_sigmask( int ) PIP_PRIVATE;
 extern void pip_unset_sigmask( void ) PIP_PRIVATE;
 extern int  pip_signal_wait( int ) PIP_PRIVATE;
 
+extern void pip_onstart( pip_task_t* ) PIP_PRIVATE;
+extern void pip_set_exit_status( pip_task_t*, int ) PIP_PRIVATE;
+extern void pip_task_signaled( pip_task_t*, int ) PIP_PRIVATE;
+extern void pip_annul_task( pip_task_t* ) PIP_PRIVATE;
+
+extern char *pip_get_prefix_dir( char* ) PIP_PRIVATE;
+extern void pip_debug_on_exceptions( pip_task_t* ) PIP_PRIVATE;
 
 extern struct pip_gdbif_root	*pip_gdbif_root PIP_PRIVATE;
 

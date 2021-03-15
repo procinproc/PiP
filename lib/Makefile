@@ -55,12 +55,9 @@ LIBRARIES = $(LIBRARY) $(LIBRARY_PIPINIT)
 INTERP = $(dynamic_linker)
 
 CPPFLAGS += $(PIP_CPPFLAGS) -DINTERP=\"$(INTERP)\" \
+	-DLIBNAME_PIPINIT=\"$(LIBNAME_PIPINIT)\" \
 	-DPIP_INSTALL_GLIBCDIR=\"$(glibc_libdir)\" \
 	-DPIP_INSTALL_GLIBC=\"$(glibc_lib)\" \
-	-DPIP_INSTALL_LIBPIPINIT=\"$(default_libdir)/$(LIBRARY_PIPINIT)\" \
-	-DPIP_BUILD_LIBPIPINIT=\"`pwd`/$(LIBRARY_PIPINIT)\" \
-	-DPIP_INSTALL_BIN_PIPS=\"$(default_bindir)/pips\" \
-	-DPIP_BUILD_BIN_PIPS=\"../bin/pips\" \
 	-DPREFIX=\"$(prefix)\" \
 	-DLDLINUX=\"$(dynamic_linker)\" \
 	$(CPPFLAGS_DEBUG)
@@ -69,12 +66,14 @@ CFLAGS   += $(PIC_CFLAG) $(PTHREAD_FLAG)
 LIBMAIN = -Wl,-e,pip_main
 
 SRCS  = pip_main.c pip.c pip_init.c pip_util.c pip_gdb.c pip_2_backport.c pip_signal.c \
-	pip_wait.c pip_dlfcn.c pip_gdbif.c pip_got.c pip_clone.c pip_namexp.c
+	pip_wait.c pip_dlfcn.c pip_gdbif.c pip_got.c pip_clone.c pip_namexp.c \
+	pip_onstart.c
 
 OBJS_PIPINIT = pip_init.o
 
 OBJS = pip_main.o pip.o pip_util.o pip_2_backport.o pip_signal.o pip_wait.o \
-	pip_dlfcn.o pip_gdbif.o pip_got.o pip_clone.o pip_namexp.o $(OBJS_PIPINIT)
+	pip_dlfcn.o pip_gdbif.o pip_got.o pip_clone.o pip_namexp.o pip_onstart.o \
+	$(OBJS_PIPINIT)
 
 include $(top_srcdir)/build/rule.mk
 

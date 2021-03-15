@@ -224,8 +224,10 @@ Above example shows that the 'a.out' program can run as a PiP root and PiP tasks
 
 The following procedure attaches all PiP tasks and PiP root which
 created those tasks. Each PiP task is treated as a GDB inferior
-in PiP-gdb. Note that PiP-glibc and PiP-gdb packages are required to
-do this.
+in PiP-gdb.
+
+**Note: The functionalities in this section can only work with the
+process mode and PiP-glibc and PiP-gdb must be installed properly.**
 
     $ pip-gdb
     (pip-gdb) attach PID
