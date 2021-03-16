@@ -173,7 +173,7 @@ void pip_print_loaded_solibs( FILE *file ) {
   (void) pip_idstr( idstr, PIPIDLEN );
   if( file == NULL ) file = stderr;
 
-  if( ( err = pip_get_dso( PIP_PIPID_MYSELF, &handle ) ) != 0 ) {
+  if( ( err = pip_get_dlmopen_info( PIP_PIPID_MYSELF, &handle, NULL ) ) != 0 ) {
     fprintf( file, "%s (no solibs found: %d)\n", idstr, err );
   } else {
     struct link_map *map = (struct link_map*) handle;

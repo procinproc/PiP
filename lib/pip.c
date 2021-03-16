@@ -82,10 +82,6 @@ int pip_root_p_( void ) {
     pip_root->task_root == pip_task;
 }
 
-int pip_is_pthread_( void ) {
-  return (pip_root->opts & PIP_MODE_PTHREAD) != 0 ? CLONE_THREAD : 0;
-}
-
 static void pip_set_name( char *symbol, char *progname ) {
 #ifdef PR_SET_NAME
   /* the following code is to set the right */
@@ -578,12 +574,6 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
   RETURN( err );
 }
 
-int pip_is_pthread( int *flagp ) {
-  if( pip_root == NULL ) RETURN( EPERM  );
-  if( flagp != NULL ) *flagp = pip_is_pthread_();
-  RETURN( 0 );
-}
-
 static int pip_is_shared_fd_( void ) {
   return pip_is_threaded_();
 }
@@ -615,13 +605,14 @@ pip_task_t *pip_get_task_( int pipid ) {
   return task;
 }
 
-int pip_get_dso( int pipid, void **loaded ) {
+int pip_get_dlmopen_info( int pipid, void **handle, long *lmidp ) {
   pip_task_t *task;
   int err;
 
+  if( !pip_is_initialized() ) RETURN( EPERM );
   if( ( err = pip_check_pipid( &pipid ) ) != 0 ) RETURN( err );
   task = pip_get_task_( pipid );
-  if( loaded != NULL ) *loaded = task->loaded;
+  if( handle != NULL ) *handle = task->loaded;
   RETURN( 0 );
 }
 
@@ -651,6 +642,7 @@ int pip_get_ntasks( int *ntasksp ) {
 
 static pip_task_t *pip_get_myself( void ) {
   pip_task_t *task;
+
   if( pip_root_p_() ) {
     task = pip_root->task_root;
   } else {
@@ -660,12 +652,17 @@ static pip_task_t *pip_get_myself( void ) {
 }
 
 int pip_export( void *export ) {
+  pip_task_t *task;
+
+  if( !pip_is_initialized() ) RETURN( EPERM );
   if( export == NULL ) RETURN( EINVAL );
-  pip_get_myself()->export = export;
+  task = pip_get_myself();
+  if( task->export != NULL ) RETURN( EBUSY );
+  task->export = export;
   RETURN( 0 );
 }
 
-int pip_import( int pipid, void **exportp  ) {
+int pip_import( int pipid, void **exportp ) {
   pip_task_t *task;
   int err;
 
@@ -926,11 +923,11 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
   void 		*loaded     = NULL;
   void 		*ld_pipinit = NULL;
   int 		flags = RTLD_NOW;
-  /* RTLD_GLOBAL is NOT accepted and dlmopen() returns EINVAL */
   int		err = 0;
 
+  /* RTLD_GLOBAL is NOT accepted and dlmopen() returns EINVAL */
 #ifdef RTLD_DEEPBIND
-  flags |= RTLD_DEEPBIND;
+  //flags |= RTLD_DEEPBIND;
 #endif
 
   ENTERF( "path:%s", path );
@@ -960,25 +957,33 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
   /*** the name space contexts of here and there are different ***/
   impinit = (pip_init_t) pip_dlsym( loaded, "pip_init_task_implicitly" );
   if( impinit == NULL ) {
-    char *libpip_init_name = "/lib/" LIBNAME_PIPINIT;
+    char *libpipinit_name = "/lib/" LIBNAME_PIPINIT;
     DBGF( "dlsym: %s", pip_dlerror() );
-    if( ( libpipinit = pip_get_prefix_dir( libpip_init_name ) ) != NULL ) {
-      DBGF( "libpipinit:%s", libpipinit );
-      if( ( ld_pipinit = pip_dlmopen( lmid, libpipinit, flags ) ) == NULL ) {
-	pip_warn_mesg( "Unable to load %s: %s", libpipinit, pip_dlerror() );
-      } else {
-	impinit = (pip_init_t)
-	  pip_dlsym( ld_pipinit, "pip_init_task_implicitly" );
+    if( ( libpipinit = pip_get_prefix_dir( libpipinit_name ) ) == NULL ) {
+      pip_err_mesg( "Unable to find %s", libpipinit_name );
+      err = ENOENT;
+      goto error;
+    } else if( ( ld_pipinit = pip_dlmopen( lmid, libpipinit, flags ) ) == NULL ) {
+      pip_err_mesg( "Unable to load [%ld] %s: %s", lmid, libpipinit, pip_dlerror() );
+      err = ENOENT;
+      goto error;
+    } else {
+      impinit = (pip_init_t) pip_dlsym( ld_pipinit, "pip_init_task_implicitly" );
+      if( impinit == NULL ) {
 	DBGF( "dlsym: %s", pip_dlerror() );
+	err = ENOENT;
+	goto error;
       }
-      free( libpipinit );
     }
   }
+  free( libpipinit );
   task->symbols.pip_init = impinit;
-  task->loaded = loaded;
-  RETURN( 0 );
+  task->loaded           = loaded;
+  task->lmid             = lmid;
+  RETURN( err );
 
  error:
+  free( libpipinit );
   if( loaded     != NULL ) pip_dlclose( loaded    );
   if( ld_pipinit != NULL ) pip_dlclose( ld_pipinit);
   RETURN( err );
@@ -1289,7 +1294,7 @@ static void *pip_do_spawn( void *thargs )  {
     pip_set_signal_handler( SIGQUIT, pip_sigquit_handler, NULL );
   }
 #ifdef DEBUG
-  if( pip_is_pthread_() ) {
+  if( pip_is_threaded_() ) {
     pthread_attr_t attr;
     size_t sz;
     int _err;

@@ -801,7 +801,7 @@ void pip_spawn_hook( pip_spawn_hook_t *hook,
    *
    * \synopsis
    * \#include <pip/pip.h> \n
-   *  int pip_export( void **expp );
+   *  int pip_import( int pipid, void **expp );
    *
    * \description
    * Get an address exported by the specified PiP task. This is
@@ -809,7 +809,7 @@ void pip_spawn_hook( pip_spawn_hook_t *hook,
    * address is not yet exported at the time of calling this function,
    * then \p NULL is returned.
    *
-   * \param[in] pipid The PiP ID to import the exportedaddress
+   * \param[in] pipid The PiP ID to import the exported address
    * \param[out] expp The exported address
    *
    * \return Return 0 on success. Return an error code on error.
@@ -853,13 +853,33 @@ void pip_spawn_hook( pip_spawn_hook_t *hook,
    * \param[out] auxp Returned user data
    *
    * \return Return 0 on success. Return an error code on error.
-   * \retval EINAVL \c domainp is \c NULL or \c auxp is \c NULL
    * \retval EPERM PiP library is not yet initialized or already
    * finalized
    *
    * \sa pip_set_aux
    */
   int pip_get_aux( void **auxp );
+
+  /**
+   * \PiPManEntry{pip_get_aux}
+   *
+   * \brief Retrieve the loaded link map info. of the specified Pip task
+   *
+   * \synopsis
+   * \#include <pip/pip.h> \n
+   * int pip_get_dlminfo( int pipid, void **handlep, long *lmidp )
+   *
+   * \param[in] pipid The PiP ID 
+   * \param[out] handlep loaded handle
+   * \param[out] lmidp Lmid
+   *
+   * \return Return 0 on success. Return an error code on error.
+   * \retval EPERM PiP library is not yet initialized or already
+   * finalized
+   *
+   * \sa pip_task_spawn
+   */
+  int pip_get_dlmopen_info( int pipid, void **handle, long *lmidp );
 
   /**
    * @}

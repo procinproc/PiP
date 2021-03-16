@@ -131,18 +131,18 @@ typedef struct pip_symbol {
   /* glibc variables */
   char			***libc_argvp; /* to set __libc_argv */
   int			*libc_argcp;   /* to set __libc_argc */
-  char			**prog;
-  char			**prog_full;
-  char			***environ;    /* pointer to the environ variable */
+  char			**prog;	       /* to set __progname */
+  char			**prog_full;   /* to set __progname_full */
+  char			***environ;    /* to set the environ variable */
   /* GLIBC init funcs */
   ctype_init_t		ctype_init;   /* to call GLIBC __ctype_init() */
-  long long		*malloc_hook;
+  long long		*malloc_hook; /* not used */
   /* GLIBC functions */
   mallopt_t		mallopt;      /* to call GLIBC mallopt() */
   fflush_t		libc_fflush;  /* to call GLIBC fflush() at the end */
   exit_t		exit;	     /* call exit() from fork()ed process */
   pthread_exit_t	pthread_exit;	   /* (see above exit) */
-  void			*__reserved__[15]; /* reserved for future use */
+  void			*__reserved__[16]; /* reserved for future use */
 } pip_symbols_t;
 
 typedef struct pip_char_vec {
@@ -160,6 +160,7 @@ typedef struct pip_spawn_args {
   void			*start_arg;
   pip_char_vec_t	argvec;
   pip_char_vec_t	envvec;
+  void			*__reserved__[16]; /* reserved for future use */
 } pip_spawn_args_t;
 
 #define PIP_TYPE_NULL	(0)
@@ -200,9 +201,10 @@ typedef struct pip_task {
   pip_spawnhook_t	hook_after;
   void			*hook_arg;
   void			*sigalt_stack;
-  /* stop_on_start */
+  /* stop_on_start fomr PiP 2.1 */
   pid_t			pid_onstart;
   char			*onstart_script;
+  Lmid_t		lmid;
   /* reserved for future use */
   void			*__reserved__[16];
 } pip_task_t;
@@ -260,6 +262,8 @@ typedef struct pip_root {
   size_t		stack_size;
   pip_task_t		*task_root; /* points to tasks[ntasks] */
   pip_spinlock_t	lock_tasks; /* lock for finding a new task id */
+
+  char			*installdir;
   /* reserved for future use */
   void			*__reserved__[16];
   /* tasks */
@@ -338,7 +342,6 @@ extern int  pip_get_thread( int pipid, pthread_t *threadp );
 extern int  pip_is_pthread( int *flagp );
 extern int  pip_is_shared_fd( int *flagp );
 extern int  pip_is_shared_sighand( int *flagp );
-extern int  pip_debug_env( void );
 
 extern pip_task_t *pip_get_task_( int ) PIP_PRIVATE;
 extern int  pip_check_pipid( int* ) PIP_PRIVATE;

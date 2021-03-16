@@ -119,7 +119,7 @@ header-distclean:
 
 ### lib rules
 
-lib-all: $(LIBRARIES)
+lib-all: $(LIBRARIES) $(DEPINCS)
 .PHONY: lib-all
 
 lib-install:
@@ -149,7 +149,7 @@ lib-distclean:
 
 ### prog rules
 
-prog-all: $(PROGRAMS)
+prog-all: $(PROGRAMS) $(DEPINCS)
 .PHONY: prog-all
 
 prog-install:

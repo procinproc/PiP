@@ -38,7 +38,6 @@
 #include <pip/pip.h>
 
 extern int pip_root_p_( void );
-extern int pip_is_pthread_( void );
 
 extern pip_root_t *pip_root;
 extern pip_task_t *pip_task;
@@ -88,16 +87,4 @@ int pip_kill_all_tasks( void ) {
     }
   }
   return err;
-}
-
-int pip_debug_env( void ) {
-  static int flag = 0;
-  if( !flag ) {
-    if( getenv( "PIP_NODEBUG" ) ) {
-      flag = -1;
-    } else {
-      flag = 1;
-    }
-  }
-  return flag > 0;
 }

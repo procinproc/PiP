@@ -46,9 +46,8 @@ LDFLAGS_PIP = -shared -Wl,-soname -Wl,$(LIBRARY) $(PTHREAD_FLAG)
 SO_MAJOR_PIPINIT = 0
 LIBNAME_PIPINIT = libpip_init.so
 LIBRARY_PIPINIT = $(LIBNAME_PIPINIT).$(SO_MAJOR_PIPINIT)
-LDFLAGS_PIPINIT = -shared $(DFLAGS_EXTRA) -Wl,-soname -Wl,$(LIBRARY_PIPINIT)\
+LDFLAGS_PIPINIT = -shared $(DFLAGS_EXTRA) -Wl,-soname -Wl,$(LIBRARY_PIPINIT) \
 	$(PTHREAD_FLAG)
-
 
 LIBRARIES = $(LIBRARY) $(LIBRARY_PIPINIT)
 
@@ -57,7 +56,6 @@ INTERP = $(dynamic_linker)
 CPPFLAGS += $(PIP_CPPFLAGS) -DINTERP=\"$(INTERP)\" \
 	-DLIBNAME_PIPINIT=\"$(LIBNAME_PIPINIT)\" \
 	-DPIP_INSTALL_GLIBCDIR=\"$(glibc_libdir)\" \
-	-DPIP_INSTALL_GLIBC=\"$(glibc_lib)\" \
 	-DPREFIX=\"$(prefix)\" \
 	-DLDLINUX=\"$(dynamic_linker)\" \
 	$(CPPFLAGS_DEBUG)
@@ -82,9 +80,9 @@ BUILD_H = $(top_srcdir)/include/pip/build.h
 $(BUILD_H): $(top_srcdir)/include/pip/pip_config.h
 	( cd ../include/pip ; $(MAKE) header )
 
-$(OBJS): $(BUILD_H)
+$(OBJS): $(BUILD_H) $(DEPINCS) 
 
-$(LIBRARY): $(OBJS) $(DEPINCS) Makefile
+$(LIBRARY): $(OBJS) Makefile
 	$(CC) $(LDFLAGS_PIP) $(LIBMAIN) $(OBJS) -o $@
 	$(RM) $(LIBNAME)
 	ln -s $(LIBRARY) $(LIBNAME)

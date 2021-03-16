@@ -84,17 +84,19 @@ PIPCC = $(PIP_BINDIR)/pipcc
 
 DEPINCS = $(PIP_INCDIR)/pip/pip_config.h		\
 	  $(PIP_INCDIR)/pip/pip.h			\
+	  $(PIP_INCDIR)/pip/pip_internal.h		\
 	  $(PIP_INCDIR)/pip/pip_clone.h			\
 	  $(PIP_INCDIR)/pip/pip_dlfcn.h			\
-	  $(PIP_INCDIR)/pip/pip_internal.h		\
+	  $(PIP_INCDIR)/pip/pip_util.h			\
+	  $(PIP_INCDIR)/pip/pip_list.h 			\
+	  $(PIP_INCDIR)/pip/pip_debug.h			\
 	  $(PIP_INCDIR)/pip/pip_machdep.h 		\
 	  $(PIP_INCDIR)/pip/pip_machdep_aarch64.h 	\
 	  $(PIP_INCDIR)/pip/pip_machdep_x86_64.h 	\
 	  $(PIP_INCDIR)/pip/pip_gdbif.h			\
 	  $(PIP_INCDIR)/pip/pip_gdbif_func.h		\
 	  $(PIP_INCDIR)/pip/pip_gdbif_queue.h		\
-	  $(PIP_INCDIR)/pip/pip_util.h			\
-	  $(PIP_INCDIR)/pip/pip_debug.h
+	  $(PIP_INCDIR)/pip/pip_gdbif_enums.h
 
 DEPLIBS = $(PIP_LIBDIR)/libpip.so 			\
 	  $(PIP_LIBDIR)/libpip_init.so

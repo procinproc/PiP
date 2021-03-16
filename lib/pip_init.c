@@ -188,6 +188,20 @@ void pip_err_mesg( const char *format, ... ) {
   va_end( ap );
 }
 
+#ifdef DEBUG
+int pip_debug_env( void ) {
+  static int flag = 0;
+  if( !flag ) {
+    if( getenv( "PIP_NODEBUG" ) ) {
+      flag = -1;
+    } else {
+      flag = 1;
+    }
+  }
+  return flag > 0;
+}
+#endif
+
 static char *pip_path_gdb;
 static char *pip_command_gdb;
 
@@ -413,39 +427,51 @@ char *pip_get_prefix_dir( char *name ) {
   FILE	 *fp_maps;
   size_t sz, l;
   char	 *line, *fname, *prefix, *p;
-  char	 *dirup = "/../";
+  char	 *updir = "/..";
   void	 *sta, *end;
   void	 *faddr = (void*) pip_get_prefix_dir;
 
-  ASSERT( ( fp_maps = fopen( "/proc/self/maps", "r" ) ) != NULL );
-  prefix = NULL;
-  line   = NULL;
-  sz   = 0;
-  while( ( l = getline( &line, &sz, fp_maps ) ) > 0 ) {
-    //DBGF( "l:%d sz:%d line(%p):%s", (int)l, (int)sz, line, line );
-    if( l == sz ) {
-      ASSERT( ( line = (char*)realloc(line,l+1) ) != NULL );
-    }
-    line[l] = '\0';
-    if( sscanf( line, "%p-%p %*4s %*x %*d:%*d %*d %ms", &sta, &end, &fname ) == 3 ) {
-      DBGF( "%p-%p %s", sta, end, fname );
-      if( sta <= faddr &&  faddr < end ) {
-	prefix = strdup( dirname( fname ) );
-	ASSERT( ( prefix = realloc( prefix, 
-				    strlen( dirup ) + strlen( name ) + 1 ) ) 
-		!= NULL );
-	p = stpcpy( prefix, dirup );
-	p = stpcpy( p, name );
-	free( fname );
-	goto done;
+  fp_maps = NULL;
+  line    = NULL;
+  if( pip_root != NULL &&
+      pip_root->installdir != NULL ) {
+    prefix = pip_root->installdir;
+  } else {
+    sz = 0;
+    ASSERT( ( fp_maps = fopen( "/proc/self/maps", "r" ) ) != NULL );
+    while( ( l = getline( &line, &sz, fp_maps ) ) > 0 ) {
+      //DBGF( "l:%d sz:%d line(%p):%s", (int)l, (int)sz, line, line );
+      line[l] = '\0';
+      prefix = NULL;
+      if( sscanf( line, "%p-%p %*4s %*x %*d:%*d %*d %ms", &sta, &end, &prefix ) == 3 ) {
+	DBGF( "%p-%p %p %s", sta, end, faddr, prefix );
+	if( prefix != NULL && sta <= faddr && faddr < end ) {
+	  if( pip_root != NULL ) {
+	    prefix = dirname( prefix );
+	    DBGF( "prefix: %s", prefix );
+	    pip_root->installdir = prefix;
+	  }
+	  goto found;
+	}
+	free( prefix );
       }
-      free( fname );
     }
+    fname = NULL;
+    goto not_found;
   }
- done:
+ found:
+  ASSERT( ( fname = malloc( strlen( prefix ) +
+			    strlen( updir )  +
+			    strlen( name )   + 1 ) ) 
+	  != NULL );
+  p = stpcpy( fname, prefix );
+  p = stpcpy( p, updir );
+  p = stpcpy( p, name );
+  DBGF( "fname: %s", fname );
+ not_found:
   if( line != NULL ) free( line );
   fclose( fp_maps );
-  return prefix;
+  return fname;
 }
 
 static void pip_show_pips( void ) {
