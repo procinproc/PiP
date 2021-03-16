@@ -861,13 +861,13 @@ void pip_spawn_hook( pip_spawn_hook_t *hook,
   int pip_get_aux( void **auxp );
 
   /**
-   * \PiPManEntry{pip_get_aux}
+   * \PiPManEntry{pip_get_dlmopen_info}
    *
    * \brief Retrieve the loaded link map info. of the specified Pip task
    *
    * \synopsis
    * \#include <pip/pip.h> \n
-   * int pip_get_dlminfo( int pipid, void **handlep, long *lmidp )
+   * int pip_get_dlmopen_info( int pipid, void **handlep, long *lmidp )
    *
    * \param[in] pipid The PiP ID 
    * \param[out] handlep loaded handle
@@ -879,7 +879,7 @@ void pip_spawn_hook( pip_spawn_hook_t *hook,
    *
    * \sa pip_task_spawn
    */
-  int pip_get_dlmopen_info( int pipid, void **handle, long *lmidp );
+  int pip_get_dlmopen_info( int pipid, void **handlep, long *lmidp );
 
   /**
    * @}

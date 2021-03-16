@@ -104,6 +104,9 @@ Functions</h2></td></tr>
 <tr class="memitem:ga779abad7e346657a6fd3c024e204addb"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__PiP-2-export.html#ga779abad7e346657a6fd3c024e204addb">pip_get_aux</a> (void **auxp)</td></tr>
 <tr class="memdesc:ga779abad7e346657a6fd3c024e204addb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Retrieve the user data associated with a PiP task.  <a href="#ga779abad7e346657a6fd3c024e204addb">More...</a><br/></td></tr>
 <tr class="separator:ga779abad7e346657a6fd3c024e204addb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gab22e04973c50d1569f77657757bc7b74"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__PiP-2-export.html#gab22e04973c50d1569f77657757bc7b74">pip_get_dlmopen_info</a> (int pipid, void **handlep, long *lmidp)</td></tr>
+<tr class="memdesc:gab22e04973c50d1569f77657757bc7b74"><td class="mdescLeft">&#160;</td><td class="mdescRight">Retrieve the loaded link map info. of the specified Pip task.  <a href="#gab22e04973c50d1569f77657757bc7b74">More...</a><br/></td></tr>
+<tr class="separator:gab22e04973c50d1569f77657757bc7b74"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 
@@ -374,11 +377,11 @@ int pip_named_export( void *exp, const char *format, ... )</dd></dl>
 </div><div class="memdoc">
 <dl class="section user"><dt>Name</dt><dd>pip_import<a name="ga6d7ac596a9da824e40d7c06528f42e5f_pip_import"></a></dd></dl>
 <dl class="section user"><dt>Synopsis</dt><dd>#include &lt;<a class="el" href="pip_8h_source.html">pip/pip.h</a>&gt; <br/>
- int pip_export( void **expp );</dd></dl>
+ int <a class="el" href="group__PiP-2-export.html#ga6d7ac596a9da824e40d7c06528f42e5f" title="import exported address of a PiP task ">pip_import( int pipid, void **expp )</a>;</dd></dl>
 <dl class="section user"><dt>Description</dt><dd>Get an address exported by the specified PiP task. This is a very naive implementation in PiP v1 and deprecated. If the address is not yet exported at the time of calling this function, then <code>NULL</code> is returned.</dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">pipid</td><td>The PiP ID to import the exportedaddress </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">pipid</td><td>The PiP ID to import the exported address </td></tr>
     <tr><td class="paramdir">[out]</td><td class="paramname">expp</td><td>The exported address</td></tr>
   </table>
   </dd>
@@ -458,12 +461,62 @@ int <a class="el" href="group__PiP-2-export.html#ga779abad7e346657a6fd3c024e204a
 <dl class="section return"><dt>Returns</dt><dd>Return 0 on success. Return an error code on error. </dd></dl>
 <dl class="retval"><dt>Return values</dt><dd>
   <table class="retval">
-    <tr><td class="paramname">EINAVL</td><td><code>domainp</code> is <code>NULL</code> or <code>auxp</code> is <code>NULL</code> </td></tr>
     <tr><td class="paramname">EPERM</td><td>PiP library is not yet initialized or already finalized</td></tr>
   </table>
   </dd>
 </dl>
 <dl class="section see"><dt>See Also</dt><dd><a class="el" href="group__PiP-2-export.html#gabe36293dba51fe90f94057bb4f82f328" title="Associate user data with a PiP task. ">pip_set_aux</a> </dd></dl>
+
+</div>
+</div>
+<a class="anchor" id="gab22e04973c50d1569f77657757bc7b74"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int pip_get_dlmopen_info </td>
+          <td>(</td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>pipid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void **&#160;</td>
+          <td class="paramname"><em>handlep</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">long *&#160;</td>
+          <td class="paramname"><em>lmidp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<dl class="section user"><dt>Name</dt><dd>pip_get_dlmopen_info<a name="gab22e04973c50d1569f77657757bc7b74_pip_get_dlmopen_info"></a></dd></dl>
+<dl class="section user"><dt>Synopsis</dt><dd>#include &lt;<a class="el" href="pip_8h_source.html">pip/pip.h</a>&gt; <br/>
+int <a class="el" href="group__PiP-2-export.html#gab22e04973c50d1569f77657757bc7b74" title="Retrieve the loaded link map info. of the specified Pip task. ">pip_get_dlmopen_info( int pipid, void **handlep, long *lmidp )</a></dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">pipid</td><td>The PiP ID </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">handlep</td><td>loaded handle </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">lmidp</td><td>Lmid</td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Return 0 on success. Return an error code on error. </dd></dl>
+<dl class="retval"><dt>Return values</dt><dd>
+  <table class="retval">
+    <tr><td class="paramname">EPERM</td><td>PiP library is not yet initialized or already finalized</td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section see"><dt>See Also</dt><dd><a class="el" href="group__PiP-1-spawn.html#gaf1fcc4cb85ec3eda734afe2beb0c6a36" title="Spawning a PiP task. ">pip_task_spawn</a> </dd></dl>
 
 </div>
 </div>

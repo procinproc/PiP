@@ -1,4 +1,4 @@
-.TH "libpip" 7 "Tue Feb 16 2021" "Process-in-Process" \" -*- nroff -*-
+.TH "libpip" 7 "Tue Mar 16 2021" "Process-in-Process" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
@@ -70,7 +70,7 @@ Basically PiP requires the following three software packages;
 .PP
 By using PiP-glibc, users can create up to 300 PiP tasks which can be debugged by using PiP-gdb\&. In other words, without installing PiP-glibc, users can create up to around 10 PiP tasks (the number depends on the program) and cannot debug by using PiP-gdb\&.
 .PP
-There are several ways to install the PiP packages; Yum (RPM), Docker, Spack, and building from the source code\&. It is strongly recommended to use the following PiP package installation program (pip-pip):
+There are several ways to install the PiP packages; Docker, Spack, and building from the source code\&. It is strongly recommended to use the following PiP package installation program (pip-pip):
 .PP
 .IP "\(bu" 2
 \fCPiP-pip\fP - PiP package installing program
@@ -79,14 +79,14 @@ There are several ways to install the PiP packages; Yum (RPM), Docker, Spack, an
 This is the easiest way to install PiP packages in any form\&. Here is the example of \fCpip-pip\fP usage: 
 .PP
 .nf
-$ git clone https://github.com/RIKEN-SysSoft/PiP-pip.git
+$ git clone https://github.com/procinproc/PiP-pip.git
 $ cd PiP-pip
 $ ./pip-pip --how=HOW --pip=PIP_VERSION --work=BUILD_DIR --prefix=INSTALL_DIR
 
 .fi
 .PP
 .PP
-\fBHOW\fP can be one of \fCyum\fP, \fCdocker\fP, \fCspack\fP and \fCgithub\fP, or any combination of them\&. \fCpip-pip --help\fP will show you how to use the program\&. \fCyum\fP, \fCdocker\fP and \fCspack\fP include all three packages; PiP-glibc, PiP-lib, and PiP-gdb\&.
+\fBHOW\fP can be one of \fCdocker\fP, \fCspack\fP and \fCgithub\fP, or any combination of them\&. \fCpip-pip --help\fP will show you how to use the program\&. \fCdocker\fP and \fCspack\fP include all three packages; PiP-glibc, PiP-gdb, and PiP\&.
 .PP
 .SH "PiP Documents"
 .PP
@@ -200,7 +200,9 @@ $ pips -s KILL [ PATTERN \&.\&. ]
 .PP
 .SS "Debugging your PiP programs by the pip-gdb command"
 .PP
-The following procedure attaches all PiP tasks and PiP root which created those tasks\&. Each PiP task is treated as a GDB inferior in PiP-gdb\&. Note that PiP-glibc and PiP-gdb packages are required to do this\&. 
+The following procedure attaches all PiP tasks and PiP root which created those tasks\&. Each PiP task is treated as a GDB inferior in PiP-gdb\&.
+.PP
+\fBNote: The functionalities in this section can only work with the process mode and PiP-glibc and PiP-gdb must be installed properly\&.\fP 
 .PP
 .nf
 $ pip-gdb
@@ -350,6 +352,8 @@ pip_export
 pip_fin 
 .PP
 pip_get_aux 
+.PP
+pip_get_dlmopen_info 
 .PP
 pip_get_mode 
 .PP

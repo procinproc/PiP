@@ -98,34 +98,34 @@ see the [LICENSE](LICENSE) file for details.
 
 Basically PiP requires the following three software packages;
 
-* [PiP](https://github.com/RIKEN-SysSoft/PiP) - Process in Process (this package)
-* [PiP-Testsuite](https://github.com/RIKEN-SysSoft/PiP-Testsuite) - Testsuite for PiP
-* [PiP-glibc](https://github.com/RIKEN-SysSoft/PiP-glibc) - patched GNU libc for PiP
-* [PiP-gdb](https://github.com/RIKEN-SysSoft/PiP-gdb) - patched gdb to debug PiP root and PiP tasks.
+* [PiP](https://github.com/procinproc/PiP) - Process in Process (this package)
+* [PiP-Testsuite](https://github.com/procinproc/PiP-Testsuite) - Testsuite for PiP
+* [PiP-glibc](https://github.com/procinproc/PiP-glibc) - patched GNU libc for PiP
+* [PiP-gdb](https://github.com/procinproc/PiP-gdb) - patched gdb to debug PiP root and PiP tasks.
 
 By using PiP-glibc, users can create up to 300 PiP tasks which can be
 debugged by using PiP-gdb.  In other words, without installing
 PiP-glibc, users can create up to around 10 PiP tasks (the number
 depends on the program) and cannot debug by using PiP-gdb. 
 
-There are several ways to install the PiP packages; Yum (RPM), Docker,
+There are several ways to install the PiP packages; Docker,
 Spack, and building from the source code. It is strongly recommended
 to use the following PiP package installation program (pip-pip):
 
-* [PiP-pip](https://github.com/RIKEN-SysSoft/PiP-pip) - PiP package
+* [PiP-pip](https://github.com/procinproc/PiP-pip) - PiP package
   installing program
 
 This is the easiest way to install PiP packages in any form. Here is
 the example of `pip-pip` usage:
 
-    $ git clone https://github.com/RIKEN-SysSoft/PiP-pip.git
+    $ git clone https://github.com/procinproc/PiP-pip.git
     $ cd PiP-pip
     $ ./pip-pip --how=HOW --pip=PIP_VERSION --work=BUILD_DIR --prefix=INSTALL_DIR
 
-**HOW** can be one of `yum`, `docker`, `spack` and `github`, or any
+**HOW** can be one of `docker`, `spack` and `github`, or any
   combination of them. `pip-pip --help` will show you how to use the
-  program. `yum`, `docker` and `spack` include all three packages;
-  PiP-glibc, PiP-lib, and PiP-gdb.
+  program. `docker` and `spack` include all three packages;
+  PiP-glibc, PiP-gdb, and PiP.
 
 # PiP Documents
 
@@ -225,8 +225,10 @@ Above example shows that the 'a.out' program can run as a PiP root and PiP tasks
 
 The following procedure attaches all PiP tasks and PiP root which
 created those tasks. Each PiP task is treated as a GDB inferior
-in PiP-gdb. Note that PiP-glibc and PiP-gdb packages are required to
-do this.
+in PiP-gdb.
+
+**Note: The functionalities in this section can only work with the
+process mode and PiP-glibc and PiP-gdb must be installed properly.**
 
     $ pip-gdb
     (pip-gdb) attach PID
@@ -357,6 +359,7 @@ Analysis (SC '20). IEEE Press, Article 36, 1–15.
 \sa pip\_export
 \sa pip\_fin
 \sa pip\_get\_aux
+\sa pip\_get\_dlmopen\_info
 \sa pip\_get\_mode
 \sa pip\_get\_mode\_str
 \sa pip\_get\_ntasks
