@@ -57,6 +57,18 @@ extern size_t pip_idstr( char *buf, size_t sz );
 
 #define DBGSW		pip_debug_env()
 
+INLINE int pip_debug_env( void ) {
+  static int flag = 0;
+  if( !flag ) {
+    if( getenv( "PIP_NODEBUG" ) ) {
+      flag = -1;
+    } else {
+      flag = 1;
+    }
+  }
+  return flag > 0;
+}
+
 #define DBGBUFLEN	(512)
 #define DBGTAGLEN	(128)
 
@@ -113,7 +125,6 @@ extern size_t pip_idstr( char *buf, size_t sz );
 
 #ifdef DEBUG
 
-extern int pip_debug_env( void );
 #define DBG_TAG_ENTER							\
   do { char __tag[DBGTAGLEN]; pip_idstr(__tag,DBGTAGLEN);		\
     DBG_PRNT("%s %s:%d >> %s()",__tag,					\

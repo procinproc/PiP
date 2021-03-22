@@ -44,9 +44,14 @@ pips [a][u][x] [PIPS-OPTIONS] [-] [PATTERN ..]
 \param \-\-root List PiP root(s)
 \param \-\-task List PiP task(s)
 \param \-\-family List PiP root(s) and PiP task(s) in family order
+\param \-\-mode List PiP root(s) and PiP task(s) running in the
+specified execution mode. This option must be followed by excution
+mode(s) which is the combination of characters consisting of 'P'
+(process mode), 'L' (process:preload), 'C' (process:pipclone), 'G'
+(process:got) and 'T' (thread mode).
 \param \-\-kill Send SIGTERM to PiP root(s) and task(s)
 \param \-\-signal Send a signal to PiP root(s) and task(s). This
-option must be followed by a signal number of name.
+option must be followed by a signal number or name.
 \param \-\-ps Run the ps Linux command. This option may have \c ps
 command option(s) separated by comma (,)
 \param \-\-top Run the top Linux command. This option may have

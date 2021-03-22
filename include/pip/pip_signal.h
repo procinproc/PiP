@@ -130,9 +130,6 @@ extern "C" {
 
 #ifndef DOXYGEN_INPROGRESS
 
-  int  pip_tgkill( int, int, int );
-  int  pip_tkill( int, int );
-
 #ifdef __cplusplus
 }
 #endif

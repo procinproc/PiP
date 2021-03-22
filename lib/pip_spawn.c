@@ -111,11 +111,12 @@ static int pip_copy_vec( char **vecadd,
 }
 
 #define ENVLEN	(64)
-static int pip_copy_env( char **envsrc, int pipid,
-			 pip_char_vec_t *vecp ) {
+static int pip_copy_env( char **envsrc, int pipid, pip_char_vec_t *vecp ) {
   char rootenv[ENVLEN], taskenv[ENVLEN];
-  char *preload_env = getenv( "LD_PRELOAD" );
-  char *addenv[4] = { rootenv, taskenv, preload_env, NULL };
+  char *preload_env    = getenv( "LD_PRELOAD" );
+  char *mmap_threshold = "MALLOC_MMAP_THRESHOLD_=1";
+  char *mmap_max       = "MALLOC_MMAP_MAX_=4294967296"; /* 4*1024*1024*1024 */
+  char *addenv[] = { rootenv, taskenv, preload_env, mmap_threshold, mmap_max, NULL };
 
   ASSERT( snprintf( rootenv, ENVLEN, "%s=%p", PIP_ROOT_ENV, pip_root ) > 0 );
   ASSERT( snprintf( taskenv, ENVLEN, "%s=%d", PIP_TASK_ENV, pipid    ) > 0 );
@@ -275,19 +276,13 @@ static int pip_find_user_symbols( pip_spawn_program_t *progp,
 #define DLMOPEN_FLAGS	  (RTLD_NOW)
 #endif
 
-static int pip_load_glibc( pip_task_internal_t *taski, Lmid_t lmid ) {
+static int
+pip_find_glibc_symbols( void *handle, pip_task_internal_t *taski ) {
   pip_symbols_t *symp = &MA(taski)->symbols;
-  void	*handle;
-  int 	err = 0;
+  int 	 err = 0;
 
   pip_glibc_lock();		/* to protect dlsym */
   {
-    if( ( handle = dlmopen( lmid, PIP_INSTALL_GLIBC, DLMOPEN_FLAGS ) ) == NULL ) {
-      pip_glibc_unlock();
-      DBGF( "dlmopen: %s", dlerror() );
-      err = ENXIO;
-      RETURN( err );
-    }
     /* the GLIBC _init() seems not callable. It seems that */
     /* dlmopen()ed name space does not setup VDSO properly */
     //symp->libc_init        = dlsym( handle, "_init"           );
@@ -318,75 +313,26 @@ static int pip_load_glibc( pip_task_internal_t *taski, Lmid_t lmid ) {
   RETURN( err );
 }
 
-static char *pip_find_newer_libpipinit( void ) {
-  struct stat	stb_install, stb_build;
-  char		*newer = NULL;
-
-  DBGF( "%s", PIP_INSTALL_LIBPIPINIT );
-  DBGF( "%s", PIP_BUILD_LIBPIPINIT );
-  memset( &stb_install, 0, sizeof(struct stat) );
-  memset( &stb_build,   0, sizeof(struct stat) );
-  if( stat( PIP_INSTALL_LIBPIPINIT, &stb_install ) != 0 ) {
-    /* not found in install dir */
-    if( stat( PIP_BUILD_LIBPIPINIT, &stb_build   ) != 0 ) {
-      /* nowhere */
-      return NULL;
-    }
-    newer = PIP_BUILD_LIBPIPINIT;
-  } else if( stat( PIP_BUILD_LIBPIPINIT, &stb_build ) != 0 ) {
-    /* not found in build dir, but install dir */
-    newer = PIP_INSTALL_LIBPIPINIT;
-  } else {
-    /* both found, take the newer one */
-    if( stb_install.st_mtime > stb_build.st_mtime ) {
-      newer = PIP_INSTALL_LIBPIPINIT;
-    } else {
-      newer = PIP_BUILD_LIBPIPINIT;
-    }
-  }
-  return newer;
-}
-
-void pip_load_libpip( pip_task_internal_t *taski, Lmid_t lmid ) {
-  void		*loaded = MA(taski)->loaded;
-  void		*ld_pipinit = NULL;
-  char		*libpipinit = NULL;
-  pip_init_t	impinit     = NULL;
-
-  /* call pip_init_task_implicitly */
-  /*** we cannot call pip_ini_task_implicitly() directly here  ***/
-  /*** the name space contexts of here and there are different ***/
-  impinit = (pip_init_t) pip_dlsym( loaded, "pip_init_task_implicitly" );
-  if( impinit == NULL ) {
-    DBGF( "dlsym: %s", pip_dlerror() );
-    if( ( libpipinit = pip_find_newer_libpipinit() ) != NULL ) {
-      DBGF( "libpipinit: %s", libpipinit );
-      if( ( ld_pipinit = pip_dlmopen( lmid, libpipinit, DLMOPEN_FLAGS ) ) == NULL ) {
-	pip_warn_mesg( "Unable to load %s: %s", libpipinit, pip_dlerror() );
-      } else {
-	impinit = (pip_init_t) pip_dlsym( ld_pipinit, "pip_init_task_implicitly" );
-	DBGF( "dlsym: %s", pip_dlerror() );
-      }
-    }
-  }
-  MA(taski)->symbols.pip_init = impinit;
-  MA(taski)->symbols.named_export_fin =
-    pip_dlsym( loaded, "pip_named_export_fin" );
-}
-
 static int
 pip_load_dsos( pip_spawn_program_t *progp, pip_task_internal_t *taski ) {
   const char 	*prog = progp->prog;
-  Lmid_t	lmid = LM_ID_NEWLM;
-  void 		*loaded = NULL;
+  Lmid_t	lmid;
+  char		*libpipinit = NULL;
+  pip_init_t	impinit     = NULL;
+  void 		*loaded     = NULL;
+  void 		*ld_pipinit = NULL;
   int		err = 0;
 
   ENTERF( "prog: %s", prog );
+  lmid = LM_ID_NEWLM;
   if( ( loaded = pip_dlmopen( lmid, prog, DLMOPEN_FLAGS ) ) == NULL ) {
     char *dle = pip_dlerror();
     if( ( err = pip_check_pie( prog, 1 ) ) != 0 ) goto error;
     pip_err_mesg( "dlmopen(%s): %s", prog, dle );
     err = ENOEXEC;
+    goto error;
+  }
+  if( ( err = pip_find_glibc_symbols( loaded, taski ) ) ) {
     goto error;
   }
   if( ( err = pip_find_user_symbols( progp, loaded, taski ) ) ) {
@@ -397,18 +343,41 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_internal_t *taski ) {
     err = ENXIO;
     goto error;
   }
-  MA(taski)->loaded = loaded;
-
-  DBGF( "lmid: %d", (int) lmid );
-  /* load libc explicitly */
-  if( ( err = pip_load_glibc( taski, lmid ) ) ) {
-    goto error;
+  DBGF( "lmid:%d", (int) lmid );
+  /* call pip_init_task_implicitly */
+  /*** we cannot call pip_ini_task_implicitly() directly here  ***/
+  /*** the name space contexts of here and there are different ***/
+  impinit = (pip_init_t) pip_dlsym( loaded, "pip_init_task_implicitly" );
+  if( impinit == NULL ) {
+    char *libpipinit_name = "/lib/" LIBNAME_PIPINIT;
+    DBGF( "dlsym: %s", pip_dlerror() );
+    if( ( libpipinit = pip_get_prefix_dir( libpipinit_name ) ) == NULL ) {
+      pip_err_mesg( "Unable to find %s", libpipinit_name );
+      err = ENOENT;
+      goto error;
+    } else if( ( ld_pipinit = pip_dlmopen( lmid, libpipinit, DLMOPEN_FLAGS ) ) == NULL ) {
+      pip_err_mesg( "Unable to load [%ld] %s: %s", lmid, libpipinit, pip_dlerror() );
+      err = ENOENT;
+      goto error;
+    } else {
+      impinit = (pip_init_t) pip_dlsym( ld_pipinit, "pip_init_task_implicitly" );
+      if( impinit == NULL ) {
+	DBGF( "dlsym: %s", pip_dlerror() );
+	err = ENOENT;
+	goto error;
+      }
+    }
   }
-  pip_load_libpip( taski, lmid );
-  RETURN( 0 );
+  free( libpipinit );
+  MA(taski)->symbols.pip_init = impinit;
+  MA(taski)->loaded           = loaded;
+  MA(taski)->lmid             = lmid;
+  RETURN( err );
 
  error:
-  if( loaded != NULL ) pip_dlclose( loaded );
+  free( libpipinit );
+  if( loaded     != NULL ) pip_dlclose( loaded    );
+  if( ld_pipinit != NULL ) pip_dlclose( ld_pipinit);
   RETURN( err );
 }
 
@@ -493,16 +462,6 @@ static int pip_undo_corebind( pid_t tid, uint32_t coreno, cpu_set_t *oldsetp ) {
   RETURN( err );
 }
 
-int pip_get_dso( int pipid, void **loaded ) {
-  pip_task_internal_t *task;
-  int err;
-
-  if( ( err = pip_check_pipid( &pipid ) ) != 0 ) RETURN( err );
-  task = pip_get_task( pipid );
-  if( loaded != NULL ) *loaded = MA(task)->loaded;
-  RETURN( 0 );
-}
-
 static void pip_glibc_init( pip_symbols_t *symbols,
 			    pip_spawn_args_t *args ) {
   /* setting GLIBC variables */
@@ -556,20 +515,15 @@ static void pip_glibc_init( pip_symbols_t *symbols,
   ***/
 }
 
-extern char **environ;
-
 static int pip_call_before_hook( pip_task_internal_t *taski ) {
   int err = 0;
-
   if( MA(taski)->hook_before != NULL ) {
-    char **env_save = environ;
-    environ = MA(taski)->args.envvec.vec;
+    pip_print_fds( stderr );
     err = MA(taski)->hook_before( MA(taski)->hook_arg );
-    MA(taski)->args.envvec.vec = environ;
-    environ = env_save;
     if( err ) {
       pip_err_mesg( "PIPID:%d before-hook returns %d", TA(taski)->pipid, err );
     }
+    pip_print_fds( stderr );
   }
   return err;
 }
@@ -577,11 +531,9 @@ static int pip_call_before_hook( pip_task_internal_t *taski ) {
 int pip_call_after_hook( pip_task_internal_t *taski, int extval ) {
   int err = 0;
   if( MA(taski)->hook_after != NULL ) {
-    char **env_save = environ;
-    environ = MA(taski)->args.envvec.vec;
+    pip_print_fds( stderr );
     err = MA(taski)->hook_after( MA(taski)->hook_arg );
-    MA(taski)->args.envvec.vec = environ;
-    environ = env_save;
+    pip_print_fds( stderr );
     if( err ) {
       pip_err_mesg( "PIPID:%d after-hook returns %d", TA(taski)->pipid, err );
       if( extval == 0 ) extval = err;
@@ -681,20 +633,10 @@ static void pip_start_user_func( pip_spawn_args_t *args,
   char **argv     = args->argvec.vec;
   char **envv     = args->envvec.vec;
   void *start_arg = args->start_arg;
-  char *env_stop;
   int	extval, i, err = 0;
 
   ENTER;
-  DBGF( "fd_list:%p", args->fd_list );
-  if( args->fd_list != NULL ) {
-    for( i=0; args->fd_list[i]>=0; i++ ) { /* Close-on-exec FDs */
-      DBGF( "COE: %d", args->fd_list[i] );
-      (void) close( args->fd_list[i] );
-    }
-  }
   pip_glibc_init( &MA(self)->symbols, args );
-  pip_gdbif_hook_before( self );
-
   DBGF( "pip_impinit:%p", MA(self)->symbols.pip_init );
   if( MA(self)->symbols.pip_init != NULL ) {
     int rv = MA(self)->symbols.pip_init( AA(self)->task_root, self );
@@ -719,63 +661,72 @@ static void pip_start_user_func( pip_spawn_args_t *args,
       }
     }
   }
-  if( err ) {
-    extval = err;
-  } else {
-    err = pip_call_before_hook( self );
-    if( !err ) {
-      if( AA(self)->opts & PIP_TASK_INACTIVE ) {
-	DBGF( "INACTIVE" );
-	pip_suspend_and_enqueue_generic( self,
-					 queue,
-					 1, /* lock flag */
-					 pip_start_cb,
-					 self );
-	/* resumed */
-      } else {
-	DBGF( "ACTIVE" );
-	if( queue != NULL ) {
-	  int n = PIP_TASK_ALL;
-	  err = pip_dequeue_and_resume_multiple( queue, self, &n );
-	}
-	/* since there is no callback, the cb func is called explicitly */
-	pip_start_cb( (void*) self );
-      }
-    }
-    if( err ) {
-      extval = err;
+  if( !err ) {
+    pip_gdbif_hook_before( self );
+
+    if( AA(self)->opts & PIP_TASK_INACTIVE ) {
+      DBGF( "INACTIVE" );
+      pip_suspend_and_enqueue_generic( self,
+				       queue,
+				       1, /* lock flag */
+				       pip_start_cb,
+				       self );
+      /* resumed */
     } else {
-      if( ( env_stop = pip_root->envs.stop_on_start ) != NULL &&
-	  env_stop[0] != '\0' ) {
-	int pipid_stop = strtol( env_stop, NULL, 10 );
-	if( pipid_stop < 0 || pipid_stop == TA(self)->pipid ) {
-	  pip_info_mesg( "PiP task[%d] is SIGSTOPed (%s=%s)",
-			 TA(self)->pipid, PIP_ENV_STOP_ON_START, env_stop );
-	  pip_kill( TA(self)->pipid, SIGSTOP );
-	} else {
-	  pip_warn_mesg( "PiP task[%d] %s=%s: out of range",
-			 TA(self)->pipid, PIP_ENV_STOP_ON_START, env_stop );
-	}
+      DBGF( "ACTIVE" );
+      if( queue != NULL ) {
+	int n = PIP_TASK_ALL;
+	err = pip_dequeue_and_resume_multiple( queue, self, &n );
       }
-      if( MA(self)->symbols.start == NULL ) {
-	/* calling hook function, if any */
-	DBGF( "[%d] >> main@%p(%d,%s,%s,...)",
-	      TA(self)->pipid, MA(self)->symbols.main, args->argc, argv[0], argv[1] );
-	extval = MA(self)->symbols.main( args->argc, argv, envv );
-	DBGF( "[%d] << main@%p(%d,%s,%s,...) = %d",
-	      TA(self)->pipid, MA(self)->symbols.main, args->argc, argv[0], argv[1],
-	      extval );
-      } else {
-	DBGF( "[%d] >> %s:%p(%p)",
-	      TA(self)->pipid, args->funcname,
-	      MA(self)->symbols.start, start_arg );
-	extval = MA(self)->symbols.start( start_arg );
-	DBGF( "[%d] << %s:%p(%p) = %d",
-	      args->pipid, args->funcname,
-	      MA(self)->symbols.start, start_arg, extval );
-      }
+      /* since there is no callback, the cb func is called explicitly */
+      pip_start_cb( (void*) self );
     }
   }
+  if( err ) {
+    extval = err;
+    goto error;
+  }
+  /* PIP_STOP_ON_START */
+  DBGF( "ONSTART: %s", MA(self)->onstart_script );
+  if( MA(self)->onstart_script != NULL ) {
+    pip_info_mesg( "PiP task[%d] will be SIGSTOPed (%s)",
+		   TA(self)->pipid, PIP_ENV_STOP_ON_START );
+    if( pip_raise_signal( self, SIGSTOP ) != 0 ) {
+      /* failed to send signal */
+      pip_warn_mesg( "PiP task[%d] failed to deliver SIGSTOP (%s)",
+		     TA(self)->pipid, PIP_ENV_STOP_ON_START );
+    }
+  }
+  if( ( err = pip_call_before_hook( self ) ) != 0 ) {
+    extval = err;
+    goto error;
+  }
+  /* emulate close-on-exec */
+  DBGF( "fd_list:%p", args->fd_list );
+  if( args->fd_list != NULL ) {
+    for( i=0; args->fd_list[i]>=0; i++ ) { /* Close-on-exec FDs */
+      DBGF( "COE: %d", args->fd_list[i] );
+      (void) close( args->fd_list[i] );
+    }
+  }
+  if( MA(self)->symbols.start == NULL ) {
+    /* calling hook function, if any */
+    DBGF( "[%d] >> main@%p(%d,%s,%s,...)",
+	  TA(self)->pipid, MA(self)->symbols.main, args->argc, argv[0], argv[1] );
+    extval = MA(self)->symbols.main( args->argc, argv, envv );
+    DBGF( "[%d] << main@%p(%d,%s,%s,...) = %d",
+	  TA(self)->pipid, MA(self)->symbols.main, args->argc, argv[0], argv[1],
+	  extval );
+  } else {
+    DBGF( "[%d] >> %s:%p(%p)",
+	  TA(self)->pipid, args->funcname,
+	  MA(self)->symbols.start, start_arg );
+    extval = MA(self)->symbols.start( start_arg );
+    DBGF( "[%d] << %s:%p(%p) = %d",
+	  args->pipid, args->funcname,
+	  MA(self)->symbols.start, start_arg, extval );
+  }
+ error:
   pip_return_from_start_func( self, extval );
   NEVER_REACH_HERE;
 }
@@ -800,6 +751,7 @@ static void *pip_spawn_top( void *thargs )  {
   pip_task_internal_t 	*self  = &pip_root->tasks[pipid];
   int			err    = 0;
 
+  MA(self)->pid    = getpid();
   AA(self)->tid    = pip_gettid();
   MA(self)->thread = pthread_self();
   ENTER;
@@ -886,6 +838,55 @@ static int pip_check_active_flag( uint32_t flags ) {
   return 0;
 }
 
+static char *pip_onstart_script( char *env, size_t len ) {
+  struct stat stbuf;
+  char *script;
+
+  ENTERF( "env:%s", env );
+  script = strndup( env, len );
+  if( stat( script, &stbuf ) != 0 ) {
+    pip_warn_mesg( "Unable to find file: %s (%s=%s)", 
+		   script, PIP_ENV_STOP_ON_START, env );
+    free( script );
+    script = NULL;
+  } else if( ( stbuf.st_mode & ( S_IXUSR | S_IXGRP | S_IXOTH ) ) == 0 ) {
+    pip_warn_mesg( "Not an executable file: %s (%s=%s)", 
+		   script, PIP_ENV_STOP_ON_START, env );
+    free( script );
+    script = NULL;
+  }
+  DBGF( "script:%s", script );
+  return script;
+}
+
+static char*
+pip_onstart_target( pip_task_internal_t *taski, char *env ) {
+  char *p, *q;
+  int pipid;
+
+  p = index( env, '@' );
+  if( p == NULL ) {
+    return pip_onstart_script( env, strlen( env ) );
+  } else if( env[0] == '@' ) {		/* no script */
+    p = &env[1];
+    if( *p == '\0' ) return strdup( "" );
+    pipid = strtol( p, NULL, 10 );
+    if( pipid < 0 || pipid == TA(taski)->pipid ) {
+      return strdup( "" );
+    }
+  } else {
+    q = p ++;			/* skip '@' */
+    if( *p == '\0' ) {		/* no target */
+      return pip_onstart_script( env, q - env );
+    }
+    pipid = strtol( p, NULL, 10 );
+    if( pipid < 0 || pipid == TA(taski)->pipid ) {
+      return pip_onstart_script( env, q - env );
+    }
+  }
+  return NULL;
+}
+
 static int pip_do_task_spawn( pip_spawn_program_t *progp,
 			      int pipid,
 			      int coreno,
@@ -896,6 +897,7 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
   cpu_set_t 		cpuset;
   pip_spawn_args_t	*args = NULL;
   pip_task_internal_t	*task = NULL;
+  char			*env_stop;
   size_t		stack_size;
   int 			err = 0;
 
@@ -977,11 +979,23 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
     }
     args->start_arg = progp->arg;
   }
+
   if( pip_is_shared_fd_() ) {
     args->fd_list = NULL;
   } else if( ( err = pip_list_coe_fds( &args->fd_list ) ) != 0 ) {
     GOTO_ERR( err );
   }
+
+  if( ( env_stop = pip_root->envs.stop_on_start ) != NULL &&
+      *env_stop != '\0' ) {
+    if( !pip_is_threaded_() ) {
+      MA(task)->onstart_script = pip_onstart_target( task, env_stop );
+    } else {
+      pip_warn_mesg( "%s=%s is NOT effective with (p)thread mode",
+		     PIP_ENV_STOP_ON_START, env_stop );
+    }
+  }
+  DBGF( "ONSTART: '%s'", MA(task)->onstart_script );
   /* must be called before calling dlmopen() */
   pip_gdbif_task_new( task );
 
@@ -1056,6 +1070,10 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
   if( err == 0 ) {
     /* wait until task starts running or enqueues */
     pip_sem_wait( &pip_root->sync_spawn );
+    if( MA(task)->onstart_script    != NULL && 
+	MA(task)->onstart_script[0] != '\0' ) {
+      pip_onstart( task );
+    }
     pip_root->ntasks_count ++;
     pip_root->ntasks_accum ++;
     if( bltp != NULL ) *bltp = (pip_task_t*) task;
@@ -1069,8 +1087,8 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
       PIP_FREE( args->funcname    );
       PIP_FREE( args->argvec.vec  );
       PIP_FREE( args->argvec.strs );
-      PIP_FREE( args->envvec.vec  );
-      PIP_FREE( args->envvec.strs );
+      //PIP_FREE( args->envvec.vec  );
+      //PIP_FREE( args->envvec.strs );
       PIP_FREE( args->fd_list     );
     }
     if( task != NULL ) {

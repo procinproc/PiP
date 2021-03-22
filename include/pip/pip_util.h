@@ -72,23 +72,24 @@ extern "C" {
   void pip_warn_mesg( const char *format, ... )
     __attribute__((format (printf, 1, 2)));
 
+  void pip_fprint_fd( FILE *fp, int );
+  void pip_fprint_fds( FILE *fp );
+
   /* the following pip_pring_*() functions will be deprecated */
   void pip_print_maps( void );
-  void pip_print_fd( int fd );
-  void pip_print_fds( void );
-  void pip_print_loaded_solibs( FILE *file );
+  void pip_print_fd( FILE*, int );
+  void pip_print_fds( FILE* );
+  void pip_print_loaded_solibs( FILE* );
   void pip_print_dsos( void );
 
-  void pip_fprint_maps( FILE *fp );
-  void pip_fprint_fd( FILE *fp, int fd );
-  void pip_fprint_fds( FILE *fp );
-  void pip_fprint_loaded_solibs( FILE *file );
-  void pip_fprint_dsos( FILE *fp );
+  void pip_fprint_maps( FILE* );
+  void pip_fprint_loaded_solibs( FILE* );
+  void pip_fprint_dsos( FILE* );
 
-  void pip_check_addr( char *tag, void *addr );
+  void pip_check_addr( char*, void* );
   double pip_gettime( void );
 
-  void pip_backtrace_fd( int depth, int fd );
+  void pip_backtrace_fd( int, int );
 
 #ifdef __cplusplus
 }

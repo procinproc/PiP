@@ -73,9 +73,9 @@
 #include <string.h>
 #include <stdarg.h>
 #include <dirent.h>
+#include <libgen.h>
 #include <fcntl.h>
 #include <link.h>
-#include <dlfcn.h>
 #include <ucontext.h>
 
 #include <pip/pip_config.h>
@@ -214,6 +214,14 @@ typedef struct pip_task_misc {
   struct pip_gdbif_task		*gdbif_task; /* GDB if */
   /* stack for pip-gdb automatic attach */
   void				*sigalt_stack;
+
+  Lmid_t			lmid;
+  pid_t				pid;
+  /* stop_on_start */
+  pid_t				pid_onstart;
+  char				*onstart_script;
+  /* reserved for future use */
+  void				*__reserved__[36];
 } pip_task_misc_t;
 
 typedef struct pip_task_annex {
@@ -364,7 +372,11 @@ typedef struct pip_root {
   struct pip_gdbif_root		*gdbif_root;
   /* for backtrace */
   pip_spinlock_t		lock_bt; /* lock for backtrace */
-  void				*__reserved__[32]; /* reserved for future use */
+
+  char				*installdir;
+  /* reserved for future use */
+  void				*__reserved__[32];
+
   /* PiP tasks array */
   pip_task_internal_t		tasks[];
 
@@ -424,7 +436,10 @@ extern void pip_stack_protect( pip_task_internal_t *taski,
 extern void pip_stack_unprotect( pip_task_internal_t *taski ) PIP_PRIVATE;
 extern void pip_stack_wait( pip_task_internal_t *taski ) PIP_PRIVATE;
 
+extern void pip_set_exit_status( pip_task_internal_t*, int ) PIP_PRIVATE;
 extern void pip_do_exit( pip_task_internal_t* ) PIP_PRIVATE;
+extern void pip_task_signaled( pip_task_internal_t*, int ) PIP_PRIVATE;
+extern void pip_annul_task( pip_task_internal_t* ) PIP_PRIVATE;
 extern void pip_reset_task_struct( pip_task_internal_t* ) PIP_PRIVATE;
 extern void pip_finalize_task( pip_task_internal_t* ) PIP_PRIVATE;
 extern void pip_finalize_task_RC( pip_task_internal_t* ) PIP_PRIVATE;
@@ -464,7 +479,6 @@ extern size_t pip_idstr( char*, size_t ) PIP_PRIVATE;
 
 extern void pip_page_alloc( size_t, void** ) PIP_PRIVATE;
 extern int  pip_count_vec( char** ) PIP_PRIVATE;
-extern int  pip_get_dso( int pipid, void **loaded ) PIP_PRIVATE;
 
 extern int  pip_dequeue_and_resume_multiple( pip_task_queue_t*,
 					     pip_task_internal_t*,
@@ -479,7 +493,9 @@ extern int  pip_is_magic_ok( pip_root_t* ) PIP_PRIVATE;
 extern int  pip_is_version_ok( pip_root_t* ) PIP_PRIVATE;
 extern int  pip_are_sizes_ok( pip_root_t* ) PIP_PRIVATE;
 
+extern char *pip_get_prefix_dir( char* ) PIP_PRIVATE;
 extern void pip_debug_on_exceptions( pip_task_internal_t* ) PIP_PRIVATE;
+extern void pip_onstart( pip_task_internal_t* ) PIP_PRIVATE;
 
 INLINE int pip_are_flags_exclusive( uint32_t flags, uint32_t val ) {
   return ( flags & val ) == ( flags | val );

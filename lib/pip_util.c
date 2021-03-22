@@ -34,6 +34,7 @@
  */
 
 #include <pip/pip_internal.h>
+#include <pip/pip.h>
 
 #include <sys/syscall.h>
 #include <sys/prctl.h>
@@ -163,61 +164,51 @@ int pip_check_pie( const char *path, int flag_verbose ) {
 
 /* the following function(s) are for debugging */
 
-int pip_debug_env( void ) {
-  static int flag = 0;
-  if( !flag ) {
-    if( getenv( "PIP_NODEBUG" ) ) {
-      flag = -1;
-    } else {
-      flag = 1;
-    }
-  }
-  return flag > 0;
-}
-
 #define FDPATH_LEN	(512)
 #define RDLINK_BUF	(256)
 #define RDLINK_BUF_SP	(RDLINK_BUF+8)
 
-void pip_fprint_fd( FILE *fp, int fd ) {
-  char idstr[64];
+void pip_print_fd( FILE *fp, int fd ) {
   char fdpath[FDPATH_LEN];
   char fdname[RDLINK_BUF_SP];
   ssize_t sz;
 
-  (void) pip_idstr( idstr, sizeof(idstr) );
-  snprintf( fdpath, FDPATH_LEN, "/proc/self/fd/%d", fd );
+  sprintf( fdpath, "/proc/self/fd/%d", fd );
   if( ( sz = readlink( fdpath, fdname, RDLINK_BUF ) ) > 0 ) {
     fdname[sz] = '\0';
-    fprintf( fp, "%s %d -> %s", idstr, fd, fdname );
+    char idstr[64];
+    pip_idstr( idstr, 64 );
+#ifndef DEBUG
+    fprintf( fp, "%s %d -> %s\n", idstr, fd, fdname );
+#endif
   }
 }
 
-void pip_print_fd( int fd ) { pip_fprint_fd( stderr, fd ); }
-
-void pip_fprint_fds( FILE *fp ) {
+void pip_print_fds( FILE *fp ) {
   DIR *dir = opendir( "/proc/self/fd" );
   struct dirent *de;
   char idstr[64];
   char fdpath[FDPATH_LEN];
   char fdname[RDLINK_BUF_SP];
-  char coe = ' ';
   ssize_t sz;
 
-  (void) pip_idstr( idstr, sizeof(idstr) );
+  pip_idstr( idstr, 64 );
   if( dir != NULL ) {
     int fd_dir = dirfd( dir );
     int fd;
 
     while( ( de = readdir( dir ) ) != NULL ) {
-      snprintf( fdpath, FDPATH_LEN, "/proc/self/fd/%s", de->d_name );
+      sprintf( fdpath, "/proc/self/fd/%s", de->d_name );
       if( ( sz = readlink( fdpath, fdname, RDLINK_BUF ) ) > 0 ) {
 	fdname[sz] = '\0';
 	if( ( fd = atoi( de->d_name ) ) != fd_dir ) {
-	  if( pip_isa_coefd( fd ) ) coe = '*';
-	  fprintf( fp, "%s %s -> %s %c", idstr, fdpath, fdname, coe );
+	  if( pip_isa_coefd ( fd ) ) {
+	    fprintf( fp, "%s %s -> %s [COE]\n", idstr, fdpath, fdname );
+	  } else {
+	    fprintf( fp, "%s %s -> %s\n", idstr, fdpath, fdname );
+	  }
 	} else {
-	  fprintf( fp, "%s %s -> %s  opendir(\"/proc/self/fd\")",
+	  fprintf( fp, "%s %s -> %s  opendir(\"/proc/self/fd\")\n",
 		   idstr, fdpath, fdname );
 	}
       }
@@ -225,8 +216,6 @@ void pip_fprint_fds( FILE *fp ) {
     closedir( dir );
   }
 }
-
-void pip_print_fds( void ) { pip_fprint_fds( stderr ); }
 
 void pip_check_addr( char *tag, void *addr ) {
   FILE *maps = fopen( "/proc/self/maps", "r" );
@@ -277,7 +266,7 @@ void pip_fprint_loaded_solibs( FILE *fp ) {
   /* pip_init() must be called in advance */
   (void) pip_idstr( idstr, sizeof(idstr) );
 
-  if( ( err = pip_get_dso( PIP_PIPID_MYSELF, &handle ) ) != 0 ) {
+  if( ( err = pip_get_dlmopen_info( PIP_PIPID_MYSELF, &handle, NULL ) ) != 0 ) {
     pip_info_fmesg( fp, "%s (no solibs found: %d)\n", idstr, err );
   } else {
     struct link_map *map = (struct link_map*) handle;

@@ -27,7 +27,7 @@
 # $RIKEN_copyright: Riken Center for Computational Sceience (R-CCS),
 # System Software Development Team, 2016-2021
 # $
-# $PIP_VERSION: Version 3.0.0$
+# $PIP_VERSION: Version 3.1.0$
 #
 # $Author: Atsushi Hori (R-CCS)
 # Query:   procinproc-info@googlegroups.com
@@ -59,6 +59,10 @@ cmdself = os.path.basename( sys.argv.pop(0) )
 check_gen    = None
 check_out    = None
 check_output = None
+
+tgkill_path = os.path.abspath( 
+    os.path.join( os.path.join( os.getcwd(), os.path.dirname( __file__ ) ),
+                  "pip-tgkill" ) )
 
 def print_usage( errmsg ):
     "print usage and exit"
@@ -158,8 +162,8 @@ error = False
 
 ps_ax        = ''
 flag_bsd_u   = False
-flag_root    = False
-flag_task    = False
+flag_root    = True
+flag_task    = True
 flag_family  = False
 thread_mode  = False
 flag_kill    = False
@@ -168,6 +172,7 @@ flag_debug   = False
 ps_opts      = None
 top_opts     = None
 killsig      = None
+mode_sel     = None
 
 selections = []
 
@@ -214,19 +219,29 @@ if len(sys.argv) > 0:
     idx  = 0
     while idx < argc:
         opt = args[idx]
-        if flag_debug:
-            print( str(idx)+'/'+str(argc), opt, args )
+##        if flag_debug:
+##            print( str(idx)+'/'+str(argc), opt, args )
         idx += 1
         if idx < argc:
             nxt = args[idx]
         else:
             nxt = None
         if opt in [ '--root', '-r' ]:
-            flag_root = True
+            flag_task = False
         elif opt in [ '--task', '-t' ]:
-            flag_task = True
+            flag_root = False
         elif opt in [ '--family', '-f' ]:
             flag_family = True
+        elif opt in [ '--mode', '-m' ]:
+            if nxt is None:
+                print_usage( 'No mode specified' )
+            else:
+                nxtu = nxt.upper()
+                for m in nxtu:
+                    if not m in "PLGCT":
+                        print_usage( 'Invalid mode' )
+                mode_sel = nxtu
+            idx += 1
         elif opt in [ '--kill', '-k' ]:
             flag_kill = True
         elif opt in [ '--signal', '-s' ]:
@@ -265,9 +280,14 @@ if len(sys.argv) > 0:
 
 if flag_debug:
     print( 'Selections:', selections )
+    print( 'mode_sel:', mode_sel )
 
 if ps_opts is not None and top_opts is not None:
     ex_print( '--ps and --top options are exclusive' )
+
+if flag_kill or killsig is not None:
+    if not os.path.exists( tgkill_path ):
+        ex_print( tgkill_path + ' not found' )
 
 if flag_kill and killsig is not None:
     ex_print( '--kill and --signal options are exclusive' )
@@ -287,8 +307,6 @@ if killsig is not None and top_opts is not None:
 pips_postfix = 'comm tid pid ppid'
 if flag_bsd_u:
     fmt = 'user pid tid %cpu %mem vsz rss tty stat start_time cputime'
-elif ps_ax == '':
-    fmt = 'pid tid tty time'
 else:
     fmt = 'pid tid tty stat time'
 ps_cmd = [ 'ps', ps_ax+'H', '--format' ] + [ fmt + ' ' + pips_postfix ]
@@ -329,10 +347,7 @@ def format_header( header ):
     head.insert( -1, 'PIP' )
     return head
 
-def format_psline( psline ):
-    "re-format from the ps format to the pips format"
-    cmd = get_command( psline )
-    first  = cmd[0]
+def get_mode( cmd ):
     second = cmd[1]
     if second == ':':
         mode = 'L'
@@ -344,6 +359,13 @@ def format_psline( psline ):
         mode = 'T'
     else:
         mode = '?'
+    return mode
+
+def format_psline( psline ):
+    "re-format from the ps format to the pips format"
+    cmd = get_command( psline )
+    first  = cmd[0]
+    mode = get_mode( cmd );
     line = psline[:-4]
     line += [ first+mode, cmd[2:] ]
     return line
@@ -366,7 +388,7 @@ def pip_task_symbol( sym ):
         return True
     return False
 
-def get_mode( ps ):
+def get_mode_symbol( ps ):
     "return PiP execution mode symbol"
     cmd = get_command( ps )
     return cmd[1]
@@ -391,29 +413,44 @@ def isa_piptask( cmd ):
         return True
     return False
 
+def check_mode( cmd ):
+    "check is the mode of the command is the one to be selected"
+    if mode_sel is None:
+        return True
+    m = get_mode( cmd )
+    if 'P' in mode_sel:
+        if m in 'LCG':
+            return True
+        else:
+            return False
+    elif m in mode_sel:
+        return True
+    else:
+        return False
+
 def is_selected( ps, cmd, patterns ):
     "check if the psline matches the patterns"
     if patterns == []:
-        return True
+        return check_mode( cmd )
     if len(cmd) > 2 and cmd[2:] in patterns:
-        return True
+        return check_mode( cmd )
     tid = get_tid( ps )
     if tid in patterns:
-        return True
+        return check_mode( cmd )
     pid = get_pid( ps )
     if pid in patterns:
-        return True
+        return check_mode( cmd )
 
     if flag_fnmatch:
         for pat in patterns:
             if fnm.fnmatch( cmd, pat ):
-                return True
+                return check_mode( cmd )
     return False
 
-def has_pc_relation( parent, child ):
+def have_pc_relation( parent, child ):
     "check if they have the parent-child relationship"
-    mp = get_mode( parent )
-    mc = get_mode( child  )
+    mp = get_mode_symbol( parent )
+    mc = get_mode_symbol( child  )
     if mp != mc:
         return False
     if is_threaded( mp ):
@@ -442,7 +479,6 @@ def read_ps_output( fstream ):
         if header is None:
             header = psl
         else:
-            print( psl )
             cmd = get_command( psl )
             if isa_piproot( cmd ) or isa_piptask( cmd ):
                 piplines += [ psl ]
@@ -461,85 +497,107 @@ else:
     fstream = open( check_out+'.input', mode='r' )
     fstream.readline() # skip the very first line
     read_ps_output( fstream )
-#try:
-#except Exception as e:
-#    ex_print( 'ps.Popen('+str(ps_cmd)+') error: ' + str(e) )
-#finally:
-#    if fstream is not None:
-#        fstream.close()
-#    if check_gen != None:
-#        check_input.close()
 
 patterns = []
 for select in selections:
-    patterns += [ select[0:14] ]
+    patterns += [ select ]
 
-pip_roots = []
-pip_tasks = []
-pip_all_roots = []
-pip_all_tasks = []
+if not flag_root and not flag_task:
+    flag_root = True
+    flag_task = True
+
+all_roots = []
+all_tasks = []
+sel_roots = []
+sel_tasks = []
 for ps in piplines:
     cmd = get_command( ps )
     if isa_piproot( cmd ):
-        pip_all_roots += [ ps ]
-        if ( not flag_root and not flag_task ) or flag_root:
-            if is_selected( ps, cmd, patterns ):
-                pip_roots += [ ps ]
+        all_roots += [ ps ]
+        if is_selected( ps, cmd, patterns ):
+            sel_roots += [ ps ]
     elif isa_piptask( cmd ):
-        pip_all_tasks += [ ps ]
-        if ( not flag_root and not flag_task ) or flag_task:
-            if is_selected( ps, cmd, patterns ):
-                pip_tasks += [ ps ]
+        all_tasks += [ ps ]
+        if is_selected( ps, cmd, patterns ):
+            sel_tasks += [ ps ]
+
+if flag_debug:
+    print( 'all_roots:', all_roots )
+    print( 'all_tasks:', all_tasks )
+    print( 'sel_roots:', sel_roots )
+    print( 'sel_tasks:', sel_tasks )
 
 if flag_family:
     fmly_roots = []
     fmly_tasks = []
-    for rs in pip_roots:
+    for rs in sel_roots:
         fmly_roots += [ rs ]
-        for ts in pip_all_tasks:
-            if has_pc_relation( rs, ts ):
+        for ts in all_tasks:
+            if have_pc_relation( rs, ts ):
                 fmly_tasks += [ ts ]
-    for ts in pip_tasks:
-        for rs in pip_all_roots:
-            if has_pc_relation( ts, rs ) and rs not in fmly_roots:
+    for ts in sel_tasks:
+        for rs in all_roots:
+            if have_pc_relation( rs, ts ) and rs not in fmly_roots:
                 fmly_roots += [ rs ]
     for rs in fmly_roots:
-        for ts in pip_all_tasks:
-            if has_pc_relation( rs, ts ) and ts not in fmly_tasks:
+        for ts in all_tasks:
+            if have_pc_relation( rs, ts ) and ts not in fmly_tasks:
                 fmly_tasks += [ ts ]
-    pip_roots = fmly_roots
-    pip_tasks = fmly_tasks
+    sel_roots = fmly_roots
+    sel_tasks = fmly_tasks
+
+if flag_debug:
+    print( 'sel_roots:', sel_roots )
+    print( 'sel_tasks:', sel_tasks )
+
+all_tasks = []
+if not flag_root and not flag_task:
+    all_tasks = sel_roots + sel_tasks
+if flag_root:
+    all_tasks += sel_roots
+if flag_task:
+    all_tasks += sel_tasks
+
+if all_tasks == []:
+    ex_print( 'no PiP task found' )
 
 def sort_tid( psline ):
     "sort lines with TID"
     return int( get_tid( psline ) )
 
-pip_roots.sort( key=sort_tid )
-pip_tasks.sort( key=sort_tid )
-
-all_tasks = pip_roots + pip_tasks
-if all_tasks == []:
-    ex_print( 'no PiP task found' )
 all_tasks.sort( key=sort_tid )
 
 if flag_debug:
     for ps in all_tasks:
         print( ps )
 
-if killsig is not None:
+def kill_task( ps, killsig ):
     ( signame, signum ) = killsig
     try:
-        for ps in all_tasks:
-            tid = get_tid( ps )
-            if flag_verbose:
-                eprint( 'kill -s ' + signame + ' ' + tid )
-            if check_gen is None and check_out is None:
-                os.kill( int(tid), signum )
-            else:
-                print( 'kill', tid, signame, file=check_output )
+        cmd = get_command( ps )
+        tid = get_tid( ps )
+        pid = get_pid( ps )
+        if flag_verbose:
+            print( 'pip-tgkill ' + signame + ' ' + 
+                   pid + ' ' + tid + 
+                   ' (' + cmd + ')' )
+        if check_gen is None and check_out is None:
+            sp.check_call( [ tgkill_path, signame, pid, tid ] )
+        else:
+            print( 'pip-tgkill', signame, tid, cmd, file=check_output )
     except Exception as e:
         error = True
-        eprint( 'kill(' + signame + ',' + tid + '): ' + str(e) )
+        print( 'pip-tgkill ' + signame + ' ' + 
+               pid + ' ' + tid + 
+               ' (' + cmd + ')' )
+
+if killsig is not None:
+    if flag_task:
+        for ps in sel_tasks:
+            kill_task( ps, killsig );
+    if flag_root:
+        for ps in sel_roots:
+            kill_task( ps, killsig );
 
 elif ps_opts is not None:
     ps_cmd = 'ps'
@@ -589,21 +647,16 @@ elif top_opts is not None:
 else:
     out_list = []
     if flag_family:
-        for pr in pip_roots:
-            out_list += [ pr ]
-            for pt in pip_tasks:
-                if has_pc_relation( pr, pt ):
-                    out_list += [ pt ]
-    elif not flag_root and not flag_task:
+        for pr in sel_roots:
+            if flag_root:
+                out_list += [ pr ]
+            if flag_task:
+                for pt in all_tasks:
+                    if have_pc_relation( pr, pt ):
+                        out_list += [ pt ]
+    else:
         for ps in all_tasks:
             out_list += [ ps ]
-    else:
-        if flag_root:
-            for ps in pip_roots:
-                out_list += [ ps ]
-        if flag_task:
-            for ps in pip_tasks:
-                out_list += [ ps ]
     # format
     outl = [ format_header( header ) ]
     for out in out_list:

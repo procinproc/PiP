@@ -44,6 +44,7 @@
 #include <pip/pip_dlfcn.h>
 #include <pip/pip_gdbif_func.h>
 
+#include <malloc.h> 		/* needed for mallopt(M_MMAP_THRESHOLD) */
 #include <limits.h>		/* for PTHREAD_STACK_MIN */
 #define PIP_TRAMPOLINE_STACKSZ	(PTHREAD_STACK_MIN)
 
@@ -56,6 +57,20 @@ extern pip_spinlock_t 	*pip_lock_clone;
 /*** located at each PIP task and the root process. ***/
 
 static pip_clone_t*	pip_cloneinfo = NULL;
+
+#ifndef PIP_NO_MALLOPT
+  /* heap (using brk or sbrk) is not safe in PiP */
+#ifdef M_MMAP_THRESHOLD
+void pip_donot_use_heap( void ) __attribute__ ((constructor));
+void pip_donot_usr_heap( void ) {
+  if( mallopt( M_MMAP_THRESHOLD, 1 ) == 1 ) {
+    DBGF( "mallopt(M_MMAP_THRESHOLD): succeeded" );
+  } else {
+    pip_warn_mesg( "mallopt(M_MMAP_THRESHOLD): failed !!!!!!" );
+  }
+}
+#endif
+#endif
 
 static void pip_set_magic( pip_root_t *root ) {
   memcpy( root->magic, PIP_MAGIC_WORD, PIP_MAGIC_WLEN );
@@ -379,13 +394,13 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, uint32_t opts ) {
 
   if(( envroot = getenv( PIP_ROOT_ENV ) ) == NULL ) {
     /* root process */
-    if( pip_root != NULL ) RETURN( EBUSY ); /* already initialized */
+    if( pip_is_initialized() ) RETURN( EBUSY );
+
     if( ntasksp == NULL ) {
       ntasks = PIP_NTASKS_MAX;
     } else {
       ntasks = *ntasksp;
     }
-
     if( ntasks <= 0             ) RETURN( EINVAL );
     if( ntasks > PIP_NTASKS_MAX ) RETURN( EOVERFLOW );
 
@@ -503,40 +518,22 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, uint32_t opts ) {
 
   } else if( ( envtask = getenv( PIP_TASK_ENV ) ) != NULL ) {
     /* child task */
-    int	rv;
-
     root  = (pip_root_t*) strtoll( envroot, NULL, 16 );
     pipid = (int) strtol( envtask, NULL, 10 );
     ASSERT( pipid >= 0 && pipid < root->ntasks );
     taski = &pip_root->tasks[pipid];
-    if( ( rv = pip_init_task_implicitly( root, taski ) ) == 0 ) {
+    if( ( err = pip_init_task_implicitly( root, taski ) ) == 0 ) {
       ntasks = root->ntasks;
       /* succeeded */
       if( ntasksp != NULL ) *ntasksp = ntasks;
       if( rt_expp != NULL ) {
 	*rt_expp = AA(taski)->import_root;
       }
+      DBGF( "UNSETENV ++++++++++++++++++++++++" );
       unsetenv( PIP_ROOT_ENV );
       unsetenv( PIP_TASK_ENV );
     } else {
-      switch( rv ) {
-      case 1:
-	pip_err_mesg( "Invalid PiP root" );
-	break;
-      case 2:
-	pip_err_mesg( "Magic number error" );
-	break;
-      case 3:
-	pip_err_mesg( "Version miss-match between PiP root and task" );
-	break;
-      case 4:
-	pip_err_mesg( "Size miss-match between PiP root and task" );
-	break;
-      default:
-	pip_err_mesg( "Something wrong with PiP root and task" );
-	break;
-      }
-      RETURN( EINVAL );
+      RETURN( err );
     }
   } else {
     RETURN( EPERM );
@@ -623,6 +620,18 @@ int pip_isa_task( void ) {
     pip_is_initialized() &&
     PIP_ISA_TASK( pip_task ) && /* root is also a task */
     !PIP_ISA_ROOT( pip_task );
+}
+
+int pip_get_dlmopen_info( int pipid, void **handle, long *lmidp ) {
+  pip_task_internal_t *taski;
+  int err;
+
+  if( !pip_is_initialized() ) RETURN( EPERM );
+  if( ( err = pip_check_pipid( &pipid ) ) != 0 ) RETURN( err );
+  taski = pip_get_task( pipid );
+  if( handle != NULL ) *handle = MA(taski)->loaded;
+  if( lmidp  != NULL ) *lmidp  = MA(taski)->lmid;
+  RETURN( 0 );
 }
 
 int pip_get_pipid( int *pipidp ) {

@@ -837,6 +837,27 @@ int pip_task_spawn( pip_spawn_program_t *progp,
   int pip_get_aux( void **auxp );
 
   /**
+   * \PiPManEntry{pip_get_dlmopen_info}
+   *
+   * \brief Retrieve the loaded link map info. of the specified Pip task
+   *
+   * \synopsis
+   * \#include <pip/pip.h> \n
+   * int pip_get_dlmopen_info( int pipid, void **handlep, long *lmidp )
+   *
+   * \param[in] pipid The PiP ID 
+   * \param[out] handlep loaded handle
+   * \param[out] lmidp Lmid
+   *
+   * \return Return 0 on success. Return an error code on error.
+   * \retval EPERM PiP library is not yet initialized or already
+   * finalized
+   *
+   * \sa pip_task_spawn
+   */
+  int pip_get_dlmopen_info( int pipid, void **handlep, long *lmidp );
+
+  /**
    * @}
    */
 

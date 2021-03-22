@@ -48,7 +48,6 @@
  * \param "-n N" number of tasks
  * \param "-f FUNC" function name to start
  * \param "-c CORE" specify the CPU core number to bind core(s)
- * \param -r core binding in the round-robin fashion
  *
  * \sa
  * pipcc(1)
@@ -66,6 +65,7 @@
 
 #include <pip/pip.h>
 
+#include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -80,7 +80,7 @@ static char *program;
 static void print_usage( void ) {
   fprintf( stderr,
 	   "Usage: %s [-n N] [-c C] [-f F] A.OUT ... "
-	   "{ : [-n N] [-c C] [-f F] B.OUT ... } \n",
+	   "{ : [-n N] [-c C] [-f F] B.OUT ... }\n",
 	   program );
   fprintf( stderr, "\t-n N\t: Number of PiP tasks (default is 1)\n" );
   fprintf( stderr, "\t-c C\t: CPU core binding pattern\n" );
@@ -130,7 +130,7 @@ static corebind_t *new_corebind( char **p ) {
   }
   corebind_t	*cb = (corebind_t*) malloc( sizeof( corebind_t ) );
   if( cb == NULL ) {
-    fprintf( stderr, "Not enough memory (corebind)\n" );
+    fprintf( stderr, "%s: Not enough memory (corebind)\n", program );
     exit( 9 );
   }
   memset( cb, 0, sizeof( corebind_t ) );
@@ -187,7 +187,7 @@ typedef struct arg {
 static arg_t *new_arg( char *a ) {
   arg_t	*arg = (arg_t*) malloc( sizeof( arg_t ) );
   if( arg == NULL ) {
-    fprintf( stderr, "Not enough memory (arg)\n" );
+    fprintf( stderr, "%s: Not enough memory (arg)\n", program );
     exit( 9 );
   }
   memset( arg, 0, sizeof( arg_t ) );
@@ -217,7 +217,7 @@ static int isa_digit_string( const char *str ) {
 static spawn_t *new_spawn( void ) {
   spawn_t *spawn = (spawn_t*) malloc( sizeof( spawn_t ) );
   if( spawn == NULL ) {
-    fprintf( stderr, "Not enough memory (spawn)\n" );
+    fprintf( stderr, "%s: Not enough memory (spawn)\n", program );
     exit( 9 );
   }
   memset( spawn, 0, sizeof( spawn_t ) );
@@ -288,7 +288,7 @@ int main( int argc, char **argv ) {
   //  int flag_dryrun = 0;
   int pipid;
   int i, j, d;
-  int extval;
+  int extval, errsig;
   int err = 0;
 
   program = basename( argv[0] );
@@ -309,7 +309,7 @@ int main( int argc, char **argv ) {
 	if( ( err = pip_check_pie( argv[i], 1 ) ) != 0 ) goto error;
 	if( access( argv[i], X_OK ) ) {
 	  err = errno;
-	  fprintf( stderr, "'%s' is not executable\n", argv[i] );
+	  fprintf( stderr, "%s: '%s' is not executable\n", program, argv[i] );
 	  goto error;
 	}
 	spawn->args = spawn->tail = new_arg( argv[i++] );
@@ -376,7 +376,7 @@ int main( int argc, char **argv ) {
     argc_max = ( spawn->argc > argc_max ) ? spawn->argc : argc_max;
   }
   if( ntasks > PIP_NTASKS_MAX ) {
-    fprintf( stderr, "Too many tasks\n" );
+    fprintf( stderr, "%s: Too many tasks\n", program );
     err = EOVERFLOW;
     goto error;
   }
@@ -384,13 +384,13 @@ int main( int argc, char **argv ) {
   argc_max ++;
   nargv = (char**) malloc( sizeof( char* ) * argc_max );
   if( nargv == NULL ) {
-    fprintf( stderr, "Not enough memory (nargv)\n" );
+    fprintf( stderr, "%s: Not enough memory (nargv)\n", program );
     err = ENOMEM;
     goto error;
   }
 
   if( ( err = pip_init( NULL, &ntasks, NULL, 0 ) ) != 0 ) {
-    fprintf( stderr, "pip_init()=%d\n", err );
+    fprintf( stderr, "%s: pip_init()=%d\n", program, err );
     goto error;
   }
   j = 0;
@@ -435,6 +435,7 @@ int main( int argc, char **argv ) {
     nt_start += spawn->ntasks;
   }
   extval = 0;
+  errsig = 0;
   for( i=0; i<ntasks; i++ ) {
     int threaded, status, ex;
 
@@ -450,13 +451,17 @@ int main( int argc, char **argv ) {
       if( ex > extval ) extval = ex;
     } else if( WIFSIGNALED( status ) ) {
       int sig = WTERMSIG( status );
-      fprintf( stderr, "PIPID:%d signaled (%s)\n", pipid, strsignal(sig) );
+      fprintf( stderr, "%s: PIPID:%d signaled (%s)\n", program, pipid, strsignal(sig) );
+      if( errsig == 0 ) errsig = sig;
     }
   }
   err = extval;
  error:
   if( nargv != NULL ) free( nargv );
   free_spawn( head );
+
+  if( errsig > 0 ) kill( getpid(), errsig );
+
   return err;
 }
 

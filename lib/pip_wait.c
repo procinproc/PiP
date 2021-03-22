@@ -99,8 +99,7 @@ void pip_deadlock_dec( void ) {
 #endif
 }
 
-static void
-pip_set_exit_status( pip_task_internal_t *taski, int status ) {
+void pip_set_exit_status( pip_task_internal_t *taski, int status ) {
   ENTER;
   if( !AA(taski)->flag_exit ) {
     AA(taski)->flag_exit = PIP_EXITED;
@@ -113,6 +112,18 @@ pip_set_exit_status( pip_task_internal_t *taski, int status ) {
   }
   DBGF( "status: 0x%x(0x%x)", status, AA(taski)->status );
   RETURNV;
+}
+
+void pip_task_signaled( pip_task_internal_t *taski, int status ) {
+  int sig = WTERMSIG( status );
+  pip_warn_mesg( "PiP Task [%d] terminated by '%s' (%d) signal",
+		 TA(taski)->pipid, strsignal(sig), sig );
+}
+
+void pip_annul_task( pip_task_internal_t *taski ) {
+  TA(taski)->type   = PIP_TYPE_NULL;
+  AA(taski)->tid    = 0;
+  MA(taski)->thread = 0;
 }
 
 void pip_finalize_task_RC( pip_task_internal_t *taski ) {
@@ -250,17 +261,23 @@ pip_wait_syscall( pip_task_internal_t *taski, int flag_blk ) {
 	  AA(taski)->tid, status, tid, err );
 
     if( !err && WIFSIGNALED( status ) ) {
-      int sig = WTERMSIG( status );
-      pip_warn_mesg( "PiP Task [%d] terminated by '%s' (%d) signal",
-		     TA(taski)->pipid, strsignal(sig), sig );
-	pip_set_exit_status( taski, status );
+      pip_set_exit_status( taski, status );
+      pip_task_signaled(   taski, status );
     }
   }
   if( !err ) {
     DBGF( "PIPID:%d terminated", TA(taski)->pipid );
-    TA(taski)->type   = PIP_TYPE_NULL;
-    AA(taski)->tid    = 0;
-    MA(taski)->thread = 0;
+    free( MA(taski)->onstart_script );
+    MA(taski)->onstart_script = NULL;
+    if( MA(taski)->pid_onstart > 0 ) {
+      do {
+	errno = 0;
+	(void) waitpid( MA(taski)->pid_onstart, NULL, 0 );
+      } while( errno == EINTR );
+      DBGF( "PIPID:%d on_start (%d) terminates", 
+	    TA(taski)->pipid, MA(taski)->pid_onstart );
+    }
+    pip_annul_task( taski );
   }
   RETURN( err );
 }

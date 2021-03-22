@@ -38,7 +38,7 @@ srcdir = .
 include $(top_srcdir)/build/var.mk
 
 PROGRAM = pip-exec
-PROGRAMS = $(PROGRAM) printpipmode pip_unpie pipcc pipfc
+PROGRAMS = $(PROGRAM) printpipmode pip_unpie pipcc pipfc pip-tgkill
 PROGRAMS_TO_INSTALL = $(PROGRAMS) pip-mode pip-check pip-man pips 
 EXTRA_PROGRAMS = pip-exec.to-install printpipmode.to-install
 
@@ -84,6 +84,9 @@ pipfc: pipcc.in
 	chmod +x pipfc
 
 pip_unpie: pip_unpie.c
+	$(CC) -g -O2 -Wall $< -o $@
+
+pip-tgkill: pip-tgkill.c
 	$(CC) -g -O2 -Wall $< -o $@
 
 post-clean-hook:
