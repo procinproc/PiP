@@ -42,7 +42,6 @@ int pip_barrier_init_( pip_barrier_t *barrp, int n ) {
   if( barrp == NULL || n < 1 ) RETURN( EINVAL );
   memset( (void*) barrp, 0, sizeof(pip_barrier_t) );
   if( !pip_is_initialized() ) RETURN( EPERM );
-  if( n < 0 ) return EINVAL;
   pip_task_queue_init( &barrp->queue, NULL );
   barrp->count      = n;
   barrp->count_init = n;

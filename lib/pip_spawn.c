@@ -639,31 +639,12 @@ static void pip_start_user_func( pip_spawn_args_t *args,
   pip_glibc_init( &MA(self)->symbols, args );
   DBGF( "pip_impinit:%p", MA(self)->symbols.pip_init );
   if( MA(self)->symbols.pip_init != NULL ) {
-    int rv = MA(self)->symbols.pip_init( AA(self)->task_root, self );
-    if( rv ) {
-      err = EPERM;
-      switch( rv ) {
-      case 1:
-	pip_err_mesg( "Invalid PiP root" );
-	break;
-      case 2:
-	pip_err_mesg( "Magic number error" );
-	break;
-      case 3:
-	pip_err_mesg( "Version miss-match between PiP root and task" );
-	break;
-      case 4:
-	pip_err_mesg( "Size miss-match between PiP root and task" );
-	break;
-      default:
-	pip_err_mesg( "Something wrong with PiP root and task" );
-	break;
-      }
+    if( ( err = MA(self)->symbols.pip_init( AA(self)->task_root, self ) ) != 0 ) {
+      extval = err;
+      goto error;
     }
-  }
-  if( !err ) {
     pip_gdbif_hook_before( self );
-
+    
     if( AA(self)->opts & PIP_TASK_INACTIVE ) {
       DBGF( "INACTIVE" );
       pip_suspend_and_enqueue_generic( self,

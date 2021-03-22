@@ -288,7 +288,7 @@ int main( int argc, char **argv ) {
   //  int flag_dryrun = 0;
   int pipid;
   int i, j, d;
-  int extval, errsig;
+  int extval, errsig = 0;
   int err = 0;
 
   program = basename( argv[0] );
@@ -435,7 +435,6 @@ int main( int argc, char **argv ) {
     nt_start += spawn->ntasks;
   }
   extval = 0;
-  errsig = 0;
   for( i=0; i<ntasks; i++ ) {
     int threaded, status, ex;
 

@@ -514,6 +514,9 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, uint32_t opts ) {
     pip_gdbif_task_commit( taski );
     pip_debug_on_exceptions( taski );
 
+    /* fix me: only pip_preload.so must be excluded */
+    unsetenv( "LD_PRELOAD" );
+
     DBGF( "PiP Execution Mode: %s", pip_get_mode_str() );
 
   } else if( ( envtask = getenv( PIP_TASK_ENV ) ) != NULL ) {
