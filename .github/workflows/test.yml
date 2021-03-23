@@ -1,0 +1,138 @@
+name: test for PiP and PiP-Testsuite
+
+on:
+
+  repository_dispatch:
+    types: [pip-glibc-built, pip-update, pip-test-invoke, pip-testsuite-update]
+  # client-payload:
+  #    github.event.client_payload.distros: [centos7, centos8]
+  #    github.event.client_payload.archs: [amd64, arm64]
+  #    github.event.client_payload.pip_versions: [2, 3] or [''] if pip_ref != ''
+  #    github.event.client_payload.pip_ref: commit_hash or ''
+  #    github.event.client_payload.pip_testsuite_ref: commit_hash or ''
+  #    github.event.client_payload.dispatch: true or false
+  #
+  # - pip-glibc-built
+  #    github.event.client_payload.distros: [centos7, centos8]
+  #    github.event.client_payload.archs: [amd64, arm64]
+  #    github.event.client_payload.pip_versions: [2, 3]
+  #    github.event.client_payload.pip_ref: ''
+  #    github.event.client_payload.pip_testsuite_ref: ''
+  #    github.event.client_payload.dispatch: true
+  # - pip-test-invoke
+  #    anything
+  # - pip-update
+  #    github.event.client_payload.distros: [centos7, centos8]
+  #    github.event.client_payload.archs: [amd64, arm64]
+  #    github.event.client_payload.pip_versions: ['']
+  #    github.event.client_payload.pip_ref: commit_hash
+  #    github.event.client_payload.pip_testsuite_ref: ''
+  #    github.event.client_payload.dispatch: true if not pull_request
+  # - pip-testsuite-update
+  #    github.event.client_payload.distros: [centos7, centos8]
+  #    github.event.client_payload.archs: [amd64, arm64]
+  #    github.event.client_payload.pip_versions: [2, 3]
+  #    github.event.client_payload.pip_ref: ''
+  #    github.event.client_payload.pip_testsuite_ref: commit_hash
+  #    github.event.client_payload.dispatch: false
+
+jobs:
+
+  build:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: ${{ github.event.client_payload.distros }}
+        arch: ${{ github.event.client_payload.archs }}
+        pip_version: ${{ github.event.client_payload.pip_versions }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: checkout PiP
+        if: github.event.client_payload.pip_ref == ''
+        uses: actions/checkout@v2
+        with:
+          path: PiP
+          ref: pip-${{ matrix.pip_version }}
+
+      - name: checkout PiP @ ref in client_payload
+        if: github.event.client_payload.pip_ref != ''
+        uses: actions/checkout@v2
+        with:
+          path: PiP
+          ref: ${{ github.event.client_payload.pip_ref }}
+
+      - name: checkout PiP-Testsuite
+        if: github.event.client_payload.pip_testsuite_ref == ''
+        uses: actions/checkout@v2
+        with:
+          path: PiP-Testsuite
+          repository: ${{ github.repository_owner }}/PiP-Testsuite
+
+      - name: checkout PiP-Testsuite @ ref in client_payload
+        if: github.event.client_payload.pip_testsuite_ref != ''
+        uses: actions/checkout@v2
+        with:
+          path: PiP-Testsuite
+          repository: ${{ github.repository_owner }}/PiP-Testsuite
+          ref: ${{ github.event.client_payload.pip_testsuite_ref }}
+
+      - name: Setup QEMU user-mode emulation
+        uses: docker/setup-qemu-action@v1
+
+      - name: test
+        run: |
+          set -x
+          docker run -v $(pwd):/host ${{ secrets.DOCKERHUB_USER }}/pip-glibc:HEAD-${{ matrix.distro }}-${{ matrix.arch }} /bin/sh -x /host/PiP/.github/workflows/test.sh
+
+      - name: show generated files
+        run: ls -CF results
+
+      - name: upload test results
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: pip-test-${{ matrix.distro }}-${{ matrix.arch }}
+          path: PiP-Testsuite/**/test.log*
+
+  dispatch:
+    if: github.event.client_payload.dispatch && (github.event.client_payload.pip_ref == '' || github.event.client_payload.pip_ref == 'pip-2' || github.event.client_payload.pip_ref == 'pip-3')
+
+    needs: [build]
+
+    strategy:
+      matrix:
+        repo: ['${{ github.repository }}']
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: config
+        id: config
+        run: |
+          set -x
+          echo "distros=<${{ toJson(github.event.client_payload.distros) }}>"
+          echo "archs=<${{ toJson(github.event.client_payload.archs) }}>"
+          case "${{ github.event.client_payload.pip_ref }}" in
+          '')
+            pip_versions="${{ toJson(github.event.client_payload.pip_versions) }}"
+            ;;
+          *)
+            pip_version=`echo ${{ github.event.client_payload.pip_ref }} | sed 's/pip-//'`
+            pip_versions="['$pip_version']"
+            ;;
+          esac
+          echo "pip_versions=<$pip_versions>"
+          echo "::set-output name=pip_versions::${pip_versions}"
+
+      - name: dispatch event
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.PIP_BUILD_TOKEN }}
+          repository: ${{ matrix.repo }}
+          event-type: pip-test-ok
+          client-payload: '{ "distros": ${{ toJson(github.event.client_payload.distros) }}, "archs": toJson(github.event.client_payload.archs), "pip_versions": ${{ steps.config.outputs.pip_branch }} }'
