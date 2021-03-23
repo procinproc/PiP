@@ -413,38 +413,23 @@ def isa_piptask( cmd ):
         return True
     return False
 
-def check_mode( cmd ):
-    "check is the mode of the command is the one to be selected"
-    if mode_sel is None:
-        return True
-    m = get_mode( cmd )
-    if 'P' in mode_sel:
-        if m in 'LCG':
-            return True
-        else:
-            return False
-    elif m in mode_sel:
-        return True
-    else:
-        return False
-
 def is_selected( ps, cmd, patterns ):
     "check if the psline matches the patterns"
     if patterns == []:
-        return check_mode( cmd )
+        return True
     if len(cmd) > 2 and cmd[2:] in patterns:
-        return check_mode( cmd )
+        return True
     tid = get_tid( ps )
     if tid in patterns:
-        return check_mode( cmd )
+        return True
     pid = get_pid( ps )
     if pid in patterns:
-        return check_mode( cmd )
+        return True
 
     if flag_fnmatch:
         for pat in patterns:
             if fnm.fnmatch( cmd, pat ):
-                return check_mode( cmd )
+                return True
     return False
 
 def have_pc_relation( parent, child ):
@@ -460,6 +445,20 @@ def have_pc_relation( parent, child ):
     if get_pid( parent ) == get_ppid( child ):
         return True
     return False
+
+def check_mode( cmd, mode ):
+    "check is the mode of the command is the one to be selected"
+    m = get_mode( cmd )
+    print( 'check_mode( ', cmd, ' , ', mode, ' , ', m,  ' )' )
+    if 'P' in mode:
+        if m in 'LCG':
+            return True
+        else:
+            return False
+    elif m in mode:
+        return True
+    else:
+        return False
 
 os.environ['LANG'] = 'C'
 piplines = []
@@ -546,6 +545,20 @@ if flag_family:
     sel_roots = fmly_roots
     sel_tasks = fmly_tasks
 
+if not mode_sel is None:
+    sel = []
+    for rs in sel_roots:
+        cmd = get_command( rs )
+        if check_mode( cmd, mode_sel ):
+            sel += [ rs ]
+    sel_roots = sel
+    sel = []
+    for ts in sel_tasks:
+        cmd = get_command( ts )
+        if check_mode( cmd, mode_sel ):
+            sel += [ ts ]
+    sel_tasks = sel
+
 if flag_debug:
     print( 'sel_roots:', sel_roots )
     print( 'sel_tasks:', sel_tasks )
@@ -582,12 +595,13 @@ def kill_task( ps, killsig ):
                    pid + ' ' + tid + 
                    ' (' + cmd + ')' )
         if check_gen is None and check_out is None:
-            sp.check_call( [ tgkill_path, signame, pid, tid ] )
+            sp.check_call( [ tgkill_path, signame, pid, tid ], 
+                           stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL )
         else:
             print( 'pip-tgkill', signame, tid, cmd, file=check_output )
     except Exception as e:
         error = True
-        print( 'pip-tgkill ' + signame + ' ' + 
+        print( tgkill_path + ' ', signame + ' ' + 
                pid + ' ' + tid + 
                ' (' + cmd + ')' )
 

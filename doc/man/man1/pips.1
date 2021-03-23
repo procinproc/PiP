@@ -1,4 +1,4 @@
-.TH "pips" 1 "Tue Feb 16 2021" "Process-in-Process" \" -*- nroff -*-
+.TH "pips" 1 "Tue Mar 23 2021" "Process-in-Process" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
@@ -20,9 +20,11 @@ pips [a][u][x] [PIPS-OPTIONS] [-] [PATTERN \&.\&.]
 .br
 \fI--family\fP List PiP root(s) and PiP task(s) in family order 
 .br
+\fI--mode\fP List PiP root(s) and PiP task(s) running in the specified execution mode\&. This option must be followed by excution mode(s) which is the combination of characters consisting of 'P' (process mode), 'L' (process:preload), 'C' (process:pipclone), 'G' (process:got) and 'T' (thread mode)\&. 
+.br
 \fI--kill\fP Send SIGTERM to PiP root(s) and task(s) 
 .br
-\fI--signal\fP Send a signal to PiP root(s) and task(s)\&. This option must be followed by a signal number of name\&. 
+\fI--signal\fP Send a signal to PiP root(s) and task(s)\&. This option must be followed by a signal number or name\&. 
 .br
 \fI--ps\fP Run the ps Linux command\&. This option may have \fCps\fP command option(s) separated by comma (,) 
 .br

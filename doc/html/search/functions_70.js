@@ -15,6 +15,7 @@ var searchData=
   ['pip_5fexport',['pip_export',['../group__PiP-2-export.html#ga92d98dc8bafe8c73d4332d40d77be6cb',1,'pip.h']]],
   ['pip_5ffin',['pip_fin',['../group__PiP-0-init-fin.html#gac4654282785abb9434ce81573fdf16ed',1,'pip.h']]],
   ['pip_5fget_5faux',['pip_get_aux',['../group__PiP-2-export.html#ga779abad7e346657a6fd3c024e204addb',1,'pip.h']]],
+  ['pip_5fget_5fdlmopen_5finfo',['pip_get_dlmopen_info',['../group__PiP-2-export.html#gab22e04973c50d1569f77657757bc7b74',1,'pip.h']]],
   ['pip_5fget_5fmode',['pip_get_mode',['../group__PiP-4-query.html#gab603f68c1ce972a5f3bfb8c95fcfb555',1,'pip.h']]],
   ['pip_5fget_5fmode_5fstr',['pip_get_mode_str',['../group__PiP-4-query.html#ga0e12c95fe7abc5c356acfd45a89ad5d8',1,'pip.h']]],
   ['pip_5fget_5fntasks',['pip_get_ntasks',['../group__PiP-4-query.html#ga9786d5aafa2a3882714c35ecc9f39a5a',1,'pip.h']]],

@@ -1,4 +1,4 @@
-.TH "Export/Import Functions" 3 "Tue Feb 16 2021" "Process-in-Process" \" -*- nroff -*-
+.TH "Export/Import Functions" 3 "Tue Mar 23 2021" "Process-in-Process" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
@@ -34,6 +34,10 @@ Export/Import Functions \-
 .RI "int \fBpip_get_aux\fP (void **auxp)"
 .br
 .RI "\fIRetrieve the user data associated with a PiP task\&. \fP"
+.ti -1c
+.RI "int \fBpip_get_dlmopen_info\fP (int pipid, void **handlep, long *lmidp)"
+.br
+.RI "\fIRetrieve the loaded link map info\&. of the specified Pip task\&. \fP"
 .in -1c
 .SH "Detailed Description"
 .PP 
@@ -400,6 +404,46 @@ Return 0 on success\&. Return an error code on error\&.
 \fBSee Also:\fP
 .RS 4
 \fBpip_set_aux\fP 
+.RE
+.PP
+
+.SS "int pip_get_dlmopen_info (intpipid, void **handlep, long *lmidp)"
+
+.PP
+\fBName\fP
+.RS 4
+pip_get_dlmopen_info
+.RE
+.PP
+\fBSynopsis\fP
+.RS 4
+#include <\fBpip/pip\&.h\fP> 
+.br
+int \fBpip_get_dlmopen_info( int pipid, void **handlep, long *lmidp )\fP
+.RE
+.PP
+\fBParameters:\fP
+.RS 4
+\fIpipid\fP The PiP ID 
+.br
+\fIhandlep\fP loaded handle 
+.br
+\fIlmidp\fP Lmid
+.RE
+.PP
+\fBReturns:\fP
+.RS 4
+Return 0 on success\&. Return an error code on error\&. 
+.RE
+.PP
+\fBReturn values:\fP
+.RS 4
+\fIEPERM\fP PiP library is not yet initialized or already finalized
+.RE
+.PP
+\fBSee Also:\fP
+.RS 4
+\fBpip_task_spawn\fP 
 .RE
 .PP
 
