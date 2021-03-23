@@ -595,15 +595,14 @@ def kill_task( ps, killsig ):
                    pid + ' ' + tid + 
                    ' (' + cmd + ')' )
         if check_gen is None and check_out is None:
-            sp.check_call( [ tgkill_path, signame, pid, tid ], 
-                           stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL )
+            sp.check_call( [ tgkill_path, signame, pid, tid ] )
         else:
             print( 'pip-tgkill', signame, tid, cmd, file=check_output )
     except Exception as e:
         error = True
         print( tgkill_path + ' ', signame + ' ' + 
                pid + ' ' + tid + 
-               ' (' + cmd + ')' )
+               ' (' + cmd + '): ', e )
 
 if killsig is not None:
     if flag_task:
