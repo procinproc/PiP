@@ -599,7 +599,6 @@ def kill_task( ps, killsig ):
         else:
             print( 'pip-tgkill', signame, tid, cmd, file=check_output )
     except Exception as e:
-        error = True
         print( tgkill_path + ' ', signame + ' ' + 
                pid + ' ' + tid + 
                ' (' + cmd + '): ', e )
@@ -634,7 +633,6 @@ elif ps_opts is not None:
             print( 'execvp(', ps_cmd, ' '.join(ps_opts+pid_list), ')',
                    file=check_output )
     except Exception as e:
-        error = True
         eprint( 'execvp(ps):' + str(e) )
 
 elif top_opts is not None:
@@ -654,7 +652,6 @@ elif top_opts is not None:
             print( 'execvp(', top_cmd, ' '.join(top_opts+pid_opt), ')',
                    file=check_output )
     except Exception as e:
-        error = True
         eprint( 'execvp(top):' + str(e) )
 
 else:
