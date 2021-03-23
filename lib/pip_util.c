@@ -40,7 +40,7 @@
 #include <elf.h>
 
 extern int pip_is_coefd( int );
-extern int pip_get_dso( int pipid, void **loaded );
+extern int pip_get_dso( int, void** );
 extern int pip_root_p_( void );
 
 /* the following function(s) are for debugging */
@@ -74,7 +74,7 @@ void pip_print_maps( void ) {
 #define RDLINK_BUF	(256)
 #define RDLINK_BUF_SP	(RDLINK_BUF+8)
 
-void pip_print_fd( int fd ) {
+void pip_print_fd( FILE *fp, int fd ) {
   char fdpath[FDPATH_LEN];
   char fdname[RDLINK_BUF_SP];
   ssize_t sz;
@@ -84,21 +84,20 @@ void pip_print_fd( int fd ) {
     fdname[sz] = '\0';
     char idstr[64];
     pip_idstr( idstr, 64 );
-#ifndef DEBUG
-    fprintf( stderr, "%s %d -> %s\n", idstr, fd, fdname );
-#else
-    DBGF( "%d -> %s", fd, fdname );
-#endif
+    if( pip_is_coefd ( fd ) ) {
+      fprintf( fp, "%s %s -> %s [COE]\n", idstr, fdpath, fdname );
+    } else {
+      fprintf( fp, "%s %s -> %s\n", idstr, fdpath, fdname );
+    }
   }
 }
 
-void pip_print_fds( void ) {
+void pip_print_fds( FILE *fp ) {
   DIR *dir = opendir( "/proc/self/fd" );
   struct dirent *de;
   char idstr[64];
   char fdpath[FDPATH_LEN];
   char fdname[RDLINK_BUF_SP];
-  char coe = ' ';
   ssize_t sz;
 
   pip_idstr( idstr, 64 );
@@ -111,10 +110,13 @@ void pip_print_fds( void ) {
       if( ( sz = readlink( fdpath, fdname, RDLINK_BUF ) ) > 0 ) {
 	fdname[sz] = '\0';
 	if( ( fd = atoi( de->d_name ) ) != fd_dir ) {
-	  if( pip_is_coefd ( fd ) ) coe = '*';
-	  fprintf( stderr, "%s %s -> %s %c", idstr, fdpath, fdname, coe );
+	  if( pip_is_coefd ( fd ) ) {
+	    fprintf( fp, "%s %s -> %s [COE]\n", idstr, fdpath, fdname );
+	  } else {
+	    fprintf( fp, "%s %s -> %s\n", idstr, fdpath, fdname );
+	  }
 	} else {
-	  fprintf( stderr, "%s %s -> %s  opendir(\"/proc/self/fd\")",
+	  fprintf( fp, "%s %s -> %s  opendir(\"/proc/self/fd\")\n",
 		   idstr, fdpath, fdname );
 	}
       }

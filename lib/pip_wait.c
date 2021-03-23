@@ -81,7 +81,9 @@ pip_wait_thread( pip_task_t *task, int flag_blk ) {
   int err = 0;
 
   ENTERF( "PIPID:%d", task->pipid );
-  if( flag_blk ) {
+  if( !task->thread ) {
+    err = ECHILD;
+  } else if( flag_blk ) {
     err = pthread_join( task->thread, NULL );
     if( err ) {
       DBGF( "pthread_timedjoin_np(): %s", strerror(err) );
@@ -122,7 +124,7 @@ pip_wait_syscall( pip_task_t *task, int flag_blk ) {
   int err = 0;
 
   ENTERF( "PIPID:%d", task->pipid );
-  if( task->flag_exit  == PIP_EXIT_WAITED ||
+  if( task->type == PIP_TYPE_NULL ||
       task->tid <= 0 ) {
     /* already waited */
     RETURN( ECHILD );
@@ -197,11 +199,9 @@ pip_wait_syscall( pip_task_t *task, int flag_blk ) {
 
 static int pip_wait_task( pip_task_t *task ) {
   ENTERF( "PIPID:%d", task->pipid );
-  if( task->flag_exit == PIP_EXIT_WAITED ) {
-    goto found;
-  } else if( task->type   != PIP_TYPE_NULL &&
-	     task->tid    != 0            &&
-	     task->thread != 0 ) {
+  if( task->type   != PIP_TYPE_NULL &&
+      task->tid    != 0             &&
+      task->thread != 0 ) {
     if( pip_is_threaded_() ) {
       if( task->flag_sigchld ) {
 	/* if sigchld is really raised, then blocking wait */

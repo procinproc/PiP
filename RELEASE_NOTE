@@ -1,10 +1,16 @@
-Github:
-	https://github.com/RIKEN-SysSoft/PiP
+Repo:
+	https://github.com/procinproc/PiP
+
+Version 2.1 (25 March 2021)
+	- Git server change (github.com/RIKEN-SysSoft -> github.com/procinproc)
+	- New PIP_STOP_ON_SIGNAL interface 
+	- No ABI compatibility with 2.0.0
+	- Added more features to the pips command
 
 Version 2.0 (25 Nov. 2020)
 	- There is no ABI compatibility with PiP-v1 and PiP-v3
 	- New PiP execution mode 'process:got' was added
-	- pipcc defines PIPCC and PIP_VERSION* symbols
+	- pipcc defines PIPCC and PIP_VERSION* CPP symbols
 	- Header files were moved from include/ to include/pip/
 	- New pips (Python version) was released
 	- piplnlibs was moved to PiP-glibc

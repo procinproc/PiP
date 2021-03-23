@@ -60,10 +60,10 @@ extern "C" {
 #endif
 
   void   pip_print_maps( void );
-  void   pip_print_fd( int fd );
-  void   pip_print_fds( void );
-  void   pip_check_addr( char *tag, void *addr );
-  void   pip_print_loaded_solibs( FILE *file );
+  void   pip_print_fd( FILE*, int );
+  void   pip_print_fds( FILE* );
+  void   pip_check_addr( char*, void* );
+  void   pip_print_loaded_solibs( FILE* );
   void   pip_print_dsos( void );
   double pip_gettime( void );
 

@@ -40,8 +40,11 @@ pip_root_t		*pip_root PIP_PRIVATE;
 pip_task_t		*pip_task PIP_PRIVATE;
 struct pip_gdbif_root	*pip_gdbif_root PIP_PRIVATE;
 
+static char *pip_path_gdb;
+static char *pip_command_gdb;
+
 int pip_is_initialized( void ) {
-  return pip_task != NULL && pip_root != NULL;
+  return pip_root != NULL;
 }
 
 int pip_isa_root( void ) {
@@ -52,11 +55,9 @@ int pip_is_threaded_( void ) {
   return pip_root->opts & PIP_MODE_PTHREAD;
 }
 
-#ifdef USE_TGKILL
 static int tgkill( int tgid, int tid, int sig ) {
   return (int) syscall( (long int) SYS_tgkill, tgid, tid, sig );
 }
-#endif
 
 int pip_raise_signal( pip_task_t *task, int sig ) {
   int err = 0;
@@ -72,6 +73,7 @@ int pip_raise_signal( pip_task_t *task, int sig ) {
       err = tgkill( task->pid, task->tid, sig );
 #endif
     } else {
+      err = 0;
       if( kill( task->tid, sig ) != 0 ) {
 	err = errno;
       }
@@ -115,14 +117,19 @@ int pip_are_sizes_ok( pip_root_t *root ) {
 }
 
 static int pip_check_root( pip_root_t *root ) {
+  int err = EPERM;
   if( root == NULL ) {
-    return 1;
+    pip_err_mesg( "Invalid PiP root" );
+    return err;
   } else if( !pip_is_magic_ok( root ) ) {
-    return 2;
+    pip_err_mesg( "Magic number error" );
+    return err;
   } else if( !pip_is_version_ok( root ) ) {
-    return 3;
+    pip_err_mesg( "Version miss-match between PiP root and task" );
+    return err;
   } else if( !pip_are_sizes_ok( root ) ) {
-    return 4;
+    pip_err_mesg( "Size miss-match between PiP root and task" );
+    return err;
   }
   return 0;
 }
@@ -187,23 +194,6 @@ void pip_err_mesg( const char *format, ... ) {
 	       format, ap );
   va_end( ap );
 }
-
-#ifdef DEBUG
-int pip_debug_env( void ) {
-  static int flag = 0;
-  if( !flag ) {
-    if( getenv( "PIP_NODEBUG" ) ) {
-      flag = -1;
-    } else {
-      flag = 1;
-    }
-  }
-  return flag > 0;
-}
-#endif
-
-static char *pip_path_gdb;
-static char *pip_command_gdb;
 
 pip_task_t *pip_current_task( int tid ) {
   /* do not put any DBG macors in this function */
@@ -438,7 +428,7 @@ char *pip_get_prefix_dir( char *name ) {
     prefix = pip_root->installdir;
   } else {
     sz = 0;
-    ASSERT( ( fp_maps = fopen( "/proc/self/maps", "r" ) ) != NULL );
+    ASSERT( ( fp_maps = fopen( PIP_MAPS_PATH, "r" ) ) != NULL );
     while( ( l = getline( &line, &sz, fp_maps ) ) > 0 ) {
       //DBGF( "l:%d sz:%d line(%p):%s", (int)l, (int)sz, line, line );
       line[l] = '\0';
@@ -508,7 +498,7 @@ static void pip_exception_handler( int sig, siginfo_t *info, void *extra ) {
     pip_debug_info();
   }
   if( pip_root != NULL ) pip_spin_unlock( &pip_root->lock_bt );
-  (void) kill( pip_gettid(), sig );
+  (void) tgkill( getpid(), pip_gettid(), sig );
 }
 
 static int
@@ -681,9 +671,16 @@ void pip_debug_on_exceptions( pip_task_t *task ) {
     } else {
       /* exception signals must be blocked in thread mode */
       /* so that root hanlder can catch them */
-      ASSERT( sigaddset( &sigs, SIGTERM ) == 0 );
-      ASSERT( sigaddset( &sigs, SIGCHLD ) == 0 );
-      ASSERT( pthread_sigmask( SIG_BLOCK, &sigs, NULL ) == 0 );
+      if( ( signals = pip_root->envs.gdb_signals ) != NULL ) {
+	pip_set_gdb_sigset( signals, &sigs );
+	if( memcmp( &sigs, &sigempty, sizeof(sigs) ) ) {
+	  ASSERT( pthread_sigmask( SIG_BLOCK, &sigs, NULL ) == 0 );
+	}
+      } else {			/* default signals */
+	ASSERT( sigaddset( &sigs, SIGHUP  ) == 0 );
+	ASSERT( sigaddset( &sigs, SIGSEGV ) == 0 );
+	ASSERT( pthread_sigmask( SIG_BLOCK, &sigs, NULL ) == 0 );
+      }
     }
   }
 }
@@ -696,8 +693,9 @@ int pip_init_task_implicitly( pip_root_t *root,
 int pip_init_task_implicitly( pip_root_t *root,
 			      pip_task_t *task ) {
   ENTER;
-  int err = pip_check_root( root );
-  if( !err ) {
+  int err = 0;
+
+  if( ( err = pip_check_root( root ) ) == 0 ) {
     if( ( pip_root != NULL && pip_root != root ) ||
 	( pip_task != NULL && pip_task != task ) ||
 	( pip_gdbif_root != NULL &&

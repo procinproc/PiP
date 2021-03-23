@@ -48,7 +48,6 @@
  * \param "-n N" number of tasks
  * \param "-f FUNC" function name to start
  * \param "-c CORE" specify the CPU core number to bind core(s)
- * \param -r core binding in the round-robin fashion
  *
  * \sa
  * pipcc(1)
@@ -81,7 +80,7 @@ static char *program;
 static void print_usage( void ) {
   fprintf( stderr,
 	   "Usage: %s [-n N] [-c C] [-f F] A.OUT ... "
-	   "{ : [-n N] [-c C] [-f F] B.OUT ... } \n",
+	   "{ : [-n N] [-c C] [-f F] B.OUT ... }\n",
 	   program );
   fprintf( stderr, "\t-n N\t: Number of PiP tasks (default is 1)\n" );
   fprintf( stderr, "\t-c C\t: CPU core binding pattern\n" );

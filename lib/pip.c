@@ -43,10 +43,7 @@
 #include <sys/prctl.h>
 
 //#define PIP_NO_MALLOPT
-
 //#define DEBUG
-//#define PRINT_MAPS
-//#define PRINT_FDS
 
 /* the EVAL env. is to measure the time for calling dlmopen() */
 //#define EVAL
@@ -56,15 +53,14 @@
 #include <pip/pip_util.h>
 #include <pip/pip_gdbif.h>
 
-extern char 		**environ;
-
 /*** note that the following static variables are   ***/
 /*** located at each PIP task and the root process. ***/
 pip_root_t		*pip_root = NULL;
 pip_task_t		*pip_task = NULL;
 
-static pip_clone_t*	pip_cloneinfo = NULL;
 pip_spinlock_t *pip_lock_clone PIP_PRIVATE;
+
+static pip_clone_t*	pip_cloneinfo   = NULL;
 
 static int (*pip_clone_mostly_pthread_ptr) (
 	pthread_t *newthread,
@@ -76,6 +72,20 @@ static int (*pip_clone_mostly_pthread_ptr) (
 	pid_t *pidp) = NULL;
 
 struct pip_gdbif_root	*pip_gdbif_root;
+
+#ifndef PIP_NO_MALLOPT
+  /* heap (using brk or sbrk) is not safe in PiP */
+#ifdef M_MMAP_THRESHOLD
+void pip_donot_use_heap( void ) __attribute__ ((constructor));
+void pip_donot_usr_heap( void ) {
+  if( mallopt( M_MMAP_THRESHOLD, 1 ) == 1 ) {
+    DBGF( "mallopt(M_MMAP_THRESHOLD): succeeded" );
+  } else {
+    pip_warn_mesg( "mallopt(M_MMAP_THRESHOLD): failed !!!!!!" );
+  }
+}
+#endif
+#endif
 
 int pip_root_p_( void ) {
   return pip_root != NULL && pip_task != NULL &&
@@ -454,14 +464,14 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
 
   if( ( envroot = getenv( PIP_ROOT_ENV ) ) == NULL ) {
     /* root process ? */
-    if( pip_root != NULL ) RETURN( EBUSY ); /* already initialized */
+    if( pip_is_initialized() ) RETURN( EBUSY );
+
     if( ntasksp == NULL ) {
       ntasks = PIP_NTASKS_MAX;
-    } else if( *ntasksp <= 0 ) {
-      RETURN( EINVAL );
     } else {
       ntasks = *ntasksp;
     }
+    if( ntasks <= 0             ) RETURN( EINVAL );
     if( ntasks > PIP_NTASKS_MAX ) RETURN( EOVERFLOW );
 
     if( ( err = pip_check_opt_and_env( &opts ) ) != 0 ) RETURN( err );
@@ -525,6 +535,8 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     }
     pip_debug_on_exceptions( pip_task );
 
+    unsetenv( "LD_PRELOAD" );
+
   } else if( ( envtask = getenv( PIP_TASK_ENV ) ) != NULL ) {
     /* child task */
     pip_root_t 	*root;
@@ -534,7 +546,9 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     pipid = (int) strtol( envtask, NULL, 10 );
     ASSERT( pipid >= 0 && pipid < root->ntasks );
     task = &root->tasks[pipid];
-    if( ( rv = pip_init_task_implicitly( root, task ) ) == 0 ) {
+    if( ( rv = pip_init_task_implicitly( root, task ) ) != 0 ) {
+      RETURN( rv );
+    } else {
       ntasks = pip_root->ntasks;
       /* succeeded */
       if( ntasksp != NULL ) *ntasksp = ntasks;
@@ -543,26 +557,6 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
       }
       unsetenv( PIP_ROOT_ENV );
       unsetenv( PIP_TASK_ENV );
-    } else {
-      DBGF( "rv:%d", rv );
-      switch( rv ) {
-      case 1:
-	pip_err_mesg( "Invalid PiP root" );
-	break;
-      case 2:
-	pip_err_mesg( "Magic number error" );
-	break;
-      case 3:
-	pip_err_mesg( "Version miss-match between PiP root and task" );
-	break;
-      case 4:
-	pip_err_mesg( "Size miss-match between PiP root and task" );
-	break;
-      default:
-	pip_err_mesg( "Something wrong with PiP root and task" );
-	break;
-      }
-      RETURN( EPERM );
     }
   } else {
     RETURN( EPERM );
@@ -613,6 +607,7 @@ int pip_get_dlmopen_info( int pipid, void **handle, long *lmidp ) {
   if( ( err = pip_check_pipid( &pipid ) ) != 0 ) RETURN( err );
   task = pip_get_task_( pipid );
   if( handle != NULL ) *handle = task->loaded;
+  if( lmidp  != NULL ) *lmidp  = task->lmid;
   RETURN( 0 );
 }
 
@@ -750,9 +745,10 @@ static int pip_copy_vec( char **vecadd,
 #define ENVLEN	(64)
 static int pip_copy_env( char **envsrc, int pipid, pip_char_vec_t *vecp ) {
   char rootenv[ENVLEN], taskenv[ENVLEN];
-  char *mallopt = "MALLOC_MMAP_THRESHOLD_=1";
-  char *preload_env = getenv( "LD_PRELOAD" );
-  char *addenv[] = { rootenv, taskenv, mallopt, preload_env, NULL };
+  char *preload_env    = getenv( "LD_PRELOAD" );
+  char *mmap_threshold = "MALLOC_MMAP_THRESHOLD_=1";
+  char *mmap_max       = "MALLOC_MMAP_MAX_=4294967296"; /* 4GB */
+  char *addenv[] = { rootenv, taskenv, preload_env, mmap_threshold, mmap_max, NULL };
 
   ASSERT( snprintf( rootenv, ENVLEN, "%s=%p", PIP_ROOT_ENV, pip_root ) > 0 );
   ASSERT( snprintf( taskenv, ENVLEN, "%s=%d", PIP_TASK_ENV, pipid    ) > 0 );
@@ -827,10 +823,6 @@ static void pip_close_on_exec( void ) {
   struct dirent *direntp;
   int fd;
 
-#ifdef PRINT_FDS
-  pip_print_fds();
-#endif
-
 #define PROCFD_PATH		"/proc/self/fd"
   if( ( dir = opendir( PROCFD_PATH ) ) != NULL ) {
     int fd_dir = dirfd( dir );
@@ -841,17 +833,11 @@ static void pip_close_on_exec( void ) {
 	  pip_is_coefd( fd ) ) {
 	(void) close( fd );
 	DBGF( "FD:%d is closed (CLOEXEC)", fd );
-#ifdef DEBUG
-	pip_print_fd( fd );
-#endif
       }
     }
     (void) closedir( dir );
     (void) close( fd_dir );
   }
-#ifdef PRINT_FDS
-  pip_print_fds();
-#endif
 }
 
 static int pip_find_user_symbols( pip_spawn_program_t *progp,
@@ -914,6 +900,12 @@ pip_find_glibc_symbols( void *handle, pip_task_t *task ) {
   RETURN( err );
 }
 
+#ifdef RTLD_DEEPBIND
+#define DLMOPEN_FLAGS	  (RTLD_NOW | RTLD_DEEPBIND)
+#else
+#define DLMOPEN_FLAGS	  (RTLD_NOW)
+#endif
+
 static int
 pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
   const char 	*path = progp->prog;
@@ -922,17 +914,11 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
   pip_init_t	impinit     = NULL;
   void 		*loaded     = NULL;
   void 		*ld_pipinit = NULL;
-  int 		flags = RTLD_NOW;
   int		err = 0;
-
-  /* RTLD_GLOBAL is NOT accepted and dlmopen() returns EINVAL */
-#ifdef RTLD_DEEPBIND
-  //flags |= RTLD_DEEPBIND;
-#endif
 
   ENTERF( "path:%s", path );
   lmid = LM_ID_NEWLM;
-  if( ( loaded = pip_dlmopen( lmid, path, flags ) ) == NULL ) {
+  if( ( loaded = pip_dlmopen( lmid, path, DLMOPEN_FLAGS ) ) == NULL ) {
     char *dle = pip_dlerror();
     if( ( err = pip_check_pie( path, 1 ) ) != 0 ) goto error;
     pip_err_mesg( "dlmopen(%s): %s", path, dle );
@@ -946,8 +932,7 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
     goto error;
   }
   if( pip_dlinfo( loaded, RTLD_DI_LMID, &lmid ) != 0 ) {
-    pip_err_mesg( "Unable to obtain Lmid (%s): %s",
-		  libpipinit, pip_dlerror() );
+    pip_err_mesg( "Unable to obtain Lmid - %s", pip_dlerror() );
     err = ENXIO;
     goto error;
   }
@@ -963,7 +948,7 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
       pip_err_mesg( "Unable to find %s", libpipinit_name );
       err = ENOENT;
       goto error;
-    } else if( ( ld_pipinit = pip_dlmopen( lmid, libpipinit, flags ) ) == NULL ) {
+    } else if( ( ld_pipinit = pip_dlmopen( lmid, libpipinit, DLMOPEN_FLAGS ) ) == NULL ) {
       pip_err_mesg( "Unable to load [%ld] %s: %s", lmid, libpipinit, pip_dlerror() );
       err = ENOENT;
       goto error;
@@ -1142,10 +1127,7 @@ static void pip_return_from_start_func( pip_task_t *task,
     NEVER_REACH_HERE;
   }
   if( task->hook_after != NULL ) {
-    char **env_save = environ;
-    environ = task->args.envvec.vec;
     err = task->hook_after( task->hook_arg );
-    environ = env_save;
     if( err ) {
       pip_err_mesg( "PIPID:%d after-hook returns %d", task->pipid, err );
     }
@@ -1322,13 +1304,7 @@ static void *pip_do_spawn( void *thargs )  {
   }
   /* calling before hook, if any */
   if( before != NULL ) {
-    char **env_save = environ;
-    environ = envv;
-    err = before( hook_arg );
-    args->envvec.vec = environ;
-    environ = env_save;
-
-    if( err ) {
+    if( ( err = before( hook_arg ) ) ) {
       pip_warn_mesg( "try to spawn(%s), but the before hook at %p returns %d",
 		     argv[0], before, err );
       extval = err;
@@ -1336,10 +1312,8 @@ static void *pip_do_spawn( void *thargs )  {
   }
   if( !err ) {
     pip_glibc_init( &self->symbols, args );
-    if( self->symbols.pip_init != NULL ) {
-      err = self->symbols.pip_init( pip_root, self );
-    }
-    if( err ) {
+    if( self->symbols.pip_init != NULL &&
+	( err = self->symbols.pip_init( pip_root, self ) ) != 0 ) {
       extval = err;
     } else {
       if( self->symbols.start == NULL ) {

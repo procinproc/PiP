@@ -362,6 +362,8 @@ extern void pip_annul_task( pip_task_t* ) PIP_PRIVATE;
 extern char *pip_get_prefix_dir( char* ) PIP_PRIVATE;
 extern void pip_debug_on_exceptions( pip_task_t* ) PIP_PRIVATE;
 
+extern int pip_debug_env( void );
+
 extern struct pip_gdbif_root	*pip_gdbif_root PIP_PRIVATE;
 
 void pip_gdbif_load( pip_task_t* ) PIP_PRIVATE;
