@@ -900,7 +900,7 @@ pip_find_glibc_symbols( void *handle, pip_task_t *task ) {
   RETURN( err );
 }
 
-char *pip_get_prefix_dir( char *name ) {
+static char *pip_get_prefix_dir( char *name ) {
   FILE	 *fp_maps = NULL;
   size_t  sz = 0;
   ssize_t l;
