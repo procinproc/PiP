@@ -88,6 +88,8 @@
 
 #define MAIN_FUNC		"main"
 
+#define PIP_MAPS_PATH		"/proc/self/maps"
+
 #define PIP_PIPID_NONE		(-999)
 
 #define PIP_EXITED		(1)
@@ -359,7 +361,7 @@ extern void pip_set_exit_status( pip_task_t*, int ) PIP_PRIVATE;
 extern void pip_task_signaled( pip_task_t*, int ) PIP_PRIVATE;
 extern void pip_annul_task( pip_task_t* ) PIP_PRIVATE;
 
-extern char *pip_get_prefix_dir( char* ) PIP_PRIVATE;
+extern char *pip_get_prefix_dir( char* );
 extern void pip_debug_on_exceptions( pip_task_t* ) PIP_PRIVATE;
 
 extern int pip_debug_env( void );
