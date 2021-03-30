@@ -450,7 +450,7 @@ def have_pc_relation( parent, child ):
 def check_mode( cmd, mode ):
     "check is the mode of the command is the one to be selected"
     m = get_mode( cmd )
-    print( 'check_mode( ', cmd, ' , ', mode, ' , ', m,  ' )' )
+    #print( 'check_mode( ', cmd, ' , ', mode, ' , ', m,  ' )' )
     if 'P' in mode:
         if m in 'LCG':
             return True
@@ -599,7 +599,7 @@ def kill_task( ps, killsig ):
         if check_gen is None and check_out is None:
             sp.check_call( [ tgkill_path, signame, pid, tid ] )
         else:
-            eprint( 'pip-tgkill', signame, tid, cmd, file=check_output )
+            print( 'pip-tgkill', signame, tid, cmd, file=check_output )
     except Exception as e:
         print( tgkill_path + ' ', signame + ' ' + 
                pid + ' ' + tid + 
