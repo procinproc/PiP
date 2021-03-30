@@ -1,0 +1,38 @@
+name: create process-in-process RPM
+
+on:
+
+  workflow_dispatch:
+
+    inputs:
+
+      distros:
+        description: 'distribtions to create the images'
+        required: true
+        default: '[ "centos7", "centos8" ]'
+
+      archs:
+        description: 'architectures of the images'
+        required: true
+        default: '[ "amd64", "arm64" ]'
+
+      pip_versions:
+        description: 'PiP versions of the images'
+        required: true
+        default: '[ "2", "3" ]'
+
+jobs:
+
+  dispatch:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: dispatch event
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.PIP_BUILD_TOKEN }}
+          repository: ${{ github.repository }}
+          event-type: pip-rpm-invoke
+          client-payload: '{ "distros": ${{ github.event.inputs.distros }}, "archs": ${{ github.event.inputs.archs }}, "pip_versions": ${{ github.event.inputs.pip_versions }} }'
