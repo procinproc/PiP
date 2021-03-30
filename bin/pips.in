@@ -417,18 +417,19 @@ def is_selected( ps, cmd, patterns ):
     "check if the psline matches the patterns"
     if patterns == []:
         return True
-    if len(cmd) > 2 and cmd[2:] in patterns:
-        return True
+
     tid = get_tid( ps )
     if tid in patterns:
         return True
     pid = get_pid( ps )
     if pid in patterns:
         return True
+    if len(cmd) > 2 and cmd[2:] in patterns:
+        return True
 
     if flag_fnmatch:
         for pat in patterns:
-            if fnm.fnmatch( cmd, pat ):
+            if fnm.fnmatch( cmd[2:], pat ):
                 return True
     return False
 
@@ -532,7 +533,8 @@ if flag_family:
     for rs in sel_roots:
         fmly_roots += [ rs ]
         for ts in all_tasks:
-            if have_pc_relation( rs, ts ):
+            # if rs is multi-threaded, same ts may appaer twice or more
+            if have_pc_relation( rs, ts ) and ts not in fmly_tasks:
                 fmly_tasks += [ ts ]
     for ts in sel_tasks:
         for rs in all_roots:
@@ -545,7 +547,7 @@ if flag_family:
     sel_roots = fmly_roots
     sel_tasks = fmly_tasks
 
-if not mode_sel is None:
+if mode_sel is not None:
     sel = []
     for rs in sel_roots:
         cmd = get_command( rs )
@@ -597,7 +599,7 @@ def kill_task( ps, killsig ):
         if check_gen is None and check_out is None:
             sp.check_call( [ tgkill_path, signame, pid, tid ] )
         else:
-            print( 'pip-tgkill', signame, tid, cmd, file=check_output )
+            eprint( 'pip-tgkill', signame, tid, cmd, file=check_output )
     except Exception as e:
         print( tgkill_path + ' ', signame + ' ' + 
                pid + ' ' + tid + 

@@ -524,9 +524,6 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     pip_set_signal_handler( SIGCHLD,
 			    pip_sigchld_handler,
 			    &pip_root->old_sigchld );
-    pip_set_signal_handler( SIGTERM,
-			    pip_sigterm_handler,
-			    &pip_root->old_sigterm );
 
     pip_gdbif_initialize_root( ntasks );
     pip_gdbif_task_commit( pip_task );
@@ -919,9 +916,8 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
   ENTERF( "path:%s", path );
   lmid = LM_ID_NEWLM;
   if( ( loaded = pip_dlmopen( lmid, path, DLMOPEN_FLAGS ) ) == NULL ) {
-    char *dle = pip_dlerror();
     if( ( err = pip_check_pie( path, 1 ) ) != 0 ) goto error;
-    pip_err_mesg( "dlmopen(%s): %s", path, dle );
+    pip_err_mesg( "dlmopen(%s): %s", path, pip_dlerror() );
     err = ENOEXEC;
     goto error;
   }
