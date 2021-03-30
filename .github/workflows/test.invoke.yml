@@ -1,4 +1,4 @@
-name: run test for PiP
+name: run PiP-Testsuite
 
 on:
 
@@ -9,17 +9,17 @@ on:
       distros:
         description: 'distribtions to test'
         required: true
-        default: 'centos7,centos8'
+        default: '[ "centos7", "centos8" ]'
 
       archs:
         description: 'architectures to test'
         required: true
-        default: 'amd64,arm64'
+        default: '[ "amd64", "arm64" ]'
 
       pip_versions:
         description: 'pip_versions to test (optional)'
         required: false
-        default: '2, 3'
+        default: '[ "2", "3" ]'
 
       pip_ref:
         description: 'PiP commit to test (optional)'
@@ -44,18 +44,10 @@ jobs:
 
     steps:
 
-      - name: convert strings to arrays
-        id: to_array
-        run: |
-           set -x
-           echo "::set-output name=distros::[$(echo "${{ github.event.inputs.distros }}" | awk -F, '{printf "\"%s\"", $1; for (i=2; i<=NF; i++) printf ", \"%s\"", $i; }')]"
-           echo "::set-output name=archs::[$(echo "${{ github.event.inputs.archs }}" | awk -F, '{printf "\"%s\"", $1; for (i=2; i<=NF; i++) printf ", \"%s\"", $i; }')]"
-           echo "::set-output name=pip_versions::[$(echo "${{ github.event.inputs.pip_versions }}" | awk -F, '{printf "\"%s\"", $1; for (i=2; i<=NF; i++) printf ", \"%s\"", $i; }')]"
-
       - name: dispatch event
         uses: peter-evans/repository-dispatch@v1
         with:
           token: ${{ secrets.PIP_BUILD_TOKEN }}
           repository: ${{ github.repository }}
           event-type: pip-test-invoke
-          client-payload: '{ "distros": ${{ steps.to_array.outputs.distros }}, "archs": ${{ steps.to_array.outputs.archs }}, "pip_versions": ${{ steps.to_array.outputs.pip_versions }}, "pip_ref": "${{ github.event.inputs.pip_ref }}", "pip_testsuite_ref": "${{ github.event.inputs.pip_testsuite_ref }}", "dispatch": "${{ github.event.inputs.dispatch }}" }'
+          client-payload: '{ "distros": ${{ github.event.inputs.distros }}, "archs": ${{ github.event.inputs.archs }}, "pip_versions": ${{ github.event.inputs.pip_versions }}, "pip_ref": "${{ github.event.inputs.pip_ref }}", "pip_testsuite_ref": "${{ github.event.inputs.pip_testsuite_ref }}", "dispatch": "${{ github.event.inputs.dispatch }}" }'

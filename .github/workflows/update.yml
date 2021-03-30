@@ -1,0 +1,40 @@
+name: PiP update handler
+
+on: [push, pull_request]
+
+jobs:
+
+  dispatch:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: determine pip_versions
+        id: pip_versions
+        run: |
+          set -x
+          echo "event_name=<${{ github.event_name }}>"
+          case "${{ github.ref }}" in
+          refs/heads/pip-*)
+            pip_versions='[ "'`echo "${{ github.ref }}" | sed 's|refs/heads/pip-||'`'" ]'
+            pip_ref=''
+            dispatch=true
+            ;;
+          *)
+            pip_versions='[""]'
+            pip_ref='${{ github.ref }}'
+            dispatch=false
+            ;;
+          esac
+          echo "::set-output name=pip_versions::${pip_versions}"
+          echo "::set-output name=pip_ref::${pip_ref}"
+          echo "::set-output name=dispatch::${dispatch}"
+
+      - name: dispatch event
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.PIP_BUILD_TOKEN }}
+          repository: ${{ github.repository }}
+          event-type: pip-update
+          client-payload: '{ "distros": [ "centos7", "centos8" ], "archs": [ "amd64", "arm64" ], "pip_versions": ${{ steps.pip_versions.outputs.pip_versions }}, "pip_ref": "${{ steps.pip_versions.outputs.pip_ref }}", "pip_testsuite_ref": "", "dispatch": ${{ steps.pip_versions.outputs.dispatch }} }'

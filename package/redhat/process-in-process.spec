@@ -1,6 +1,6 @@
 # How to build this RPM:
 #
-#	env QA_RPATHS=3 rpmbuild -bb pip.spec
+#	env QA_RPATHS=3 rpmbuild -bb process-in-process.spec
 #
 
 %define base_prefix	/opt/process-in-process
@@ -65,6 +65,7 @@ make DESTDIR="$RPM_BUILD_ROOT" install
 %attr(0755,root,root) %{_bindir}/pip-exec
 %attr(0755,root,root) %{_bindir}/pip-man
 %attr(0755,root,root) %{_bindir}/pip-mode
+%attr(0755,root,root) %{_bindir}/pip-tgkill
 %attr(0755,root,root) %{_bindir}/pips
 %attr(0755,root,root) %{_bindir}/pip_unpie
 %attr(0755,root,root) %{_bindir}/printpipmode
