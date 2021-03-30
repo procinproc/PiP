@@ -897,6 +897,57 @@ pip_find_glibc_symbols( void *handle, pip_task_t *task ) {
   RETURN( err );
 }
 
+static char *pip_get_prefix_dir( char *name ) {
+  FILE	 *fp_maps = NULL;
+  size_t  sz = 0;
+  ssize_t l;
+  char	 *line = NULL;
+  char	 *fname, *prefix, *p;
+  char	 *updir = "/..";
+  void	 *sta, *end;
+  void	 *faddr = (void*) pip_get_prefix_dir;
+
+  if( ( prefix = pip_root->installdir ) != NULL ) goto found;
+  if( pip_root != NULL &&
+      pip_root->installdir != NULL ) {
+    prefix = pip_root->installdir;
+  } else {
+    ASSERT( ( fp_maps = fopen( PIP_MAPS_PATH, "r" ) ) != NULL );
+    DBGF( "faddr:%p", faddr );
+    while( ( l = getline( &line, &sz, fp_maps ) ) > 0 ) {
+      line[l] = '\0';
+      DBGF( "l:%d sz:%d line(%p)\n\t%s", (int)l, (int)sz, line, line );
+      prefix = NULL;
+      int n = sscanf( line, "%p-%p %*4s %*x %*x:%*x %*d %ms", &sta, &end, &prefix );
+      DBGF( "%d: %p-%p %p %s", n, sta, end, faddr, prefix );
+      if( n == 3 && prefix != NULL && sta <= faddr && faddr < end ) {
+	if( pip_root != NULL ) {
+	  prefix = dirname( prefix );
+	  DBGF( "prefix: %s", prefix );
+	  pip_root->installdir = prefix;
+	}
+	goto found;
+      }
+      free( prefix );
+    }
+    fname = NULL;
+    goto not_found;
+  }
+ found:
+  ASSERT( ( fname = malloc( strlen( prefix ) +
+			    strlen( updir )  +
+			    strlen( name )   + 1 ) ) 
+	  != NULL );
+  p = stpcpy( fname, prefix );
+  p = stpcpy( p, updir );
+  p = stpcpy( p, name );
+  DBGF( "fname: %s", fname );
+ not_found:
+  if( line != NULL ) free( line );
+  fclose( fp_maps );
+  return fname;
+}
+
 #ifdef RTLD_DEEPBIND
 #define DLMOPEN_FLAGS	  (RTLD_NOW | RTLD_DEEPBIND)
 #else
@@ -941,7 +992,7 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
     char *libpipinit_name = "/lib/" LIBNAME_PIPINIT;
     DBGF( "dlsym: %s", pip_dlerror() );
     if( ( libpipinit = pip_get_prefix_dir( libpipinit_name ) ) == NULL ) {
-      pip_err_mesg( "Unable to find %s", libpipinit_name );
+      pip_err_mesg( "Unable to find %s", LIBNAME_PIPINIT );
       err = ENOENT;
       goto error;
     } else if( ( ld_pipinit = pip_dlmopen( lmid, libpipinit, DLMOPEN_FLAGS ) ) == NULL ) {
