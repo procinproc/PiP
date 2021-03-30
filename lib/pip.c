@@ -414,13 +414,6 @@ void pip_unset_signal_handler( int sig, struct sigaction *oldp ) {
 
 static void pip_sigchld_handler( int sig, siginfo_t *info, void *extra ) {}
 
-static void pip_sigterm_handler( int sig, siginfo_t *info, void *extra ) {
-  ENTER;
-  ASSERT( pip_task->pipid == PIP_PIPID_ROOT );
-  (void) pip_kill_all_tasks();
-  (void) kill( getpid(), SIGKILL );
-}
-
 void pip_set_sigmask( int sig ) {
   sigset_t sigmask;
 
@@ -1317,7 +1310,6 @@ static void *pip_do_spawn( void *thargs )  {
   }
   if( !pip_is_threaded_() ) {
     pip_reset_signal_handler( SIGCHLD );
-    pip_reset_signal_handler( SIGTERM );
     (void) setpgid( 0, (pid_t) pip_root->task_root->tid );
   } else {
     pip_set_signal_handler( SIGQUIT, pip_sigquit_handler, NULL );
@@ -1683,10 +1675,6 @@ int pip_fin( void ) {
       pip_unset_sigmask();
       pip_unset_signal_handler( SIGCHLD,
 				&pip_root->old_sigchld );
-      /* SIGTERM */
-      pip_unset_signal_handler( SIGTERM,
-				&pip_root->old_sigterm );
-
       pip_named_export_fin_all();
 
       PIP_REPORT( time_load_dso  );
