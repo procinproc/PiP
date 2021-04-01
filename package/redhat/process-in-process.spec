@@ -4,7 +4,7 @@
 #
 
 %define base_prefix	/opt/process-in-process
-%define _prefix		%{base_prefix}/pip-2
+%define _prefix		%{base_prefix}/pip-3
 
 %define glibc_libdir	%{base_prefix}/pip-glibc/lib
 %define libpip_version	0
