@@ -415,7 +415,7 @@ static void pip_show_maps( void ) {
 static void pip_show_pips( void ) {
   ENTER;
   char *env    = pip_root->envs.show_pips;
-  char *prefix = pip_root->installdir;
+  char *prefix = pip_root->prefixdir;
   char *pips_path;
   if( env != NULL                  && 
       strcasecmp( env, "on" ) == 0 &&

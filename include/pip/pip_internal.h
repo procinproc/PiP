@@ -265,7 +265,7 @@ typedef struct pip_root {
   pip_task_t		*task_root; /* points to tasks[ntasks] */
   pip_spinlock_t	lock_tasks; /* lock for finding a new task id */
 
-  char			*installdir;
+  char			*prefixdir;
   /* reserved for future use */
   void			*__reserved__[16];
   /* tasks */

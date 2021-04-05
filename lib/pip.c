@@ -445,6 +445,52 @@ static void pip_save_debug_envs( pip_root_t *root ) {
     root->envs.show_pips    = strdup( env );
 }
 
+static char *pip_prefix_dir( pip_root_t *root ) {
+  FILE	 *fp_maps = NULL;
+  size_t  sz = 0;
+  ssize_t l;
+  char	 *line = NULL;
+  char	 *libpip, *prefix, *p;
+  char	 *updir = "/..";
+  void	 *sta, *end;
+  void	 *faddr = (void*) pip_prefix_dir;
+
+  if( root->prefixdir != NULL ) {
+    return root->prefixdir;
+  }
+  ASSERT( ( fp_maps = fopen( PIP_MAPS_PATH, "r" ) ) != NULL );
+  DBGF( "faddr:%p", faddr );
+  while( ( l = getline( &line, &sz, fp_maps ) ) > 0 ) {
+    line[l] = '\0';
+    DBGF( "l:%d sz:%d line(%p)\n\t%s", (int)l, (int)sz, line, line );
+    prefix = NULL;
+    int n = sscanf( line, "%p-%p %*4s %*x %*x:%*x %*d %ms", &sta, &end, &libpip );
+    DBGF( "%d: %p-%p %p %s", n, sta, end, faddr, prefix );
+    if( n == 3         && 
+	libpip != NULL && 
+	sta   <= faddr && 
+	faddr <  end   &&
+	( p = rindex( libpip, '/' ) ) != NULL ) {
+      *p = '\0';
+      ASSERT( ( prefix = (char*) malloc( strlen( libpip ) + strlen( updir ) + 1 ) )
+	      != NULL );
+      p = prefix;
+      p = stpcpy( p, libpip );
+      p = stpcpy( p, updir  );
+      ASSERT( ( p = realpath( prefix, NULL ) ) != NULL );
+      free( libpip );
+      free( prefix );
+      prefix = p;
+      root->prefixdir = prefix;
+      DBGF( "prefix: %s", prefix );
+      return prefix;
+    }
+    free( libpip );
+  }
+  NEVER_REACH_HERE;
+  return NULL;			/* dummy */
+}
+
 int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
   void pip_named_export_init( pip_task_t* );
   pip_task_t	*task;
@@ -477,6 +523,8 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
 
     pip_spin_init( &pip_root->lock_ldlinux     );
     pip_spin_init( &pip_root->lock_tasks       );
+
+    (void) pip_prefix_dir( pip_root );
     /* beyond this point, we can call the       */
     /* pip_dlsymc() and pip_dlclose() functions */
     pipid = PIP_PIPID_ROOT;
@@ -890,57 +938,6 @@ pip_find_glibc_symbols( void *handle, pip_task_t *task ) {
   RETURN( err );
 }
 
-static char *pip_get_prefix_dir( char *name ) {
-  FILE	 *fp_maps = NULL;
-  size_t  sz = 0;
-  ssize_t l;
-  char	 *line = NULL;
-  char	 *fname, *prefix, *p;
-  char	 *updir = "/..";
-  void	 *sta, *end;
-  void	 *faddr = (void*) pip_get_prefix_dir;
-
-  if( ( prefix = pip_root->installdir ) != NULL ) goto found;
-  if( pip_root != NULL &&
-      pip_root->installdir != NULL ) {
-    prefix = pip_root->installdir;
-  } else {
-    ASSERT( ( fp_maps = fopen( PIP_MAPS_PATH, "r" ) ) != NULL );
-    DBGF( "faddr:%p", faddr );
-    while( ( l = getline( &line, &sz, fp_maps ) ) > 0 ) {
-      line[l] = '\0';
-      DBGF( "l:%d sz:%d line(%p)\n\t%s", (int)l, (int)sz, line, line );
-      prefix = NULL;
-      int n = sscanf( line, "%p-%p %*4s %*x %*x:%*x %*d %ms", &sta, &end, &prefix );
-      DBGF( "%d: %p-%p %p %s", n, sta, end, faddr, prefix );
-      if( n == 3 && prefix != NULL && sta <= faddr && faddr < end ) {
-	if( pip_root != NULL ) {
-	  prefix = dirname( prefix );
-	  DBGF( "prefix: %s", prefix );
-	  pip_root->installdir = prefix;
-	}
-	goto found;
-      }
-      free( prefix );
-    }
-    fname = NULL;
-    goto not_found;
-  }
- found:
-  ASSERT( ( fname = malloc( strlen( prefix ) +
-			    strlen( updir )  +
-			    strlen( name )   + 1 ) ) 
-	  != NULL );
-  p = stpcpy( fname, prefix );
-  p = stpcpy( p, updir );
-  p = stpcpy( p, name );
-  DBGF( "fname: %s", fname );
- not_found:
-  if( line != NULL ) free( line );
-  fclose( fp_maps );
-  return fname;
-}
-
 #ifdef RTLD_DEEPBIND
 #define DLMOPEN_FLAGS	  (RTLD_NOW | RTLD_DEEPBIND)
 #else
@@ -951,7 +948,6 @@ static int
 pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
   const char 	*path = progp->prog;
   Lmid_t	lmid;
-  char		*libpipinit = NULL;
   pip_init_t	impinit     = NULL;
   void 		*loaded     = NULL;
   void 		*ld_pipinit = NULL;
@@ -982,17 +978,23 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
   /*** the name space contexts of here and there are different ***/
   impinit = (pip_init_t) pip_dlsym( loaded, "pip_init_task_implicitly" );
   if( impinit == NULL ) {
-    char *libpipinit_name = "/lib/" LIBNAME_PIPINIT;
+    char *prefix, *pipinit_path, *p;
+    char *pipinit_name = "/lib/" LIBNAME_PIPINIT;
     DBGF( "dlsym: %s", pip_dlerror() );
-    if( ( libpipinit = pip_get_prefix_dir( libpipinit_name ) ) == NULL ) {
-      pip_err_mesg( "Unable to find %s", LIBNAME_PIPINIT );
-      err = ENOENT;
-      goto error;
-    } else if( ( ld_pipinit = pip_dlmopen( lmid, libpipinit, DLMOPEN_FLAGS ) ) == NULL ) {
-      pip_err_mesg( "Unable to load [%ld] %s: %s", lmid, libpipinit, pip_dlerror() );
+    prefix = pip_prefix_dir( pip_root );
+    DBGF( "prefix: %s", prefix );
+    ASSERT( ( pipinit_path = (char*) malloc( strlen( prefix ) +
+					     strlen( pipinit_name ) + 1 ) ) != NULL );
+    p = pipinit_path;
+    p = stpcpy( p, prefix       );
+    p = stpcpy( p, pipinit_name );
+    if( ( ld_pipinit = pip_dlmopen( lmid, pipinit_path, DLMOPEN_FLAGS ) ) == NULL ) {
+      pip_err_mesg( "Unable to load [%ld] %s: %s", lmid, pipinit_path, pip_dlerror() );
+      free( pipinit_path );
       err = ENOENT;
       goto error;
     } else {
+      free( pipinit_path );
       impinit = (pip_init_t) pip_dlsym( ld_pipinit, "pip_init_task_implicitly" );
       if( impinit == NULL ) {
 	DBGF( "dlsym: %s", pip_dlerror() );
@@ -1001,14 +1003,12 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
       }
     }
   }
-  free( libpipinit );
   task->symbols.pip_init = impinit;
   task->loaded           = loaded;
   task->lmid             = lmid;
   RETURN( err );
 
  error:
-  free( libpipinit );
   if( loaded     != NULL ) pip_dlclose( loaded    );
   if( ld_pipinit != NULL ) pip_dlclose( ld_pipinit);
   RETURN( err );
