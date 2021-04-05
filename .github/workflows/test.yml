@@ -1,37 +1,46 @@
-name: test for PiP and PiP-Testsuite
+name: PiP-Testsuite
 
 on:
 
   repository_dispatch:
     types: [pip-glibc-built, pip-update, pip-test-invoke, pip-testsuite-update]
   # client-payload:
-  #    github.event.client_payload.distros: [centos7, centos8]
-  #    github.event.client_payload.archs: [amd64, arm64]
-  #    github.event.client_payload.pip_versions: [2, 3] or [''] if pip_ref != ''
+  #    github.event.client_payload.distros: ["centos7", "centos8"]
+  #    github.event.client_payload.archs: ["amd64", "arm64"]
+  #    github.event.client_payload.pip_versions:
+  #		["2", "3"] if pip_ref == ''
+  #		or
+  #		[""] if pip_ref != ''
   #    github.event.client_payload.pip_ref: commit_hash or ''
   #    github.event.client_payload.pip_testsuite_ref: commit_hash or ''
   #    github.event.client_payload.dispatch: true or false
   #
   # - pip-glibc-built
-  #    github.event.client_payload.distros: [centos7, centos8]
-  #    github.event.client_payload.archs: [amd64, arm64]
-  #    github.event.client_payload.pip_versions: [2, 3]
+  #    github.event.client_payload.distros: ["centos7", "centos8"]
+  #    github.event.client_payload.archs: ["amd64", "arm64"]
+  #    github.event.client_payload.pip_versions: ["2", "3"]
   #    github.event.client_payload.pip_ref: ''
   #    github.event.client_payload.pip_testsuite_ref: ''
   #    github.event.client_payload.dispatch: true
   # - pip-test-invoke
   #    anything
   # - pip-update
-  #    github.event.client_payload.distros: [centos7, centos8]
-  #    github.event.client_payload.archs: [amd64, arm64]
-  #    github.event.client_payload.pip_versions: ['']
-  #    github.event.client_payload.pip_ref: commit_hash
+  #    github.event.client_payload.distros: ["centos7", "centos8"]
+  #    github.event.client_payload.archs: ["amd64", "arm64"]
+  #    github.event.client_payload.pip_versions:
+  #		["2"] or ["3"] if it's git push to pip-2 or pip-3 branch
+  #		or
+  #		[""] if anything else
+  #    github.event.client_payload.pip_ref:
+  #		'' if  it's git push to pip-2 or pip-3 branch
+  #		or
+  #		commit_hash
   #    github.event.client_payload.pip_testsuite_ref: ''
   #    github.event.client_payload.dispatch: true if not pull_request
   # - pip-testsuite-update
-  #    github.event.client_payload.distros: [centos7, centos8]
-  #    github.event.client_payload.archs: [amd64, arm64]
-  #    github.event.client_payload.pip_versions: [2, 3]
+  #    github.event.client_payload.distros: ["centos7", "centos8"]
+  #    github.event.client_payload.archs: ["amd64", "arm64"]
+  #    github.event.client_payload.pip_versions: ["2", "3"]
   #    github.event.client_payload.pip_ref: ''
   #    github.event.client_payload.pip_testsuite_ref: commit_hash
   #    github.event.client_payload.dispatch: false
@@ -88,9 +97,6 @@ jobs:
           set -x
           docker run -v $(pwd):/host ${{ secrets.DOCKERHUB_USER }}/pip-glibc:HEAD-${{ matrix.distro }}-${{ matrix.arch }} /bin/sh -x /host/PiP/.github/workflows/test.sh
 
-      - name: show generated files
-        run: ls -CF results
-
       - name: upload test results
         if: always()
         uses: actions/upload-artifact@v2
@@ -111,19 +117,19 @@ jobs:
 
     steps:
 
-      - name: config
-        id: config
+      - name: determine pip_versions
+        id: pip_versions
         run: |
           set -x
-          echo "distros=<${{ toJson(github.event.client_payload.distros) }}>"
-          echo "archs=<${{ toJson(github.event.client_payload.archs) }}>"
+          echo "distros=<${{ toJSON(github.event.client_payload.distros) }}>"
+          echo "archs=<${{ toJSON(github.event.client_payload.archs) }}>"
           case "${{ github.event.client_payload.pip_ref }}" in
           '')
-            pip_versions="${{ toJson(github.event.client_payload.pip_versions) }}"
+            pip_versions="[$(echo "${{ toJSON(github.event.client_payload.pip_versions) }}" | sed -e 1d -e '$d' | awk 'NR>1 {print ","} {printf "\"%s\"", $1}' )]"
             ;;
           *)
-            pip_version=`echo ${{ github.event.client_payload.pip_ref }} | sed 's/pip-//'`
-            pip_versions="['$pip_version']"
+            pip_version=`echo ${{ github.event.client_payload.pip_ref }} | sed 's/.*pip-//'`
+            pip_versions='["'$pip_version'"]'
             ;;
           esac
           echo "pip_versions=<$pip_versions>"
@@ -135,4 +141,4 @@ jobs:
           token: ${{ secrets.PIP_BUILD_TOKEN }}
           repository: ${{ matrix.repo }}
           event-type: pip-test-ok
-          client-payload: '{ "distros": ${{ toJson(github.event.client_payload.distros) }}, "archs": toJson(github.event.client_payload.archs), "pip_versions": ${{ steps.config.outputs.pip_branch }} }'
+          client-payload: '{ "distros": ${{ toJSON(github.event.client_payload.distros) }}, "archs": ${{ toJSON(github.event.client_payload.archs) }}, "pip_versions": ${{ steps.pip_versions.outputs.pip_versions }} }'

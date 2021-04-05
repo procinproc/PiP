@@ -1,0 +1,130 @@
+name: process-in-process RPM
+
+on:
+  repository_dispatch:
+    types: [pip-test-ok, pip-rpm-invoke]
+  # client-payload:
+  #    github.event.client_payload.distros: ["centos7", "centos8"]
+  #    github.event.client_payload.archs: ["amd64", "arm64"]
+  #    github.event.client_payload.pip_versions: ["2", "3"]
+
+jobs:
+
+  source:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: ${{ github.event.client_payload.distros }}
+        pip_version: ${{ github.event.client_payload.pip_versions }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: checkout
+        uses: actions/checkout@v2
+        with:
+          ref: pip-${{ matrix.pip_version }}
+
+      - name: create SRPM
+        run: |
+          set -x
+          distro=${{ matrix.distro }}
+          pip_full_version=`awk '/^Version:/ {print $2; exit}' package/redhat/process-in-process.spec`
+          pip_name=pip-${pip_full_version}
+          source=${pip_name}.tar.gz
+          workdir=`pwd`
+          cd ..
+          mv ${workdir} ${pip_name}
+          tar zcf /tmp/${source} ${pip_name}
+          mv ${pip_name} ${workdir}
+          cd ${workdir}
+          mv /tmp/${source} .
+          docker run -v $(pwd):/host -e "RPM_SOURCE=/host/${source}" -e 'RPM_SPEC=/host/package/redhat/process-in-process.spec' -e 'RPM_RESULTS=/host/srpm' ${{ secrets.DOCKERHUB_USER }}/pip-glibc:HEAD-${distro} /host/.github/workflows/rpm.source.sh
+
+      - name: Display generated SRPMs
+        run: ls -lR srpm
+
+      - name: upload SRPM
+        uses: actions/upload-artifact@v2
+        with:
+          name: pip-${{ matrix.pip_version }}-${{ matrix.distro }}-srpm
+          path: |
+            srpm
+            .github/workflows
+
+  build:
+
+    needs: [source]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: ${{ github.event.client_payload.distros }}
+        arch: ${{ github.event.client_payload.archs }}
+        pip_version: ${{ github.event.client_payload.pip_versions }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: download SRPM and pip-glibc-rpm scripts
+        uses: actions/download-artifact@v2
+        with:
+          name: pip-${{ matrix.pip_version }}-${{ matrix.distro }}-srpm
+
+      - name: Display structure of downloaded files
+        run: ls -alR
+
+      - name: Setup QEMU user-mode emulation
+        uses: docker/setup-qemu-action@v1
+
+      - name: create RPM
+        run: |
+          set -x
+          docker run -v $(pwd):/host -e "RPM_SRPM=/host/srpm/*" -e 'RPM_SPEC=process-in-process.spec' -e 'RPM_RESULTS=/host/rpm' ${{ secrets.DOCKERHUB_USER }}/pip-glibc:HEAD-${{ matrix.distro }}-${{ matrix.arch }} sh -x /host/.github/workflows/rpm.build.sh
+
+      - name: Display generated RPMs
+        run: ls -lR rpm
+
+      - name: upload RPM
+        uses: actions/upload-artifact@v2
+        with:
+          name: pip-${{ matrix.pip_version }}-${{ matrix.distro }}-${{ matrix.arch }}-rpm
+          path: rpm
+
+  dispatch:
+
+    needs: [build]
+
+    strategy:
+      matrix:
+        repo: ['${{ github.repository }}' ]
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: determine archtypes
+        id: archtypes
+        run: |
+          set -x
+          if ${{ contains(github.event.client_payload.archs, 'amd64') }} &&
+             ${{ contains(github.event.client_payload.archs, 'arm64') }}
+          then
+            archtypes='["multiarch", "amd64", "arm64"]'
+          else
+            archtypes="[$(echo "${{ toJSON(github.event.client_payload.archs) }}" | sed -e 1d -e '$d' | awk 'NR>1 {print ","} {printf "\"%s\"", $1}' )]"
+          fi
+          echo "archs=<${{ github.event.client_payload.archs }}>"
+          echo "toJSON(archs)=<${{ toJSON(github.event.client_payload.archs) }}>"
+          echo "::set-output name=archtypes::${archtypes}"
+
+      - name: dispatch event
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.PIP_BUILD_TOKEN }}
+          repository: ${{ matrix.repo }}
+          event-type: pip-rpm-built
+          client-payload: '{ "distros": ${{ toJSON(github.event.client_payload.distros) }}, "archtypes": ${{ steps.archtypes.outputs.archtypes }}, "pip_versions": ${{ toJSON(github.event.client_payload.pip_versions) }} }'
