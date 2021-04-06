@@ -85,13 +85,33 @@ int pip_raise_signal( pip_task_t *task, int sig ) {
 void pip_abort( void ) __attribute__((noreturn));
 void pip_abort( void ) {
   /* thin function may be called either root or tasks */
-  /* SIGTERM is delivered to root so that PiP tasks   */
-  /* are forced to ternminate                         */
   ENTER;
   if( pip_root != NULL ) {
-    (void) pip_raise_signal( pip_root->task_root, SIGTERM );
+    int i, j, flag;
+
+    for( i=0; i<pip_root->ntasks; i++ ) {
+      if( &pip_root->tasks[i] == pip_task ) continue;
+      (void) pip_raise_signal( &pip_root->tasks[i], SIGABRT );
+    }
+    for( i=0; i<10; i++ ) {
+      flag = 0;
+      for( j=0; j<pip_root->ntasks; j++ ) {
+	if( &pip_root->tasks[j] == pip_task ) continue;
+	if( pip_raise_signal( &pip_root->tasks[j], 0 ) != 0 ) {
+	  flag = 1;
+	}
+      }
+      if( !flag ) goto kill_root;
+    }
+    for( i=0; i<pip_root->ntasks; i++ ) {
+      if( &pip_root->tasks[i] == pip_task ) continue;
+      (void) pip_raise_signal( &pip_root->tasks[i], SIGKILL );
+    }
+  kill_root:
+    (void) pip_raise_signal( pip_root->task_root, SIGABRT );
+    (void) pip_raise_signal( pip_task, SIGABRT );
   } else {
-    kill( pip_gettid(), SIGTERM );
+    tgkill( getpid(), pip_gettid(), SIGABRT );
   }
   while( 1 ) sleep( 1 );	/* wait for being killed */
   NEVER_REACH_HERE;
@@ -289,33 +309,6 @@ size_t pip_idstr( char *p, size_t s ) {
   return s;
 }
 
-void pip_describe( pid_t tid ) __attribute__ ((unused));
-void pip_describe( pid_t tid ) {
-  pip_task_t *task = pip_current_task( tid );
-  char  *backtrace = "back-traced";
-  char  *debugged  = "debugged";
-  char	*trailer;
-
-  if( pip_command_gdb == NULL ) {
-    trailer = backtrace;
-  } else {
-    trailer = debugged;
-  }
-  if( task != NULL ) {
-    int pipid = task->pipid;
-    if( pipid == PIP_PIPID_ROOT ) {
-      printf( "\nPiP-ROOT(TID:%d) is %s\n\n", tid, trailer );
-    } else if( pipid >= 0 ) {
-      printf( "\nPiP-TASK(PIPID:%d,TID:%d) is %s\n\n", pipid, tid, trailer );
-    } else {
-      printf( "\nPiP-TASK(PIPID:??,TID:%d) is %s\n\n", tid, trailer );
-    }
-  } else {
-    printf( "\nPiP-unknown(TID:%d) is %s\n\n", tid, trailer );
-  }
-  fflush( NULL );
-}
-
 static void pip_attach_gdb( void ) {
   pid_t	target = pip_gettid();
   pid_t	pid;
@@ -325,27 +318,25 @@ static void pip_attach_gdb( void ) {
     if( ( pid = fork() ) == 0 ) {
       extern char **environ;
       char attach[32];
-      char describe[64];
       char *argv[32];
       int argc = 0;
 
       snprintf( attach,   sizeof(attach),   "%d", target );
-      snprintf( describe, sizeof(describe), "call pip_describe(%d)", target );
       if( pip_command_gdb == NULL ) {
 	/*  1 */ argv[argc++] = pip_path_gdb;
 	/*  2 */ argv[argc++] = "-quiet";
-	/*  3 */ argv[argc++] = "-ex";
-	/*  4 */ argv[argc++] = "set verbose off";
+	/*  3 */ argv[argc++] = "-p";
+	/*  4 */ argv[argc++] = attach;
 	/*  5 */ argv[argc++] = "-ex";
-	/*  6 */ argv[argc++] = "set complaints 0";
+	/*  6 */ argv[argc++] = "set pagination off";
 	/*  7 */ argv[argc++] = "-ex";
-	/*  8 */ argv[argc++] = "set confirm off";
-	/*  9 */ argv[argc++] = "-p";
-	/* 10 */ argv[argc++] = attach;
+	/*  8 */ argv[argc++] = "set verbose off";
+	/*  9 */ argv[argc++] = "-ex";
+	/* 10 */ argv[argc++] = "set complaints 0";
 	/* 11 */ argv[argc++] = "-ex";
-	/* 12 */ argv[argc++] = "info inferiors";
+	/* 12 */ argv[argc++] = "set confirm off";
 	/* 13 */ argv[argc++] = "-ex";
-	/* 14 */ argv[argc++] = describe;
+	/* 14 */ argv[argc++] = "info inferiors";
 	/* 15 */ argv[argc++] = "-ex";
 	/* 16 */ argv[argc++] = "bt";
 	/* 17 */ argv[argc++] = "-ex";
@@ -374,6 +365,7 @@ static void pip_attach_gdb( void ) {
       waitpid( pid, NULL, 0 );
     }
   }
+  RETURNV;
 }
 
 #define PIP_DEBUG_BUFSZ		(4096)
@@ -453,8 +445,12 @@ static void pip_exception_handler( int sig, siginfo_t *info, void *extra ) {
     pip_err_mesg( "*** Exception signal: %s (%d) !!", strsignal(sig), sig );
     pip_debug_info();
   }
-  if( pip_root != NULL ) pip_spin_unlock( &pip_root->lock_bt );
-  (void) tgkill( getpid(), pip_gettid(), sig );
+  if( pip_root != NULL ) {
+    pip_spin_unlock( &pip_root->lock_bt );
+    (void) pip_raise_signal( pip_root->task_root, SIGCONT );
+  }
+  (void) kill( getpid(), SIGKILL );
+  RETURNV;
 }
 
 static int
