@@ -84,7 +84,7 @@ struct value_table valtab[] =
   };
 
 static void print_item( int item ) {
-  if( item == -1 ) {
+  if( item < 0 ) {
     int i;
     for( i=0; valtab[i].name!=NULL; i++ ) {
       printf( "%s:\t%s\n", valtab[i].name, valtab[i].value );
