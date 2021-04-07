@@ -460,7 +460,7 @@ int main( int argc, char **argv ) {
   if( nargv != NULL ) free( nargv );
   free_spawn( head );
 
-  if( errsig > 0 ) kill( getpid(), errsig );
+  if( errsig > 0 ) err = errsig;
 
   return err;
 }
