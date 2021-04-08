@@ -564,7 +564,7 @@ void pip_page_alloc( size_t sz, void **allocp ) {
 
 #define PIP_MINSIGSTKSZ 	(MINSIGSTKSZ*2)
 
-void pip_debug_on_exceptions( pip_task_t *task ) {
+void pip_debug_on_exceptions( pip_root_t *root, pip_task_t *task ) {
   char			*path, *command, *signals;
   sigset_t 		sigs, sigempty;
   struct sigaction	sigact;
@@ -574,24 +574,23 @@ void pip_debug_on_exceptions( pip_task_t *task ) {
   if( done ) return;
   done = 1;
 
-  if( ( path = pip_root->envs.gdb_path ) != NULL &&
-      *path != '\0' ) {
+  if( ( path = root->envs.gdb_path ) != NULL ) {
     ASSERT( sigemptyset( &sigs     ) == 0 );
     ASSERT( sigemptyset( &sigempty ) == 0 );
-    ASSERT( sigaddset( &sigs, SIGHUP  ) == 0 );
-    ASSERT( sigaddset( &sigs, SIGSEGV ) == 0 );
 
     if( !pip_is_threaded_() ) {
       if( access( path, X_OK ) != 0 ) {
 	  pip_err_mesg( "Unable to execute (%s)", path );
       } else {
 	pip_path_gdb = path;
-	if( ( command = pip_root->envs.gdb_command ) != NULL &&
-	    *command != '\0' ) {
-	  if( access( command, R_OK ) == 0 ) pip_command_gdb = command;
+	if( ( command = root->envs.gdb_command ) != NULL ) {
+	  pip_command_gdb = command;
 	}
-	if( ( signals = pip_root->envs.gdb_signals ) != NULL ) {
+	if( ( signals = root->envs.gdb_signals ) != NULL ) {
 	  pip_set_gdb_sigset( signals, &sigs );
+	} else {
+	  ASSERT( sigaddset( &sigs, SIGHUP  ) == 0 );
+	  ASSERT( sigaddset( &sigs, SIGSEGV ) == 0 );
 	}
 	if( memcmp( &sigs, &sigempty, sizeof(sigs) ) != 0 ) {
 	  /* FIXME: since the sigaltstack is allocated  */
@@ -623,7 +622,7 @@ void pip_debug_on_exceptions( pip_task_t *task ) {
     } else {
       /* exception signals must be blocked in thread mode */
       /* so that root hanlder can catch them */
-      if( ( signals = pip_root->envs.gdb_signals ) != NULL ) {
+      if( ( signals = root->envs.gdb_signals ) != NULL ) {
 	pip_set_gdb_sigset( signals, &sigs );
 	if( memcmp( &sigs, &sigempty, sizeof(sigs) ) ) {
 	  ASSERT( pthread_sigmask( SIG_BLOCK, &sigs, NULL ) == 0 );
@@ -658,7 +657,7 @@ int pip_init_task_implicitly( pip_root_t *root,
       pip_task = task;
       pip_gdbif_root = root->gdbif_root;
       if( !pip_is_threaded_() ) {
-	pip_debug_on_exceptions( task );
+	pip_debug_on_exceptions( root, task );
       }
     }
   }

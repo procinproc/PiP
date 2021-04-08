@@ -361,7 +361,7 @@ extern void pip_set_exit_status( pip_task_t*, int ) PIP_PRIVATE;
 extern void pip_task_signaled( pip_task_t*, int ) PIP_PRIVATE;
 extern void pip_annul_task( pip_task_t* ) PIP_PRIVATE;
 
-extern void pip_debug_on_exceptions( pip_task_t* ) PIP_PRIVATE;
+extern void pip_debug_on_exceptions( pip_root_t*, pip_task_t* ) PIP_PRIVATE;
 
 extern int pip_debug_env( void );
 

@@ -431,18 +431,26 @@ void pip_unset_sigmask( void ) {
 static void pip_save_debug_envs( pip_root_t *root ) {
   char *env;
 
-  if( ( env = getenv( PIP_ENV_STOP_ON_START ) ) != NULL )
+  if( ( env = getenv( PIP_ENV_STOP_ON_START ) ) != NULL && *env != '\0' ) {
     root->envs.stop_on_start = strdup( env );
-  if( ( env = getenv( PIP_ENV_GDB_PATH      ) ) != NULL )
+  }
+  if( ( env = getenv( PIP_ENV_GDB_PATH      ) ) != NULL && *env != '\0' &&
+      access( env, X_OK ) == 0 ) {
     root->envs.gdb_path      = strdup( env );
-  if( ( env = getenv( PIP_ENV_GDB_COMMAND   ) ) != NULL )
+  }
+  if( ( env = getenv( PIP_ENV_GDB_COMMAND   ) ) != NULL && *env != '\0' &&
+      access( env, R_OK ) == 0 ) {
     root->envs.gdb_command   = strdup( env );
-  if( ( env = getenv( PIP_ENV_GDB_SIGNALS   ) ) != NULL )
+  }
+  if( ( env = getenv( PIP_ENV_GDB_SIGNALS   ) ) != NULL && *env != '\0' ) {
     root->envs.gdb_signals   = strdup( env );
-  if( ( env = getenv( PIP_ENV_SHOW_MAPS     ) ) != NULL )
+  }
+  if( ( env = getenv( PIP_ENV_SHOW_MAPS     ) ) != NULL && *env != '\0' ) {
     root->envs.show_maps     = strdup( env );
-  if( ( env = getenv( PIP_ENV_SHOW_PIPS     ) ) != NULL )
-    root->envs.show_pips    = strdup( env );
+  }
+  if( ( env = getenv( PIP_ENV_SHOW_PIPS     ) ) != NULL && *env != '\0' ) {
+    root->envs.show_pips     = strdup( env );
+  }
 }
 
 static char *pip_prefix_dir( pip_root_t *root ) {
@@ -570,8 +578,8 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     pip_gdbif_task_commit( pip_task );
     if( !pip_is_threaded_() ) {
       pip_save_debug_envs( pip_root );
+      pip_debug_on_exceptions( pip_root, pip_task );
     }
-    pip_debug_on_exceptions( pip_task );
 
     unsetenv( "LD_PRELOAD" );
 
