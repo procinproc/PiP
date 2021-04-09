@@ -7,8 +7,8 @@ Release: 0
 Summary: PiP (Process in Process) release yum repository settings
 Group: System Environment/Libraries
 License: BSD
-URL: https://github.com/RIKEN-SysSoft/PiP/
-Vendor: RIKEN System Software Team
+URL: https://github.com/procinproc/PiP/
+Vendor: PiP Development Team
 BuildRoot: %{_tmppath}/%{name}-%{version}-buildroot
 
 Source0: process-in-process.repo
