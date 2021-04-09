@@ -25,7 +25,7 @@ Summary: PiP - Process in Process
 Group: System Environment/Libraries
 License: BSD
 URL: https://github.com/procinproc/PiP/
-Vendor: RIKEN System Software Team
+Vendor: PiP Development Team
 BuildRoot: %{_tmppath}/%{name}-%{version}-buildroot
 BuildRequires: pip-glibc
 
