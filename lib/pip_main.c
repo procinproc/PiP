@@ -25,7 +25,7 @@
  * $RIKEN_copyright: Riken Center for Computational Sceience (R-CCS),
  * System Software Development Team, 2016-2021
  * $
- * $PIP_VERSION: Version 3.0.0$
+ * $PIP_VERSION: Version 3.1.0$
  *
  * $Author: Atsushi Hori (R-CCS)
  * Query:   procinproc-info@googlegroups.com
@@ -136,7 +136,7 @@ static void free_cacheline_size_str( void ) {
 }
 
 static void print_item( int item ) {
-  if( item == -1 ) {
+  if( item < 0 ) {
     int i;
     for( i=0; valtab[i].name!=NULL; i++ ) {
       printf( "%s:\t%s\n", valtab[i].name, valtab[i].value );

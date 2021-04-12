@@ -25,7 +25,7 @@
  * $RIKEN_copyright: Riken Center for Computational Sceience (R-CCS),
  * System Software Development Team, 2016-2021
  * $
- * $PIP_VERSION: Version 3.0.0$
+ * $PIP_VERSION: Version 3.1.0$
  *
  * $Author: Atsushi Hori (R-CCS)
  * Query:   procinproc-info@googlegroups.com
@@ -43,7 +43,7 @@
     char *p = msg;				\
     int l = sizeof(msg), n;			\
     if( taski != NULL ) {			\
-      n = pip_taski_str( p, l, taski );		\
+      n = pip_task_str( p, l, taski );		\
       p += n; l -= n;				\
     }						\
     n = snprintf( p, l, ":" );			\

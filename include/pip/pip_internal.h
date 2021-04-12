@@ -25,7 +25,7 @@
  * $RIKEN_copyright: Riken Center for Computational Sceience (R-CCS),
  * System Software Development Team, 2016-2021
  * $
- * $PIP_VERSION: Version 3.0.0$
+ * $PIP_VERSION: Version 3.1.0$
  *
  * $Author: Atsushi Hori (R-CCS)
  * Query:   procinproc-info@googlegroups.com
@@ -101,7 +101,7 @@
 //#define EVAL
 
 /** BLT/ULP supported version (RELEASED as PiP v3) **/
-#define PIP_BASE_VERSION	(0x4000U)
+#define PIP_BASE_VERSION	(0x4100U)
 /** BLT/ULP UNsupported version (RELEASED as PiP v2)
 #define PIP_BASE_VERSION	(0x3000U)
 **/
@@ -119,6 +119,8 @@
 
 #define PIP_MAGIC_WORD		"PrcInPrc"
 #define PIP_MAGIC_WLEN		(8)
+
+#define PIP_MAPS_PATH		"/proc/self/maps"
 
 #define PIP_STACK_SIZE		(8*1024*1024LU) /* 8 MiB */
 #define PIP_STACK_SIZE_MIN	(1*1024*1024LU) /* 1 MiB */
@@ -373,7 +375,7 @@ typedef struct pip_root {
   /* for backtrace */
   pip_spinlock_t		lock_bt; /* lock for backtrace */
 
-  char				*installdir;
+  char				*prefixdir;
   /* reserved for future use */
   void				*__reserved__[32];
 
@@ -417,6 +419,7 @@ extern pip_clone_mostly_pthread_t 	pip_clone_mostly_pthread_ptr;
 extern int __attribute__ ((visibility ("default")))
 pip_init_task_implicitly( pip_root_t *root,
 			  pip_task_internal_t *task );
+extern char *pip_prefix_dir( pip_root_t* ) PIP_PRIVATE;
 
 extern void pip_wakeup( pip_task_internal_t *taski ) PIP_PRIVATE;
 extern void pip_wakeup_to_die( pip_task_internal_t *taski ) PIP_PRIVATE;
@@ -473,8 +476,6 @@ extern int  pip_is_shared_fd_( void ) PIP_PRIVATE;
 extern int  pip_isa_coefd( int ) PIP_PRIVATE;
 extern void pip_set_name( pip_task_internal_t* ) PIP_PRIVATE;
 
-extern int  pip_taski_str( char*, size_t, pip_task_internal_t* ) PIP_PRIVATE;
-extern int pip_task_str( char *p, size_t sz, pip_task_t *task );
 extern size_t pip_idstr( char*, size_t ) PIP_PRIVATE;
 
 extern void pip_page_alloc( size_t, void** ) PIP_PRIVATE;
@@ -494,7 +495,8 @@ extern int  pip_is_version_ok( pip_root_t* ) PIP_PRIVATE;
 extern int  pip_are_sizes_ok( pip_root_t* ) PIP_PRIVATE;
 
 extern char *pip_get_prefix_dir( char* ) PIP_PRIVATE;
-extern void pip_debug_on_exceptions( pip_task_internal_t* ) PIP_PRIVATE;
+extern void pip_debug_on_exceptions( pip_root_t*, pip_task_internal_t* ) 
+  PIP_PRIVATE;
 extern void pip_onstart( pip_task_internal_t* ) PIP_PRIVATE;
 
 INLINE int pip_are_flags_exclusive( uint32_t flags, uint32_t val ) {

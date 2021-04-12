@@ -25,7 +25,7 @@
 # $RIKEN_copyright: Riken Center for Computational Sceience (R-CCS),
 # System Software Development Team, 2016-2021
 # $
-# $PIP_VERSION: Version 3.0.0$
+# $PIP_VERSION: Version 3.1.0$
 #
 # $Author: Atsushi Hori (R-CCS)
 # Query:   procinproc-info@googlegroups.com
@@ -38,7 +38,7 @@ srcdir = .
 
 HEADERS = pip.h pip_blt.h pip_util.h pip_dlfcn.h pip_signal.h \
 	pip_machdep.h pip_machdep_x86_64.h pip_machdep_aarch64.h \
-	pip_gdbif_enums.h pip_config.h \
+	pip_gdbif_enums.h pip_config.h concat.h \
 	xpmem.h
 
 MAN3_SRCS = pip.h pip_blt.h pip_signal.h

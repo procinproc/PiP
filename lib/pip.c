@@ -25,7 +25,7 @@
  * $RIKEN_copyright: Riken Center for Computational Sceience (R-CCS),
  * System Software Development Team, 2016-2021
  * $
- * $PIP_VERSION: Version 3.0.0$
+ * $PIP_VERSION: Version 3.1.0$
  *
  * $Author: Atsushi Hori (R-CCS)
  * Query:   procinproc-info@googlegroups.com
@@ -340,18 +340,26 @@ void pip_unset_signal_handler( int sig, struct sigaction *oldp ) {
 static void pip_save_debug_envs( pip_root_t *root ) {
   char *env;
 
-  if( ( env = getenv( PIP_ENV_STOP_ON_START ) ) != NULL )
+  if( ( env = getenv( PIP_ENV_STOP_ON_START ) ) != NULL && *env != '\0' ) {
     root->envs.stop_on_start = strdup( env );
-  if( ( env = getenv( PIP_ENV_GDB_PATH      ) ) != NULL )
+  }
+  if( ( env = getenv( PIP_ENV_GDB_PATH      ) ) != NULL && *env != '\0' &&
+      access( env, X_OK ) == 0 ) {
     root->envs.gdb_path      = strdup( env );
-  if( ( env = getenv( PIP_ENV_GDB_COMMAND   ) ) != NULL )
+  }
+  if( ( env = getenv( PIP_ENV_GDB_COMMAND   ) ) != NULL && *env != '\0' &&
+      access( env, R_OK ) == 0 ) {
     root->envs.gdb_command   = strdup( env );
-  if( ( env = getenv( PIP_ENV_GDB_SIGNALS   ) ) != NULL )
+  }
+  if( ( env = getenv( PIP_ENV_GDB_SIGNALS   ) ) != NULL && *env != '\0' ) {
     root->envs.gdb_signals   = strdup( env );
-  if( ( env = getenv( PIP_ENV_SHOW_MAPS     ) ) != NULL )
+  }
+  if( ( env = getenv( PIP_ENV_SHOW_MAPS     ) ) != NULL && *env != '\0' ) {
     root->envs.show_maps     = strdup( env );
-  if( ( env = getenv( PIP_ENV_SHOW_PIPS     ) ) != NULL )
+  }
+  if( ( env = getenv( PIP_ENV_SHOW_PIPS     ) ) != NULL && *env != '\0' ) {
     root->envs.show_pips    = strdup( env );
+  }
 }
 
 /* signal handlers */
@@ -375,6 +383,52 @@ void pip_set_sigmask( int sig ) {
 
 void pip_unset_sigmask( void ) {
   ASSERT( sigprocmask( SIG_SETMASK, &pip_root->old_sigmask, NULL ) == 0 );
+}
+
+char *pip_prefix_dir( pip_root_t *root ) {
+  FILE	 *fp_maps = NULL;
+  size_t  sz = 0;
+  ssize_t l;
+  char	 *line = NULL;
+  char	 *libpip, *prefix, *p;
+  char	 *updir = "/..";
+  void	 *sta, *end;
+  void	 *faddr = (void*) pip_prefix_dir;
+
+  if( root->prefixdir != NULL ) {
+    return root->prefixdir;
+  }
+  ASSERT( ( fp_maps = fopen( PIP_MAPS_PATH, "r" ) ) != NULL );
+  DBGF( "faddr:%p", faddr );
+  while( ( l = getline( &line, &sz, fp_maps ) ) > 0 ) {
+    line[l] = '\0';
+    DBGF( "l:%d sz:%d line(%p)\n\t%s", (int)l, (int)sz, line, line );
+    prefix = NULL;
+    int n = sscanf( line, "%p-%p %*4s %*x %*x:%*x %*d %ms", &sta, &end, &libpip );
+    DBGF( "%d: %p-%p %p %s", n, sta, end, faddr, prefix );
+    if( n == 3         && 
+	libpip != NULL && 
+	sta   <= faddr && 
+	faddr <  end   &&
+	( p = rindex( libpip, '/' ) ) != NULL ) {
+      *p = '\0';
+      ASSERT( ( prefix = (char*) malloc( strlen( libpip ) + strlen( updir ) + 1 ) )
+	      != NULL );
+      p = prefix;
+      p = stpcpy( p, libpip );
+      p = stpcpy( p, updir  );
+      ASSERT( ( p = realpath( prefix, NULL ) ) != NULL );
+      free( libpip );
+      free( prefix );
+      prefix = p;
+      root->prefixdir = prefix;
+      DBGF( "prefix: %s", prefix );
+      return prefix;
+    }
+    free( libpip );
+  }
+  NEVER_REACH_HERE;
+  return NULL;			/* dummy */
 }
 
 /* API */
@@ -452,6 +506,8 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, uint32_t opts ) {
     pip_spin_init( &root->lock_tasks );
     pip_spin_init( &root->lock_bt    );
 
+    (void) pip_prefix_dir( root );
+
     pip_sem_init( &root->lock_glibc );
     pip_sem_post( &root->lock_glibc );
     pip_sem_init( &root->sync_spawn );
@@ -508,12 +564,12 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, uint32_t opts ) {
 			    pip_sigterm_handler,
 			    &root->old_sigterm );
 
-    pip_save_debug_envs( root );
-
     pip_gdbif_initialize_root( ntasks );
     pip_gdbif_task_commit( taski );
-    pip_debug_on_exceptions( taski );
-
+    if( !pip_is_threaded_() ) {
+      pip_save_debug_envs( root );
+      pip_debug_on_exceptions( root, taski );
+    }
     /* fix me: only pip_preload.so must be excluded */
     unsetenv( "LD_PRELOAD" );
 

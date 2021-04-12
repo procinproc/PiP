@@ -25,7 +25,7 @@
  * $RIKEN_copyright: Riken Center for Computational Sceience (R-CCS),
  * System Software Development Team, 2016-2021
  * $
- * $PIP_VERSION: Version 3.0.0$
+ * $PIP_VERSION: Version 3.1.0$
  *
  * $Author: Atsushi Hori (R-CCS)
  * Query:   procinproc-info@googlegroups.com
@@ -225,6 +225,9 @@ typedef struct pip_mutex {
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+  int    pip_task_str( char*, size_t, pip_task_t* );
+
 #endif
 
   /**
@@ -713,7 +716,6 @@ int pip_blt_spawn_( pip_spawn_program_t *progp,
 #else
   INLINE void
   pip_task_queue_describe_( pip_task_queue_t *queue, char *tag, FILE *fp ) {
-    extern int pip_task_str( char*, size_t, pip_task_t* );
     if( queue == NULL ) return;
     if( queue->methods == NULL || queue->methods->describe == NULL ) {
       if( PIP_TASKQ_ISEMPTY( &queue->queue ) ) {

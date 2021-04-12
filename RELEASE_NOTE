@@ -11,7 +11,7 @@ Version 3.0 (25 Nov. 2020)
 	- Introducing Bi-Level-Task (BLT) and User-Level-Process (ULP)
 	- No ABI compatibility between PiP-v1 and PiP-v2
 	- New PiP execution mode 'process:got' was added
-	- pipcc defines PIPCC and PIP_VERSION* symbols
+	- pipcc defines PIPCC and PIP_VERSION* CPP symbols
 	- Header files were moved from include/ to include/pip/
 	- New pips (Python version) was released
 	- piplnlibs was moved to PiP-glibc

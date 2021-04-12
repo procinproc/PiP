@@ -25,7 +25,7 @@
  * $RIKEN_copyright: Riken Center for Computational Sceience (R-CCS),
  * System Software Development Team, 2016-2021
  * $
- * $PIP_VERSION: Version 3.0.0$
+ * $PIP_VERSION: Version 3.1.0$
  *
  * $Author: Atsushi Hori (R-CCS)
  * Query:   procinproc-info@googlegroups.com
@@ -317,7 +317,6 @@ static int
 pip_load_dsos( pip_spawn_program_t *progp, pip_task_internal_t *taski ) {
   const char 	*prog = progp->prog;
   Lmid_t	lmid;
-  char		*libpipinit = NULL;
   pip_init_t	impinit     = NULL;
   void 		*loaded     = NULL;
   void 		*ld_pipinit = NULL;
@@ -349,17 +348,22 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_internal_t *taski ) {
   /*** the name space contexts of here and there are different ***/
   impinit = (pip_init_t) pip_dlsym( loaded, "pip_init_task_implicitly" );
   if( impinit == NULL ) {
+    char *prefix, *pipinit_path, *p;
     char *libpipinit_name = "/lib/" LIBNAME_PIPINIT;
     DBGF( "dlsym: %s", pip_dlerror() );
-    if( ( libpipinit = pip_get_prefix_dir( libpipinit_name ) ) == NULL ) {
-      pip_err_mesg( "Unable to find %s", libpipinit_name );
-      err = ENOENT;
-      goto error;
-    } else if( ( ld_pipinit = pip_dlmopen( lmid, libpipinit, DLMOPEN_FLAGS ) ) == NULL ) {
-      pip_err_mesg( "Unable to load [%ld] %s: %s", lmid, libpipinit, pip_dlerror() );
+    prefix = pip_prefix_dir( pip_root );
+    ASSERT( ( pipinit_path = (char*) malloc( strlen( prefix ) +
+					     strlen( libpipinit_name ) + 1 ) ) != NULL );
+    p = pipinit_path;
+    p = stpcpy( p, prefix          );
+    p = stpcpy( p, libpipinit_name );
+    if( ( ld_pipinit = pip_dlmopen( lmid, pipinit_path, DLMOPEN_FLAGS ) ) == NULL ) {
+      pip_err_mesg( "Unable to load [%ld] %s: %s", lmid, pipinit_path, pip_dlerror() );
+      free( pipinit_path );
       err = ENOENT;
       goto error;
     } else {
+      free( pipinit_path );
       impinit = (pip_init_t) pip_dlsym( ld_pipinit, "pip_init_task_implicitly" );
       if( impinit == NULL ) {
 	DBGF( "dlsym: %s", pip_dlerror() );
@@ -368,14 +372,12 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_internal_t *taski ) {
       }
     }
   }
-  free( libpipinit );
   MA(taski)->symbols.pip_init = impinit;
   MA(taski)->loaded           = loaded;
   MA(taski)->lmid             = lmid;
   RETURN( err );
 
  error:
-  free( libpipinit );
   if( loaded     != NULL ) pip_dlclose( loaded    );
   if( ld_pipinit != NULL ) pip_dlclose( ld_pipinit);
   RETURN( err );
