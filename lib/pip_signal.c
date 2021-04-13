@@ -41,8 +41,7 @@ int pip_tgkill( int tgid, int tid, int signal ) {
 
 int pip_kill( int pipid, int signal ) {
   int err;
-  if( pip_root == NULL            ) RETURN( EPERM  );
-  if( signal < 0 || signal > _NSIG ) RETURN( EINVAL );
+  if( !pip_is_initialized() ) RETURN( EPERM  );
   if( ( err = pip_check_pipid( &pipid ) ) == 0 ) {
     err = pip_raise_signal( pip_get_task( pipid ), signal );
   }

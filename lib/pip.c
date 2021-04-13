@@ -767,13 +767,13 @@ int pip_kill_all_tasks( void ) {
     for( i=0; i<pip_root->ntasks; i++ ) {
       pipid = i;
       if( pip_check_pipid( &pipid ) == 0 ) {
+	pip_task_internal_t *taski = &pip_root->tasks[pipid];
 	if( pip_is_threaded_() ) {
-	  pip_task_internal_t *taski = &pip_root->tasks[pipid];
-	  AA(taski)->status = PIP_W_EXITCODE( 0, SIGTERM );
-	    (void) pip_kill( pipid, SIGQUIT );
-	} else {
-	  (void) pip_kill( pipid, SIGKILL );
+	  AA(taski)->flag_sigchld = 1;
+	  /* simulate process behavior */
+	  ASSERT( pip_raise_signal( pip_root->task_root, SIGCHLD ) == 0 );
 	}
+	(void) pip_raise_signal( taski, SIGTERM );
       }
     }
   }

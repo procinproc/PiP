@@ -118,7 +118,7 @@ void pip_abort( void ) {
   } else {
     tgkill( getpid(), pip_gettid(), SIGABRT );
   }
-  while( 1 ) sleep( 1 );	/* wait for being killed */
+  while( 1 ) sleep( 1 );	/* dummy */
   NEVER_REACH_HERE;
 }
 
