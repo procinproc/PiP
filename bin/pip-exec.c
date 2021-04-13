@@ -450,7 +450,7 @@ int main( int argc, char **argv ) {
       if( ex > extval ) extval = ex;
     } else if( WIFSIGNALED( status ) ) {
       int sig = WTERMSIG( status );
-      fprintf( stderr, "%s: PIPID:%d signaled (%s)\n", program, pipid, strsignal(sig) );
+      fprintf( stderr, "%s: PiP-Task[%d] signaled (%s)\n", program, pipid, strsignal(sig) );
       if( errsig == 0 ) errsig = sig;
     }
   }
@@ -459,7 +459,7 @@ int main( int argc, char **argv ) {
   if( nargv != NULL ) free( nargv );
   free_spawn( head );
 
-  if( errsig > 0 ) kill( getpid(), errsig );
+  if( errsig > 0 ) err = errsig;
 
   return err;
 }
