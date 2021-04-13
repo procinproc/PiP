@@ -60,10 +60,6 @@ check_gen    = None
 check_out    = None
 check_output = None
 
-tgkill_path = os.path.abspath( 
-    os.path.join( os.path.join( os.getcwd(), os.path.dirname( __file__ ) ),
-                  "pip-tgkill" ) )
-
 def print_usage( errmsg ):
     "print usage and exit"
     global check_gen, check_out, check_output
@@ -132,18 +128,18 @@ def check_signal( sig ):
         signum = int( sig )
         if signum < 0 or signum > signal.NSIG:
             return None
-        for ( name, sig ) in SIGTAB:
-            if signum == sig:
-                return ( name, sig )
+        for ( name, signo ) in SIGTAB:
+            if signum == signo:
+                return ( name, signo )
         return None
     except ValueError:
         try:
             signame = sig.upper()
             if signame[0:3] == 'SIG':
                 signame = signame[3:]
-            for ( name, sig ) in SIGTAB:
+            for ( name, signo ) in SIGTAB:
                 if signame == name:
-                    return ( name, sig )
+                    return ( name, signo )
             return None
         except KeyError:
             return None
@@ -219,8 +215,6 @@ if len(sys.argv) > 0:
     idx  = 0
     while idx < argc:
         opt = args[idx]
-##        if flag_debug:
-##            print( str(idx)+'/'+str(argc), opt, args )
         idx += 1
         if idx < argc:
             nxt = args[idx]
@@ -283,26 +277,26 @@ if flag_debug:
     print( 'mode_sel:', mode_sel )
 
 if ps_opts is not None and top_opts is not None:
-    ex_print( '--ps and --top options are exclusive' )
-
-if flag_kill or killsig is not None:
-    if not os.path.exists( tgkill_path ):
-        ex_print( tgkill_path + ' not found' )
-
-if flag_kill and killsig is not None:
-    ex_print( '--kill and --signal options are exclusive' )
-if flag_kill:
-    killsig = ( 'TERM',  signal.SIGTERM )
-
-if flag_kill and ps_opts is not None:
-    ex_print( '( --kill and --ps options are exclusive' )
-if flag_kill and top_opts is not None:
-    ex_print( '( --kill and --top options are exclusive' )
+    ex_print( 'either --ps or --top can be specified' )
 
 if killsig is not None and ps_opts is not None:
-    ex_print( '( --signal and --ps options are exclusive' )
+    ex_print( 'either --signal or --ps options can be specified' )
 if killsig is not None and top_opts is not None:
-    ex_print( '( --signal and --top options are exclusive' )
+    ex_print( 'either --signal or --top options can be specified' )
+if flag_kill and killsig is not None:
+    ex_print( 'either --kill or --signal can be specified' )
+if flag_kill and ps_opts is not None:
+    ex_print( 'either --kill or --ps can be specified' )
+if flag_kill and top_opts is not None:
+    ex_print( 'either --kill or --top can be specified' )
+if flag_kill or killsig is not None:
+    tgkill_path = os.path.abspath( 
+        os.path.join( os.path.join( os.getcwd(), os.path.dirname( __file__ ) ),
+                      "pip-tgkill" ) )
+    if not os.path.exists( tgkill_path ):
+        ex_print( tgkill_path + ' not found' )
+if flag_kill:
+    killsig = ( 'TERM',  signal.SIGTERM )
 
 pips_postfix = 'comm tid pid ppid'
 if flag_bsd_u:
@@ -597,7 +591,7 @@ def kill_task( ps, killsig ):
                    pid + ' ' + tid + 
                    ' (' + cmd + ')' )
         if check_gen is None and check_out is None:
-            sp.check_call( [ tgkill_path, signame, pid, tid ] )
+            sp.check_call( [ tgkill_path, str(signum), pid, tid, 'no_esrch' ] )
         else:
             print( 'pip-tgkill', signame, tid, cmd, file=check_output )
     except Exception as e:
@@ -606,6 +600,7 @@ def kill_task( ps, killsig ):
                ' (' + cmd + '): ', e )
 
 if killsig is not None:
+    # tasks must be killed at first
     if flag_task:
         for ps in sel_tasks:
             kill_task( ps, killsig );

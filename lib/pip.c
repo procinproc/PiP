@@ -366,13 +366,6 @@ static void pip_save_debug_envs( pip_root_t *root ) {
 
 static void pip_sigchld_handler( int sig, siginfo_t *info, void *extra ) {}
 
-static void pip_sigterm_handler( int sig, siginfo_t *info, void *extra ) {
-  ENTER;
-  ASSERTD( TA(pip_task)->pipid == PIP_PIPID_ROOT );
-  (void) pip_kill_all_tasks();
-  (void) kill( getpid(), SIGKILL );
-}
-
 void pip_set_sigmask( int sig ) {
   sigset_t sigmask;
 
@@ -560,9 +553,6 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, uint32_t opts ) {
     pip_set_signal_handler( SIGCHLD,
 			    pip_sigchld_handler,
 			    &root->old_sigchld );
-    pip_set_signal_handler( SIGTERM,
-			    pip_sigterm_handler,
-			    &root->old_sigterm );
 
     pip_gdbif_initialize_root( ntasks );
     pip_gdbif_task_commit( taski );
