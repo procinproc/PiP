@@ -388,13 +388,14 @@ static void pip_attach_gdb( void ) {
 
   ENTER;
   if( pip_path_gdb != NULL ) {
+    pip_info_mesg( "*** Attaching pip-gdb (%s)", pip_path_gdb );
     if( ( pid = fork() ) == 0 ) {
       extern char **environ;
       char attach[32];
       char *argv[32];
       int argc = 0;
 
-      snprintf( attach,   sizeof(attach),   "%d", target );
+      snprintf( attach, sizeof(attach), "%d", target );
       if( pip_command_gdb == NULL ) {
 	/*  1 */ argv[argc++] = pip_path_gdb;
 	/*  2 */ argv[argc++] = "-quiet";
@@ -483,15 +484,18 @@ static void pip_show_pips( void ) {
   if( env != NULL                  && 
       strcasecmp( env, "on" ) == 0 &&
       prefix != NULL ) {
-    char *pips_name = "/bin/pips x";
+    char *pips_name = "/bin/pips";
+    char *pips_opts = " x";
     char *p;
     ASSERT( ( pips_comm = malloc( strlen( prefix    ) +
-				  strlen( pips_name ) + 1 ) ) 
+				  strlen( pips_name ) + 
+				  strlen( pips_opts ) + 1 ) ) 
 	    != NULL );
     p = stpcpy( pips_comm, prefix );
     p = stpcpy( p, pips_name );
     if( access( pips_comm, X_OK ) == 0 ) {
       pip_info_mesg( "*** Show PIPS (%s)", pips_comm );
+      stpcpy( p, pips_opts );
       system( pips_comm );
     } else {
       pip_err_mesg( "Unable to find pips" );
