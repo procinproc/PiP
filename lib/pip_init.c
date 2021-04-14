@@ -475,62 +475,20 @@ static void pip_show_maps( void ) {
   }
 }
 
-char *pip_get_prefix_dir( char *name ) {
-  FILE	 *fp_maps;
-  size_t sz, l;
-  char	 *line, *fname, *prefix, *p;
-  char	 *updir = "/..";
-  void	 *sta, *end;
-  void	 *faddr = (void*) pip_get_prefix_dir;
-
-  fp_maps = NULL;
-  line    = NULL;
-  if( pip_root != NULL &&
-      pip_root->prefixdir != NULL ) {
-    prefix = pip_root->prefixdir;
-  } else {
-    sz = 0;
-    ASSERT( ( fp_maps = fopen( PIP_MAPS_PATH, "r" ) ) != NULL );
-    while( ( l = getline( &line, &sz, fp_maps ) ) > 0 ) {
-      //DBGF( "l:%d sz:%d line(%p):%s", (int)l, (int)sz, line, line );
-      line[l] = '\0';
-      prefix = NULL;
-      if( sscanf( line, "%p-%p %*4s %*x %*d:%*d %*d %ms", &sta, &end, &prefix ) == 3 ) {
-	DBGF( "%p-%p %p %s", sta, end, faddr, prefix );
-	if( prefix != NULL && sta <= faddr && faddr < end ) {
-	  if( pip_root != NULL ) {
-	    prefix = dirname( prefix );
-	    DBGF( "prefix: %s", prefix );
-	    pip_root->prefixdir = prefix;
-	  }
-	  goto found;
-	}
-	free( prefix );
-      }
-    }
-    fname = NULL;
-    goto not_found;
-  }
- found:
-  ASSERT( ( fname = malloc( strlen( prefix ) +
-			    strlen( updir )  +
-			    strlen( name )   + 1 ) ) 
-	  != NULL );
-  p = stpcpy( fname, prefix );
-  p = stpcpy( p, updir );
-  p = stpcpy( p, name );
-  DBGF( "fname: %s", fname );
- not_found:
-  if( line != NULL ) free( line );
-  fclose( fp_maps );
-  return fname;
-}
-
 static void pip_show_pips( void ) {
-  char *env = pip_root->envs.show_pips;
-  if( env != NULL && strcasecmp( env, "on" ) == 0 ) {
-    char *pips_name = "/bin/pips";
-    char *pips_path = pip_get_prefix_dir( pips_name );
+  ENTER;
+  char *env    = pip_root->envs.show_pips;
+  char *prefix = pip_root->prefixdir;
+  char *pips_path;
+  if( env != NULL                  && 
+      strcasecmp( env, "on" ) == 0 &&
+      prefix != NULL ) {
+    char *p, *pips_name = "/bin/pips";
+    ASSERT( ( pips_path = malloc( strlen( prefix )    +
+				  strlen( pips_name ) + 1 ) ) 
+	    != NULL );
+    p = stpcpy( pips_path, prefix );
+    p = stpcpy( p, pips_name );
     if( access( pips_path, X_OK ) == 0 ) {
       pip_info_mesg( "*** Show PIPS (%s)", pips_path );
       system( pips_path );
@@ -540,6 +498,7 @@ static void pip_show_pips( void ) {
     free( pips_path );
     sleep( 1 );			/* to flush out pips messages */
   }
+  RETURNV;
 }
 
 void pip_debug_info( void ) {
@@ -561,7 +520,6 @@ static void pip_exception_handler( int sig, siginfo_t *info, void *extra ) {
     pip_debug_info();
   }
   if( pip_root != NULL ) pip_spin_unlock( &pip_root->lock_bt );
-  (void) tgkill( getpid(), pip_gettid(), sig );
 }
 
 static int

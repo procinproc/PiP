@@ -450,10 +450,7 @@ int main( int argc, char **argv ) {
       ex = WEXITSTATUS( status );
       if( ex > extval ) extval = ex;
     } else if( WIFSIGNALED( status ) ) {
-      int sig = WTERMSIG( status );
-      fprintf( stderr, "%s: PiP-Task[%d] signaled (%s)\n", 
-	       program, pipid, strsignal(sig) );
-      if( errsig == 0 ) errsig = sig;
+      if( errsig == 0 ) errsig = WTERMSIG( status );
     }
   }
   err = extval;

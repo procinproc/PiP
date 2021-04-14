@@ -43,7 +43,7 @@
     char *p = msg;				\
     int l = sizeof(msg), n;			\
     if( taski != NULL ) {			\
-      n = pip_task_str( p, l, taski );		\
+      n = pip_task_str( p,l,PIP_TASKQ(taski) );	\
       p += n; l -= n;				\
     }						\
     n = snprintf( p, l, ":" );			\
