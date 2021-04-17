@@ -550,18 +550,19 @@ if not flag_family:
     sel_roots = all_roots
     sel_tasks = all_tasks
 else:
-    fmly_roots = []
-    fmly_tasks = []
+    fmly_roots = all_roots
+    fmly_tasks = all_tasks
     for rs in all_roots:
-        fmly_roots += [ rs ]
-        for ts in all_tasks:
+        for ts in pslines:
             # if rs is multi-threaded, same ts may appaer twice or more
             if have_pc_relation( rs, ts ) and ts not in fmly_tasks:
                 fmly_tasks += [ ts ]
+    debug_ps( 'fmly_tasks:', fmly_tasks )
     for ts in all_tasks:
         for rs in pslines:
             if have_pc_relation( rs, ts ) and rs not in fmly_roots:
                 fmly_roots += [ rs ]
+    debug_ps( 'fmly_roots:', fmly_roots )
     for rs in fmly_roots:
         for ts in pslines:
             if have_pc_relation( rs, ts ) and ts not in fmly_tasks:
