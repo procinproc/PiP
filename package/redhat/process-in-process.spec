@@ -67,7 +67,7 @@ make DESTDIR="$RPM_BUILD_ROOT" install
 %attr(0755,root,root) %{_bindir}/pip-mode
 %attr(0755,root,root) %{_bindir}/pip-tgkill
 %attr(0755,root,root) %{_bindir}/pips
-%attr(0755,root,root) %{_bindir}/pip_unpie
+%attr(0755,root,root) %{_bindir}/pip-unpie
 %attr(0755,root,root) %{_bindir}/printpipmode
 # libs
 %defattr(-,root,root)
