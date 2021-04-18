@@ -328,12 +328,12 @@ fi
 if ${is_linking}; then
     do_run ${COMPILER} ${CLFLAGS} ${opts}
     if [ -x ${target} ]; then
-	if [ -x ${PIP_BINDIR}/pip_unpie ]; then
-	    # pip_unpie is the program to unflag the DF_1_PIE flag in ELF dynamic section
+	if [ -x ${PIP_BINDIR}/pip-unpie ]; then
+	    # pip-unpie is the program to unflag the DF_1_PIE flag in ELF dynamic section
 	    # this is because PIE cannot be dl(m)open()ed since centos/redhat 8
-	    ${PIP_BINDIR}/pip_unpie ${target}
+	    ${PIP_BINDIR}/pip-unpie ${target}
 	else
-	    echo >&2 "${cmd} Warning: Unable to find ${PIP_BINDIR}/pip_unpie"
+	    echo >&2 "${cmd} Warning: Unable to find ${PIP_BINDIR}/pip-unpie"
 	fi
     fi
 else
