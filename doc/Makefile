@@ -128,7 +128,6 @@ install:
 	@echo "Installing pdf ->" $(pdfdir)
 	@$(MKDIR_P) $(pdfdir);
 	@$(CP) ./latex-inuse/libpip-manpages.pdf $(pdfdir)
-	@$(MKDIR_P) $(slidedir);
 	@echo "Installing html ->" $(htmldir)
 	@$(MKDIR_P) $(htmldir);
 	@( cd ./html && tar cf - . ) | ( cd $(htmldir) && $(RM) -r * && tar xf - )
