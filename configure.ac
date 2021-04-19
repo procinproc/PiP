@@ -68,9 +68,6 @@ AC_SUBST(glibc_libdir)
 AC_SUBST(glibc_lib)
 AC_SUBST(dynamic_linker)
 
-prefix_slides=${prefix}/share/slides
-AC_SUBST(prefix_slides)
-
 # Checks for programs.
 AC_PROG_CC
 AC_PROG_INSTALL

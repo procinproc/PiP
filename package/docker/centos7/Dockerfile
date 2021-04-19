@@ -45,6 +45,6 @@ RUN set -x && \
 	rm -rf /var/cache/yum/* && \
 	yum clean all && \
 	rm -f /tmp/ks-script-* /tmp/yum.log && \
-	git clone https://github.com/RIKEN-SysSoft/PiP-pip && \
+	git clone https://github.com/procinproc/PiP-pip && \
 	./PiP-pip/pip-pip --prefix /opt/process-in-process \
 		--yes --nosubdir --notest

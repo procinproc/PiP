@@ -582,7 +582,7 @@ PACKAGE_TARNAME='proc-in-proc'
 PACKAGE_VERSION='2.1.0'
 PACKAGE_STRING='Process-in-Processs 2.1.0'
 PACKAGE_BUGREPORT='procinproc-info@googlegroups.com'
-PACKAGE_URL='https://github.com/RIKEN-SysSoft/PiP'
+PACKAGE_URL='https://github.com/procinproc/PiP'
 
 ac_unique_file="RELEASE_NOTE"
 ac_subst_vars='LTLIBOBJS
@@ -600,7 +600,6 @@ CPPFLAGS
 LDFLAGS
 CFLAGS
 CC
-prefix_slides
 dynamic_linker
 glibc_lib
 glibc_libdir
@@ -1298,7 +1297,7 @@ Use these variables to override the choices made by `configure' or to help
 it to find libraries and programs with nonstandard names/locations.
 
 Report bugs to <procinproc-info@googlegroups.com>.
-Process-in-Processs home page: <https://github.com/RIKEN-SysSoft/PiP>.
+Process-in-Processs home page: <https://github.com/procinproc/PiP>.
 _ACEOF
 ac_status=$?
 fi
@@ -1965,9 +1964,6 @@ $as_echo "${glibc_incdir}" >&6; }
 
 
 
-
-
-prefix_slides=${prefix}/share/slides
 
 
 # Checks for programs.
@@ -3526,7 +3522,7 @@ Configuration headers:
 $config_headers
 
 Report bugs to <procinproc-info@googlegroups.com>.
-Process-in-Processs home page: <https://github.com/RIKEN-SysSoft/PiP>."
+Process-in-Processs home page: <https://github.com/procinproc/PiP>."
 
 _ACEOF
 cat >>$CONFIG_STATUS <<_ACEOF || ac_write_fail=1

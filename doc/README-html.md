@@ -393,5 +393,6 @@ Analysis (SC '20). IEEE Press, Article 36, 1–15.
 
 # Author
 Atsushi Hori
-Riken Center for Commputational Science (R-CCS)
+National Institute of Informatics
+(formerly Riken Center for Commputational Science)
 Japan
