@@ -99,6 +99,7 @@ AC_SUBST(python)
 AC_CONFIG_FILES([
 	build/config.mk
 	release/version.conf
+	package/redhat/make-spec.sh
 	bin/pipcc.in
 	bin/pips
 	bin/pip-mode
