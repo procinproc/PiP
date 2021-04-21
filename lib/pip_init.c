@@ -215,7 +215,7 @@ void pip_err_mesg( const char *format, ... ) {
   va_end( ap );
 }
 
-pip_task_t *pip_current_task( int tid ) {
+static pip_task_t *pip_current_task( int tid ) {
   /* do not put any DBG macors in this function */
   pip_root_t	*root = pip_root;
   pip_task_t 	*task;
@@ -276,7 +276,7 @@ pip_pipid_str( char *p, size_t sz, int pipid, int upper ) {
   return snprintf( p, sz, "%c", c );
 }
 
-int pip_task_str( char *p, size_t sz, pip_task_t *task ) {
+static int pip_task_str( char *p, size_t sz, pip_task_t *task ) {
   int 	n = 0;
 
   if( task == NULL ) {
@@ -574,7 +574,7 @@ void pip_debug_on_exceptions( pip_root_t *root, pip_task_t *task ) {
   if( done ) return;
   done = 1;
 
-  if( ( path = root->envs.gdb_path ) != NULL ) {
+  if( ( path = pip_root->envs.gdb_path ) != NULL ) {
     ASSERT( sigemptyset( &sigs     ) == 0 );
     ASSERT( sigemptyset( &sigempty ) == 0 );
 

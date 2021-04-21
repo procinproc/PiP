@@ -162,7 +162,7 @@ static void pip_set_magic( pip_root_t *root ) {
 void pip_reset_task_struct( pip_task_t *taskp ) {
   void	*namexp = taskp->named_exptab;
   memset( (void*) taskp, 0, sizeof(pip_task_t) );
-  taskp->pipid = PIP_PIPID_NONE;
+  taskp->pipid = PIP_PIPID_NULL;
   taskp->type  = PIP_TYPE_NULL;
   taskp->named_exptab = namexp;
 }
@@ -567,8 +567,6 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
       sym[1] = pip_cmd_name_symbol( pip_root->opts );
       pip_set_name( sym, NULL );
     }
-    DBGF( "PiP Execution Mode: %s", pip_get_mode_str() );
-
     pip_set_sigmask( SIGCHLD );
     pip_set_signal_handler( SIGCHLD,
 			    pip_sigchld_handler,
@@ -580,8 +578,10 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
       pip_save_debug_envs( pip_root );
       pip_debug_on_exceptions( pip_root, pip_task );
     }
-
+    /* fix me: only pip_preload.so must be excluded */
     unsetenv( "LD_PRELOAD" );
+
+    DBGF( "PiP Execution Mode: %s", pip_get_mode_str() );
 
   } else if( ( envtask = getenv( PIP_TASK_ENV ) ) != NULL ) {
     /* child task */
@@ -1401,7 +1401,7 @@ static int pip_find_a_free_task( int *pipidp ) {
   /*** begin lock region ***/
   do {
     if( pipid != PIP_PIPID_ANY ) {
-      if( pip_root->tasks[pipid].pipid != PIP_PIPID_NONE ) {
+      if( pip_root->tasks[pipid].pipid != PIP_PIPID_NULL ) {
 	err = EAGAIN;
 	goto unlock;
       }
@@ -1409,13 +1409,13 @@ static int pip_find_a_free_task( int *pipidp ) {
       int i;
 
       for( i=pip_root->pipid_curr; i<pip_root->ntasks; i++ ) {
-	if( pip_root->tasks[i].pipid == PIP_PIPID_NONE ) {
+	if( pip_root->tasks[i].pipid == PIP_PIPID_NULL ) {
 	  pipid = i;
 	  goto found;
 	}
       }
       for( i=0; i<pip_root->pipid_curr; i++ ) {
-	if( pip_root->tasks[i].pipid == PIP_PIPID_NONE ) {
+	if( pip_root->tasks[i].pipid == PIP_PIPID_NULL ) {
 	  pipid = i;
 	  goto found;
 	}

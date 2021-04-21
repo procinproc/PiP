@@ -76,7 +76,7 @@
 #include <pip/pip_clone.h>
 #include <pip/pip_debug.h>
 
-#define PIP_BASE_VERSION	(0x2100U)
+#define PIP_BASE_VERSION	(0x3100U)
 
 #define PIP_API_VERSION		PIP_BASE_VERSION
 
@@ -86,11 +86,7 @@
 #define PIP_MAGIC_WORD		"PrcInPrc"
 #define PIP_MAGIC_WLEN		(8)
 
-#define MAIN_FUNC		"main"
-
 #define PIP_MAPS_PATH		"/proc/self/maps"
-
-#define PIP_PIPID_NONE		(-999)
 
 #define PIP_EXITED		(1)
 #define PIP_EXIT_WAITED		(2)
