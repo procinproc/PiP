@@ -68,9 +68,6 @@ AC_SUBST(glibc_libdir)
 AC_SUBST(glibc_lib)
 AC_SUBST(dynamic_linker)
 
-prefix_slides=${prefix}/share/slides
-AC_SUBST(prefix_slides)
-
 # Checks for programs.
 AC_PROG_CC
 AC_PROG_INSTALL
@@ -102,6 +99,7 @@ AC_SUBST(python)
 AC_CONFIG_FILES([
 	build/config.mk
 	release/version.conf
+	package/redhat/make-spec.sh
 	bin/pipcc.in
 	bin/pips
 	bin/pip-mode

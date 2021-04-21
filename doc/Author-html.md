@@ -1,4 +1,5 @@
 # Author
 Atsushi Hori
-Riken Center for Commputational Science (R-CCS)
+National Institute of Informatics
+(formerly Riken Center for Commputational Science)
 Japan

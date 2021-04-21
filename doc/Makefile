@@ -83,7 +83,7 @@ documents:
 	@echo ==== README.md =====;
 	./markdown.sh "# Commands"  1 "-" > commands.in
 	./markdown.sh "# Functions" 3 "-" > functions.in
-	cat README.md.in commands.in functions.in Slides-md.md Author-md.md > README.md
+	cat README.md.in commands.in functions.in Author-md.md > README.md
 	./markdown.sh "# Commands"  1 "\sa" > commands.in
 	./markdown.sh "# Functions" 3 "\sa" > functions.in
 	cat README-man.doxy  README.md.in commands.in functions.in Author-md.md > README-man.md
@@ -128,16 +128,13 @@ install:
 	@echo "Installing pdf ->" $(pdfdir)
 	@$(MKDIR_P) $(pdfdir);
 	@$(CP) ./latex-inuse/libpip-manpages.pdf $(pdfdir)
-	@$(MKDIR_P) $(slidedir);
 	@echo "Installing html ->" $(htmldir)
 	@$(MKDIR_P) $(htmldir);
 	@( cd ./html && tar cf - . ) | ( cd $(htmldir) && $(RM) -r * && tar xf - )
-	@echo "Installing slides ->" $(slidedir)
-	@$(CP) ./slides/* $(slidedir)
 .PHONY: install
 
 doc-reset:
-	git checkout man latex-inuse html slides
+	git checkout man latex-inuse html
 .PHONE: doc-reset
 
 post-clean-hook:
@@ -147,5 +144,4 @@ post-clean-hook:
 	$(MAKE) -C latex-inuse clean
 
 veryclean: clean
-	$(RM) Slides-html.md
 	$(MAKE) -C latex-inuse veryclean

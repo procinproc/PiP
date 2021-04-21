@@ -14,7 +14,6 @@ mandir = $(default_mandir)
 docdir = $(default_docdir)
 htmldir = ${datarootdir}/html
 pdfdir = $(datarootdir)/pdf
-slidedir = $(datarootdir)/slides
 sysconfdir = $(default_sysconfdir)
 localedir = $(default_localedir)
 

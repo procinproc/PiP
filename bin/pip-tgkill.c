@@ -25,7 +25,7 @@
  * $RIKEN_copyright: Riken Center for Computational Sceience (R-CCS),
  * System Software Development Team, 2016-2021
  * $
- * $PIP_VERSION: Version 2.1.0$
+ * $PIP_VERSION: Version 3.1.0$
  *
  * $Author: Atsushi Hori (R-CCS)
  * Query:   procinproc-info@googlegroups.com
@@ -35,6 +35,7 @@
 
 #define _GNU_SOURCE 
 #include <sys/syscall.h>
+#include <signal.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -45,39 +46,42 @@
 
 static char *prog;
 
-char *sigtab[] = {
-  "HUP",
-  "INT",
-  "QUIT",
-  "ILL",
-  "TRAP",
-  "ABRT",
-  "BUS",
-  "FPE",
-  "KILL",
-  "USR1",
-  "SEGV",
-  "USR2",
-  "PIPE",
-  "ALRM",
-  "TERM",
-  "STKFLT",
-  "CHLD",
-  "CONT",
-  "STOP",
-  "TSTP",
-  "TTIN",
-  "TTOU",
-  "URG",
-  "XCPU",
-  "XFSZ",
-  "VTALRM",
-  "PROF",
-  "WINCH",
-  "IO",
-  "PWR",
-  "SYS",
-  NULL };
+struct sigtab {
+  char 	*signame;
+  int	signum;
+} sigtab[] = {
+  { NULL, 	0 	},
+  { "HUP", 	SIGHUP	},
+  { "INT", 	SIGINT	},
+  { "QUIT", 	SIGQUIT	},
+  { "ILL", 	SIGILL	},
+  { "TRAP", 	SIGTRAP	},
+  { "ABRT", 	SIGABRT	},
+  { "BUS", 	SIGBUS	},
+  { "FPE", 	SIGFPE	},
+  { "KILL", 	SIGKILL	},
+  { "USR1", 	SIGUSR1	},
+  { "SEGV", 	SIGSEGV	},
+  { "USR2", 	SIGUSR2	},
+  { "PIPE", 	SIGPIPE	},
+  { "ALRM", 	SIGALRM	},
+  { "TERM", 	SIGTERM	},
+  { "CHLD", 	SIGCHLD	},
+  { "CLD",  	SIGCHLD	},
+  { "CONT", 	SIGCONT	},
+  { "STOP", 	SIGSTOP	},
+  { "TSTP", 	SIGTSTP	},
+  { "TTIN", 	SIGTTIN	},
+  { "TTOU", 	SIGTTOU	},
+  { "URG",  	SIGURG	},
+  { "XCPU", 	SIGXCPU	},
+  { "XFSZ", 	SIGXFSZ	},
+  { "VTALRM", 	SIGVTALRM },
+  { "PROF", 	SIGPROF	},
+  { "WINCH", 	SIGWINCH },
+  { "IO",   	SIGIO	},
+  { "SYS",  	SIGSYS	},
+  { NULL, 	0 	} };
   
 void print_usage( void ) {
   fprintf( stderr, "%s <SIGNAL> <PID> <TID>\n", prog );
@@ -89,40 +93,41 @@ static int tgkill( int tgid, int tid, int sig ) {
 }
 
 int main( int argc, char **argv ) {
-  char *signam = argv[1];
+  char *signame;
   int signo, pid, tid, err;
 
   prog = basename( argv[0] );
-  if( argc != 4 ) print_usage();
+  if( argc < 4 ) print_usage();
 
-  if( isalpha( *signam ) ) {
+  signame = argv[1];
+  if( isalpha( *signame ) ) {
     int i;
-    if( strncasecmp( signam, "SIG", 3 ) == 0 ) {
-      signam = signam + 3;
+    if( strncasecmp( signame, "SIG", 3 ) == 0 ) {
+      signame = signame + 3;
     }
-    for( i=0; sigtab[i]!=NULL; i++ ) {
-      if( strcasecmp( signam, sigtab[i] ) == 0 ) {
-	signo = i + 1;
+    for( i=1; sigtab[i].signame!=NULL; i++ ) {
+      if( strcasecmp( signame, sigtab[i].signame ) == 0 ) {
+	signo = sigtab[i].signum;
 	goto found;
       }
     }
     print_usage();
   } else {
     signo = strtol( argv[1], NULL, 10 );
+    if( signo < 1 || signo >= NSIG ) print_usage();
   }
-  if( signo < 2 || signo > 32 ) print_usage();
  found:
-
   pid = strtol( argv[2], NULL, 10 );
   if( pid < 2 ) print_usage();
-
   tid = strtol( argv[3], NULL, 10 );
   if( tid < 2 ) print_usage();
-
   err = 0;
   if( tgkill( pid, tid, signo ) != 0 ) {
-    err = errno;
-    fprintf( stderr, "%s %d %d %d: %s\n", prog, signo, pid, tid, strerror( err ) );
+    if( argc == 4 || 		/* when this is called from pips */
+	errno != ESRCH ) {	/* ESRCH may happen */
+      err = errno;
+      fprintf( stderr, "%s %d %d %d: %s\n", prog, signo, pid, tid, strerror( err ) );
+    }
   }
   return err;
 }

@@ -315,6 +315,7 @@ static void pip_attach_gdb( void ) {
 
   ENTER;
   if( pip_path_gdb != NULL ) {
+    pip_info_mesg( "*** Attaching pip-gdb (%s)", pip_path_gdb );
     if( ( pid = fork() ) == 0 ) {
       extern char **environ;
       char attach[32];
@@ -408,23 +409,27 @@ static void pip_show_pips( void ) {
   ENTER;
   char *env    = pip_root->envs.show_pips;
   char *prefix = pip_root->prefixdir;
-  char *pips_path;
+  char *pips_comm;
   if( env != NULL                  && 
       strcasecmp( env, "on" ) == 0 &&
       prefix != NULL ) {
-    char *p, *pips_name = "/bin/pips";
-    ASSERT( ( pips_path = malloc( strlen( prefix )    +
-				  strlen( pips_name ) + 1 ) ) 
+    char *pips_name = "/bin/pips";
+    char *pips_opts = " x";
+    char *p;
+    ASSERT( ( pips_comm = malloc( strlen( prefix    ) +
+				  strlen( pips_name ) + 
+				  strlen( pips_opts ) + 1 ) ) 
 	    != NULL );
-    p = stpcpy( pips_path, prefix );
+    p = stpcpy( pips_comm, prefix );
     p = stpcpy( p, pips_name );
-    if( access( pips_path, X_OK ) == 0 ) {
-      pip_info_mesg( "*** Show PIPS (%s)", pips_path );
-      system( pips_path );
+    if( access( pips_comm, X_OK ) == 0 ) {
+      pip_info_mesg( "*** Show PIPS (%s)", pips_comm );
+      stpcpy( p, pips_opts );
+      system( pips_comm );
     } else {
-      pip_err_mesg( "Unable to find pips %s", pips_path );
+      pip_err_mesg( "Unable to find pips" );
     }
-    free( pips_path );
+    free( pips_comm );
     sleep( 1 );			/* to flush out pips messages */
   }
   RETURNV;
@@ -449,7 +454,6 @@ static void pip_exception_handler( int sig, siginfo_t *info, void *extra ) {
     pip_spin_unlock( &pip_root->lock_bt );
     (void) pip_raise_signal( pip_root->task_root, SIGCONT );
   }
-  (void) kill( getpid(), SIGKILL );
   RETURNV;
 }
 
