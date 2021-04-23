@@ -123,14 +123,14 @@ documents:
 
 install:
 	@echo "Installing man pages ->" $(mandir)
-	@$(MKDIR_P) $(mandir);
-	@( cd ./man  && tar cf - . ) | ( cd $(mandir) && $(RM) -r * && tar xf - )
+	@$(MKDIR_P) $(DESTDIR)$(mandir);
+	@( cd ./man  && tar cf - . ) | ( cd $(DESTDIR)$(mandir) && $(RM) -r * && tar xf - )
 	@echo "Installing pdf ->" $(pdfdir)
-	@$(MKDIR_P) $(pdfdir);
-	@$(CP) ./latex-inuse/libpip-manpages.pdf $(pdfdir)
+	@$(MKDIR_P) $(DESTDIR)$(pdfdir);
+	@$(CP) ./latex-inuse/libpip-manpages.pdf $(DESTDIR)$(pdfdir)
 	@echo "Installing html ->" $(htmldir)
-	@$(MKDIR_P) $(htmldir);
-	@( cd ./html && tar cf - . ) | ( cd $(htmldir) && $(RM) -r * && tar xf - )
+	@$(MKDIR_P) $(DESTDIR)$(htmldir);
+	@( cd ./html && tar cf - . ) | ( cd $(DESTDIR)$(htmldir) && $(RM) -r * && tar xf - )
 .PHONY: install
 
 doc-reset:
