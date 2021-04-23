@@ -53,6 +53,7 @@ make
 [ "$RPM_BUILD_ROOT" != "/" ] && rm -rf "$RPM_BUILD_ROOT"
 
 make DESTDIR="$RPM_BUILD_ROOT" install
+make DESTDIR="$RPM_BUILD_ROOT" doc
 
 %clean
 [ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
@@ -78,3 +79,7 @@ make DESTDIR="$RPM_BUILD_ROOT" install
 %{_prefix}/include
 %{_libdir}/libpip_init.so
 %{_libdir}/libpip.so
+#doc
+%{_mandir}
+%{_datadir}/html
+%{_datadir}/pdf
