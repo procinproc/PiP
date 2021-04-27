@@ -32,12 +32,12 @@ jobs:
           set -x
           distro=${{ matrix.distro }}
           pip_full_version=`awk '/^Version:/ {print $2; exit}' package/redhat/process-in-process.spec`
-          pip_name=pip-${pip_full_version}
+          pip_name=PiP-${pip_full_version}
           source=${pip_name}.tar.gz
           workdir=`pwd`
           cd ..
           mv ${workdir} ${pip_name}
-          tar zcf /tmp/${source} ${pip_name}
+          tar zcf /tmp/${source} ${pip_name}/[A-Za-z]*
           mv ${pip_name} ${workdir}
           cd ${workdir}
           mv /tmp/${source} .

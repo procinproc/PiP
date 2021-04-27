@@ -9,16 +9,17 @@
 %define glibc_libdir	%{base_prefix}/pip-glibc/lib
 %define libpip_version	0
 %define libpip_init_version	0
+%define pip_tarname	PiP
 
 # workaround for "error: Empty %files file ..../debugsourcefiles.list"
 # on wallaby2 (this doesn't happen on jupiter05 for some reason)
 %global debug_package	%{nil}
 
-Name: pip
+Name: process-in-process
 Version: 2.1.0
 Release: 0%{?dist}
 Epoch: 1
-Source: %{name}-%{version}.tar.gz
+Source: %{pip_tarname}-%{version}.tar.gz
 
 Summary: PiP - Process in Process
 Group: System Environment/Libraries
@@ -43,10 +44,10 @@ is called PiP process and a sub-process are called a PiP task.
 
 %prep
 
-%setup -n %{name}-%{version}
+%setup -n %{pip_tarname}-%{version}
 
 %build
-./configure --prefix=%{_prefix} --libdir=%{_libdir} --mandir=%{_mandir} --docdir=%{_docdir} --with-glibc-libdir=%{glibc_libdir}
+%configure --with-glibc-libdir=%{glibc_libdir}
 make
 
 %install
@@ -81,5 +82,4 @@ make DESTDIR="$RPM_BUILD_ROOT" doc
 %{_libdir}/libpip.so
 #doc
 %{_mandir}
-%{_datadir}/html
-%{_datadir}/pdf
+%{_docdir}
