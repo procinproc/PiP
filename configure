@@ -578,7 +578,7 @@ MAKEFLAGS=
 
 # Identity of this package.
 PACKAGE_NAME='Process-in-Processs'
-PACKAGE_TARNAME='proc-in-proc'
+PACKAGE_TARNAME='PiP'
 PACKAGE_VERSION='3.1.0'
 PACKAGE_STRING='Process-in-Processs 3.1.0'
 PACKAGE_BUGREPORT='procinproc-info@googlegroups.com'
@@ -600,7 +600,6 @@ CPPFLAGS
 LDFLAGS
 CFLAGS
 CC
-prefix_slides
 boost_fctx_cppflags
 boost_fctx_arch
 boost_fctx_objs
@@ -1262,7 +1261,7 @@ Fine tuning of the installation directories:
   --infodir=DIR           info documentation [DATAROOTDIR/info]
   --localedir=DIR         locale-dependent data [DATAROOTDIR/locale]
   --mandir=DIR            man documentation [DATAROOTDIR/man]
-  --docdir=DIR            documentation root [DATAROOTDIR/doc/proc-in-proc]
+  --docdir=DIR            documentation root [DATAROOTDIR/doc/PiP]
   --htmldir=DIR           html documentation [DOCDIR]
   --dvidir=DIR            dvi documentation [DOCDIR]
   --pdfdir=DIR            pdf documentation [DOCDIR]
@@ -2023,9 +2022,6 @@ fi
 
 
 
-
-
-prefix_slides=${prefix}/share/slides
 
 
 # Checks for programs.
