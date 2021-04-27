@@ -123,8 +123,8 @@ the example of `pip-pip` usage:
 
 **HOW** can be one of `docker`, `spack` and `github`, or any
   combination of them. `pip-pip --help` will show you how to use the
-  program. `docker` and `spack` include all three packages;
-  PiP-glibc, PiP-gdb, and PiP.
+  program.  The `docker` and `spack` installations include all three
+  packages; PiP, PiP-glibc and PiP-gdb.
 
 # PiP Documents
 
@@ -297,7 +297,9 @@ one of the specified or default signals is delivered, then PiP-gdb will be
 attached automatically. The PiP-gdb will show backtrace by default. If users
 specify **PIP\_GDB\_COMMAND**, a filename containing some GDB
 commands, then those GDB commands will be executed by PiP-gdb in batch
-mode. If the **PIP\_STOP\_ON\_START** environment is 
+mode. 
+
+If the **PIP\_STOP\_ON\_START** environment is 
 set, then the PiP library delivers SIGSTOP to a spawned
 PiP task which is about to start user program. If its value is a
 number in decimal, then the PiP task whose PiP-ID is the same with the
