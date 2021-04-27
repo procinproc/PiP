@@ -6,7 +6,7 @@ AC_INIT([Process-in-Processs],
 	[3.1.0],
 	[procinproc-info@googlegroups.com],
 	[PiP],
-	[https://github.com/procinproc/PiP])
+	[https://github.com/procinproc/PiP/])
 AC_CONFIG_SRCDIR([RELEASE_NOTE])
 AC_CONFIG_AUX_DIR([build])
 AC_CONFIG_HEADERS([include/pip/pip_config.h])
@@ -141,6 +141,7 @@ AC_CONFIG_FILES([
 	release/version.conf
 	lib/fctx_defs.mk
 	lib/fcontext.mk
+	package/redhat/process-in-process.spec
 	bin/pipcc.in
 	bin/pips
 	bin/pip-mode
