@@ -2,10 +2,10 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([Process-in-Processs], 
-	[3.1.0], 
-	[procinproc-info@googlegroups.com], 
-	[proc-in-proc],
+AC_INIT([Process-in-Processs],
+	[3.1.0],
+	[procinproc-info@googlegroups.com],
+	[PiP],
 	[https://github.com/procinproc/PiP])
 AC_CONFIG_SRCDIR([RELEASE_NOTE])
 AC_CONFIG_AUX_DIR([build])
