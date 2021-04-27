@@ -32,8 +32,8 @@ PiP also provides new thread implementation named "Bi-Level Thread
 (BLT)", again, to take the best of two worlds, Kernel-Level Thread
 (KLT) and User-Level Thread (ULT) here. A BLT is a PiP task. When a
 PiP task is created it runs as a KLT. At any point the KLT can
-becomme a ULT by decoupling the associated kernel thread from the
-KLT. The decoupled kernel thread becommes idle. Later, the ULT can
+become a ULT by decoupling the associated kernel thread from the
+KLT. The decoupled kernel thread becomes idle. Later, the ULT can
 become KLT again by coupling with the kernel thread.
 
 ## User-Level Process (ULP, from v3)
@@ -44,12 +44,12 @@ other PiP task at user-level. This is called User-Level Process
 where processes may be derived from the same program or different
 programs. Threads basically share most of the kernel resources,
 such as address space, file descriptors, a process id, and so
-on whilst processes do not. Every process has its ows file
+on whilst processes do not. Every process has its own file
 descriptor space, for example. When a ULP is scheduled by a KLT
 having PID 1000, then the getpid() is called by the ULP
 returns 1000. Further, when the ULT is migrated to be scheduled by
 the other KLT, then the returned PID is different. So, when
-implemnting a ULP system, this systemcall consistency must be
+implementing a ULP system, this systemcall consistency must be
 preserved. In ULP on PiP, the consistency can be
 maintained by utilizing the above BLT mechanism. When a ULT tries
 to call a system call, it is coupled with its kernel thread which
@@ -140,7 +140,7 @@ Or, use the pip-man command (from v2).
 
     $ PIP_INSTALL_DIR/bin/pip-man 7 libpip
 
-The above two exammples will show you the same document you are reading.
+The above two examples will show you the same document you are reading.
 
 ## PDF
 
@@ -167,7 +167,7 @@ You can use pipcc(1) command to compile and link your PiP programs.
 
 * pip-exec(1) command (piprun(1) in PiP v1)
 
-Let's assume that you have a non-PiP program(s) and wnat to run as PiP
+Let's assume that you have a non-PiP program(s) and want to run as PiP
 tasks. All you have to do is to compile your program by using the above
 pipcc(1) command and to use the pip-exec(1) command to run your program
 as PiP tasks.
@@ -180,10 +180,10 @@ In this case, the pip-exec(1) command becomes the PiP root and your program
 runs as 8 PiP tasks. Note that the 'myprog.c' may or may not call any
 PiP functions. Your program can also run as a normal program (not as a
 PiP task) without using the pip-exec(1) command. In either case, your
-proghrams must be compiled and linked by using the pipcc(1) command
+programs must be compiled and linked by using the pipcc(1) command
 described above.
 
-You may write your own PiP programs whcih includes the PiP root programming.
+You may write your own PiP programs which includes the PiP root programming.
 In this case, your program can run without using the pip-exec(1) command.
 
 If you get the following message when you try to run your program;
@@ -225,7 +225,7 @@ Above example shows that the 'a.out' program can run as a PiP root and PiP tasks
 The following procedure attaches all PiP tasks and PiP root which
 created those tasks. Each PiP task is treated as a GDB inferior
 in PiP-gdb. Note that PiP-glibc and PiP-gdb packages are required to
-do this. Note that all fetuares in this section are only supported by
+do this. Note that all features in this section are only supported by
 PiP v2 or higher, only with the process execution mode (thread
 mode is NOT supported).
 
@@ -286,7 +286,7 @@ You can attach all relevant PiP tasks by:
 
 If the **PIP\_GDB\_PATH** environment is set to the path pointing to PiP-gdb
 executable file, then PiP-gdb is automatically attached when an
-excetion signal (SIGSEGV or SIGHUP by default) is delivered. The
+exception signal (SIGSEGV or SIGHUP by default) is delivered. The
 exception signals can also be defined by
 setting the **PIP\_GDB\_SIGNALS** environment. Signal names (case
 insensitive) can be
@@ -423,7 +423,7 @@ Analysis (SC '20). IEEE Press, Article 36, 1–15.
 
 # Author
 
-Atsushi Hori \n
-National Institute of Informatics \n
-(formerly Riken Center for Commputational Science) \n
-Japan \n
+Atsushi Hori
+National Institute of Informatics
+(formerly Riken Center for Commputational Science)
+Japan
