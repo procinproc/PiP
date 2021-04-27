@@ -582,7 +582,7 @@ PACKAGE_TARNAME='PiP'
 PACKAGE_VERSION='3.1.0'
 PACKAGE_STRING='Process-in-Processs 3.1.0'
 PACKAGE_BUGREPORT='procinproc-info@googlegroups.com'
-PACKAGE_URL='https://github.com/procinproc/PiP'
+PACKAGE_URL='https://github.com/procinproc/PiP/'
 
 ac_unique_file="RELEASE_NOTE"
 ac_subst_vars='LTLIBOBJS
@@ -1308,7 +1308,7 @@ Use these variables to override the choices made by `configure' or to help
 it to find libraries and programs with nonstandard names/locations.
 
 Report bugs to <procinproc-info@googlegroups.com>.
-Process-in-Processs home page: <https://github.com/procinproc/PiP>.
+Process-in-Processs home page: <https://github.com/procinproc/PiP/>.
 _ACEOF
 ac_status=$?
 fi
@@ -3015,7 +3015,7 @@ python=`which ${PYTHON}`
 
 # Checks for library functions.
 
-ac_config_files="$ac_config_files build/config.mk release/version.conf lib/fctx_defs.mk lib/fcontext.mk bin/pipcc.in bin/pips bin/pip-mode bin/pip-check bin/pip-man doc/latex-inuse/libpip-manpages.tex"
+ac_config_files="$ac_config_files build/config.mk release/version.conf lib/fctx_defs.mk lib/fcontext.mk package/redhat/process-in-process.spec bin/pipcc.in bin/pips bin/pip-mode bin/pip-check bin/pip-man doc/latex-inuse/libpip-manpages.tex"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -3580,7 +3580,7 @@ Configuration headers:
 $config_headers
 
 Report bugs to <procinproc-info@googlegroups.com>.
-Process-in-Processs home page: <https://github.com/procinproc/PiP>."
+Process-in-Processs home page: <https://github.com/procinproc/PiP/>."
 
 _ACEOF
 cat >>$CONFIG_STATUS <<_ACEOF || ac_write_fail=1
@@ -3713,6 +3713,7 @@ do
     "release/version.conf") CONFIG_FILES="$CONFIG_FILES release/version.conf" ;;
     "lib/fctx_defs.mk") CONFIG_FILES="$CONFIG_FILES lib/fctx_defs.mk" ;;
     "lib/fcontext.mk") CONFIG_FILES="$CONFIG_FILES lib/fcontext.mk" ;;
+    "package/redhat/process-in-process.spec") CONFIG_FILES="$CONFIG_FILES package/redhat/process-in-process.spec" ;;
     "bin/pipcc.in") CONFIG_FILES="$CONFIG_FILES bin/pipcc.in" ;;
     "bin/pips") CONFIG_FILES="$CONFIG_FILES bin/pips" ;;
     "bin/pip-mode") CONFIG_FILES="$CONFIG_FILES bin/pip-mode" ;;
