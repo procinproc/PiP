@@ -1,12 +1,3 @@
-#!/bin/sh
-
-PIP_VERSION=@PACKAGE_VERSION@
-PIP_ML=@PACKAGE_BUGREPORT@
-PIP_URL=@PACKAGE_URL@
-
-SPEC_FILE=process-in-process.spec.test
-
-cat <<EOF > $SPEC_FILE
 # How to build this RPM:
 #
 #	env QA_RPATHS=3 rpmbuild -bb process-in-process.spec
@@ -25,11 +16,7 @@ cat <<EOF > $SPEC_FILE
 %global debug_package	%{nil}
 
 Name: process-in-process
-EOF
-
-echo >> $SPEC_FILE "Version: $PIP_VERSION"
-
-cat <<EOF >> $SPEC_FILE
+Version: @PACKAGE_VERSION@
 Release: 0%{?dist}
 Epoch: 1
 Source: %{pip_tarname}-%{version}.tar.gz
@@ -37,11 +24,7 @@ Source: %{pip_tarname}-%{version}.tar.gz
 Summary: PiP - Process in Process
 Group: System Environment/Libraries
 License: BSD
-EOF
-
-echo >> $SPEC_FILE "URL: $PIP_URL"
-
-cat <<EOF >> $SPEC_FILE
+URL: @PACKAGE_URL@
 Vendor: RIKEN System Software Team
 BuildRoot: %{_tmppath}/%{name}-%{version}-buildroot
 BuildRequires: pip-glibc
@@ -68,13 +51,13 @@ is called PiP process and a sub-process are called a PiP task.
 make
 
 %install
-[ "\$RPM_BUILD_ROOT" != "/" ] && rm -rf "\$RPM_BUILD_ROOT"
+[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf "$RPM_BUILD_ROOT"
 
-make DESTDIR="\$RPM_BUILD_ROOT" install
-make DESTDIR="\$RPM_BUILD_ROOT" doc
+make DESTDIR="$RPM_BUILD_ROOT" install
+make DESTDIR="$RPM_BUILD_ROOT" doc
 
 %clean
-[ "\$RPM_BUILD_ROOT" != "/" ] && rm -rf \$RPM_BUILD_ROOT
+[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root)
@@ -100,4 +83,3 @@ make DESTDIR="\$RPM_BUILD_ROOT" doc
 #doc
 %{_mandir}
 %{_docdir}
-EOF
