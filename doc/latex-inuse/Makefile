@@ -41,16 +41,18 @@ all :
 	-pdflatex $(LIBPIP) > /dev/null 2>&1
 	makeindex $(LIBPIP).idx > /dev/null 2>&1
 	-pdflatex $(LIBPIP) > /dev/null 2>&1
-	latex_count=10 ; \
-	while egrep -s 'Rerun (LaTeX|to get cross-references right)' $(LIBPIP).log && \
-		[ $$latex_count -gt 0 ] ;\
+	rerun_count=10 ; \
+	while egrep -s 'Rerun (LaTeX|to get cross-references right)' $(LIBPIP).log; \
 	    do \
-	      echo "Rerunning latex...." ;\
-	      -pdflatex $(LIBPIP) > /dev/null 2>&1 ;\
-	      latex_count=`expr $$latex_count - 1` ;\
+	      if [ $${rerun_count} -eq 0 ]; then echo 'Something goes wrong'; exit 1; fi; \
+	      echo "Rerunning latex .... ($${rerun_count})" ;\
+	      rm -f $(LIBPIP).log; \
+	      pdflatex $(LIBPIP) > /dev/null 2>&1 ;\
+	      rerun_count=`expr $${rerun_count} - 1` ;\
 	    done
 	makeindex $(LIBPIP).idx > /dev/null 2>&1
 	-pdflatex $(LIBPIP) > /dev/null 2>&1
+	echo "Succeeded"
 
 clean:
 	$(RM) -f *.ps *.dvi *.aux *.toc *.idx *.ind *.ilg *.log *.out *.brf *.blg *.bbl
