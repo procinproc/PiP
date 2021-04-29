@@ -86,37 +86,37 @@ def ex_print( msg ):
         pass
     sys.exit( 1 )
 
-SIGTAB = [ ( 'HUP',   signal.SIGHUP  ), # 1
-           ( 'INT',   signal.SIGINT  ), # 2
-           ( 'QUIT',  signal.SIGQUIT ), # 3
-           ( 'ILL',   signal.SIGILL  ), # 4
-           ( 'TRAP',  signal.SIGTRAP ), # 5
-           ( 'ABRT',  signal.SIGABRT ), # 6
-           ( 'BUS',   signal.SIGBUS  ), # 7
-           ( 'FPE',   signal.SIGFPE  ), # 8
-           ( 'KILL',  signal.SIGKILL ), # 9
-           ( 'USR1',  signal.SIGUSR1 ), # 10
-           ( 'SEGV',  signal.SIGSEGV ), # 11
-           ( 'USR2',  signal.SIGUSR2 ), # 12
-           ( 'PIPE',  signal.SIGPIPE ), # 13
-           ( 'ALRM',  signal.SIGALRM ), # 14
-           ( 'TERM',  signal.SIGTERM ), # 15
-           ( 'CHLD',  signal.SIGCHLD ), # 17
-           ( 'CLD',   signal.SIGCHLD ), # 17
-           ( 'CONT',  signal.SIGCONT ), # 18
-           ( 'STOP',  signal.SIGSTOP ), # 19
-           ( 'TSTP',  signal.SIGTSTP ), # 20
-           ( 'TTIN',  signal.SIGTTIN ), # 21
-           ( 'TTOU',  signal.SIGTTOU ), # 22
-           ( 'URG',   signal.SIGURG  ), # 23
-           ( 'XCPU',  signal.SIGXCPU ), # 24
-           ( 'XFSZ',  signal.SIGXFSZ ), # 25
-           ( 'VTALRM', signal.SIGVTALRM ), # 26
-           ( 'PROF',  signal.SIGPROF ), # 27
-           ( 'WINCH', signal.SIGWINCH ), # 28
-           ( 'IO',    signal.SIGIO   ), # 29
-##         ( 'PWR',   signal.SIGPWR  ), # 30
-           ( 'SYS',   signal.SIGSYS  )  # 31
+SIGTAB = [ ( 'HUP',   int (signal.SIGHUP  ) ), # 1
+           ( 'INT',   int( signal.SIGINT  ) ), # 2
+           ( 'QUIT',  int( signal.SIGQUIT ) ), # 3
+           ( 'ILL',   int( signal.SIGILL  ) ), # 4
+           ( 'TRAP',  int( signal.SIGTRAP ) ), # 5
+           ( 'ABRT',  int( signal.SIGABRT ) ), # 6
+           ( 'BUS',   int( signal.SIGBUS  ) ), # 7
+           ( 'FPE',   int( signal.SIGFPE  ) ), # 8
+           ( 'KILL',  int( signal.SIGKILL ) ), # 9
+           ( 'USR1',  int( signal.SIGUSR1 ) ), # 10
+           ( 'SEGV',  int( signal.SIGSEGV ) ), # 11
+           ( 'USR2',  int( signal.SIGUSR2 ) ), # 12
+           ( 'PIPE',  int( signal.SIGPIPE ) ), # 13
+           ( 'ALRM',  int( signal.SIGALRM ) ), # 14
+           ( 'TERM',  int( signal.SIGTERM ) ), # 15
+           ( 'CHLD',  int( signal.SIGCHLD ) ), # 17
+           ( 'CLD',   int( signal.SIGCHLD ) ), # 17
+           ( 'CONT',  int( signal.SIGCONT ) ), # 18
+           ( 'STOP',  int( signal.SIGSTOP ) ), # 19
+           ( 'TSTP',  int( signal.SIGTSTP ) ), # 20
+           ( 'TTIN',  int( signal.SIGTTIN ) ), # 21
+           ( 'TTOU',  int( signal.SIGTTOU ) ), # 22
+           ( 'URG',   int( signal.SIGURG  ) ), # 23
+           ( 'XCPU',  int( signal.SIGXCPU ) ), # 24
+           ( 'XFSZ',  int( signal.SIGXFSZ ) ), # 25
+           ( 'VTALRM', int( signal.SIGVTALRM ) ), # 26
+           ( 'PROF',  int( signal.SIGPROF ) ), # 27
+           ( 'WINCH', int( signal.SIGWINCH ) ), # 28
+           ( 'IO',    int( signal.SIGIO   ) ), # 29
+##         ( 'PWR',   int( signal.SIGPWR )  ), # 30
+           ( 'SYS',   int( signal.SIGSYS  ) )  # 31
 ]
 
 def check_signal( sig ):
@@ -126,7 +126,7 @@ def check_signal( sig ):
         return None
     try:
         signum = int( sig )
-        if signum < 0 or signum > signal.NSIG:
+        if signum < 0 or signum > int( signal.NSIG ):
             return None
         for ( name, signo ) in SIGTAB:
             if signum == signo:
@@ -299,7 +299,7 @@ if flag_kill or killsig is not None:
     if not os.path.exists( tgkill_path ):
         ex_print( tgkill_path + ' not found' )
 if flag_kill:
-    killsig = ( 'TERM',  signal.SIGTERM )
+    killsig = ( 'TERM',  int( signal.SIGTERM ) )
 
 pips_postfix = 'comm tid pid ppid'
 if flag_bsd_u:
