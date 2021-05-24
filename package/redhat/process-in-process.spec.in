@@ -16,7 +16,7 @@
 %global debug_package	%{nil}
 
 Name: process-in-process
-Version: 3.1.0
+Version: @PACKAGE_VERSION@
 Release: 0%{?dist}
 Epoch: 1
 Source: %{pip_tarname}-%{version}.tar.gz
@@ -24,7 +24,7 @@ Source: %{pip_tarname}-%{version}.tar.gz
 Summary: PiP - Process in Process
 Group: System Environment/Libraries
 License: BSD
-URL: https://github.com/procinproc/PiP/
+URL: @PACKAGE_URL@
 Vendor: PiP Development Team
 BuildRoot: %{_tmppath}/%{name}-%{version}-buildroot
 BuildRequires: pip-glibc

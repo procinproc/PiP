@@ -1,4 +1,4 @@
-.TH "libpip" 7 "Mon Apr 19 2021" "Process-in-Process" \" -*- nroff -*-
+.TH "libpip" 7 "Wed Apr 28 2021" "Process-in-Process" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
@@ -26,11 +26,11 @@ Unfortunately each version has unique ABI and there is no ABI compatibility amon
 .SS "Bi-Level Thread (BLT, from v3)"
 .PP
 PiP also provides new thread implementation named 'Bi-Level Thread
-(BLT)', again, to take the best of two worlds, Kernel-Level Thread (KLT) and User-Level Thread (ULT) here\&. A BLT is a PiP task\&. When a PiP task is created it runs as a KLT\&. At any point the KLT can becomme a ULT by decoupling the associated kernel thread from the KLT\&. The decoupled kernel thread becommes idle\&. Later, the ULT can become KLT again by coupling with the kernel thread\&.
+(BLT)', again, to take the best of two worlds, Kernel-Level Thread (KLT) and User-Level Thread (ULT) here\&. A BLT is a PiP task\&. When a PiP task is created it runs as a KLT\&. At any point the KLT can become a ULT by decoupling the associated kernel thread from the KLT\&. The decoupled kernel thread becomes idle\&. Later, the ULT can become KLT again by coupling with the kernel thread\&.
 .PP
 .SS "User-Level Process (ULP, from v3)"
 .PP
-As described, PiP allows PiP tasks to share the same virtual address space\&. This mans that a PiP task can context-switch to the other PiP task at user-level\&. This is called User-Level Process where processes may be derived from the same program or different programs\&. Threads basically share most of the kernel resources, such as address space, file descriptors, a process id, and so on whilst processes do not\&. Every process has its ows file descriptor space, for example\&. When a ULP is scheduled by a KLT having PID 1000, then the getpid() is called by the ULP returns 1000\&. Further, when the ULT is migrated to be scheduled by the other KLT, then the returned PID is different\&. So, when implemnting a ULP system, this systemcall consistency must be preserved\&. In ULP on PiP, the consistency can be maintained by utilizing the above BLT mechanism\&. When a ULT tries to call a system call, it is coupled with its kernel thread which was created at the beginning as a KLT\&. It should be note that Thread Local Storage (TLS) regions are also switched when switching ULP (and BLT) contexts\&.
+As described, PiP allows PiP tasks to share the same virtual address space\&. This mans that a PiP task can context-switch to the other PiP task at user-level\&. This is called User-Level Process where processes may be derived from the same program or different programs\&. Threads basically share most of the kernel resources, such as address space, file descriptors, a process id, and so on whilst processes do not\&. Every process has its own file descriptor space, for example\&. When a ULP is scheduled by a KLT having PID 1000, then the getpid() is called by the ULP returns 1000\&. Further, when the ULT is migrated to be scheduled by the other KLT, then the returned PID is different\&. So, when implementing a ULP system, this systemcall consistency must be preserved\&. In ULP on PiP, the consistency can be maintained by utilizing the above BLT mechanism\&. When a ULT tries to call a system call, it is coupled with its kernel thread which was created at the beginning as a KLT\&. It should be note that Thread Local Storage (TLS) regions are also switched when switching ULP (and BLT) contexts\&.
 .PP
 .SS "Execution Mode"
 .PP
@@ -111,15 +111,15 @@ $ PIP_INSTALL_DIR/bin/pip-man 7 libpip
 .fi
 .PP
 .PP
-The above two exammples will show you the same document you are reading\&.
+The above two examples will show you the same document you are reading\&.
 .PP
 .SS "PDF"
 .PP
-\fCPDF documents\fP will be installed at \fBPIP_INSTALL_DIR\fP/share/pdf\&.
+\fCPDF documents\fP will be installed at \fBPIP_INSTALL_DIR\fP/share/doc/PiP/libpip-manpages\&.pdf\&.
 .PP
 .SS "HTML"
 .PP
-\fCHTML documents\fP will be installed at \fBPIP_INSTALL_DIR\fP/share/html\&.
+\fCHTML documents\fP will be installed at \fBPIP_INSTALL_DIR\fP/share/doc/PiP/index\&.html\&.
 .PP
 .SH "Getting Started"
 .PP
@@ -145,7 +145,7 @@ $ pipcc -Wall -O2 -g pip-prog.c -o pip-prog
 pip-exec(1) command (piprun(1) in PiP v1)
 .PP
 .PP
-Let's assume that you have a non-PiP program(s) and wnat to run as PiP tasks\&. All you have to do is to compile your program by using the above pipcc(1) command and to use the pip-exec(1) command to run your program as PiP tasks\&. 
+Let's assume that you have a non-PiP program(s) and want to run as PiP tasks\&. All you have to do is to compile your program by using the above pipcc(1) command and to use the pip-exec(1) command to run your program as PiP tasks\&. 
 .PP
 .nf
 $ pipcc myprog.c -o myprog
@@ -155,9 +155,9 @@ $ ./myprog
 .fi
 .PP
 .PP
-In this case, the pip-exec(1) command becomes the PiP root and your program runs as 8 PiP tasks\&. Note that the 'myprog\&.c' may or may not call any PiP functions\&. Your program can also run as a normal program (not as a PiP task) without using the pip-exec(1) command\&. In either case, your proghrams must be compiled and linked by using the pipcc(1) command described above\&.
+In this case, the pip-exec(1) command becomes the PiP root and your program runs as 8 PiP tasks\&. Note that the 'myprog\&.c' may or may not call any PiP functions\&. Your program can also run as a normal program (not as a PiP task) without using the pip-exec(1) command\&. In either case, your programs must be compiled and linked by using the pipcc(1) command described above\&.
 .PP
-You may write your own PiP programs whcih includes the PiP root programming\&. In this case, your program can run without using the pip-exec(1) command\&.
+You may write your own PiP programs which includes the PiP root programming\&. In this case, your program can run without using the pip-exec(1) command\&.
 .PP
 If you get the following message when you try to run your program; 
 .PP
@@ -200,7 +200,7 @@ $ pips -s KILL [ PATTERN \&.\&. ]
 .PP
 .SS "Debugging your PiP programs by the pip-gdb command"
 .PP
-The following procedure attaches all PiP tasks and PiP root which created those tasks\&. Each PiP task is treated as a GDB inferior in PiP-gdb\&. Note that PiP-glibc and PiP-gdb packages are required to do this\&. Note that all fetuares in this section are only supported by PiP v2 or higher, only with the process execution mode (thread mode is NOT supported)\&. 
+The following procedure is to attach all PiP tasks and PiP root which created those tasks\&. Each PiP task is treated as a GDB inferior in PiP-gdb\&. Note that PiP-glibc and PiP-gdb packages are required to do this\&. Note that all features in this section are only supported by PiP v2 or higher, only with the process execution mode (thread mode and ULP/BLT in PiP v3 are NOT supported)\&. 
 .PP
 .nf
 $ pip-gdb
@@ -273,7 +273,7 @@ $ pip-gdb -p PID-of-your-PiP-program
 .PP
 (from v2)
 .PP
-If the \fBPIP_GDB_PATH\fP environment is set to the path pointing to PiP-gdb executable file, then PiP-gdb is automatically attached when an excetion signal (SIGSEGV or SIGHUP by default) is delivered\&. The exception signals can also be defined by setting the \fBPIP_GDB_SIGNALS\fP environment\&. Signal names (case insensitive) can be concatenated by the '+' or '-' symbol\&. 'all' is reserved to specify most of the signals\&. For example, 'ALL-TERM' means all signals excepting SIGTERM, another example, 'PIPE+INT' means SIGPIPE and SIGINT\&. If one of the specified or default signals is delivered, then PiP-gdb will be attached automatically\&. The PiP-gdb will show backtrace by default\&. If users specify \fBPIP_GDB_COMMAND\fP, a filename containing some GDB commands, then those GDB commands will be executed by PiP-gdb in batch mode\&.
+If the \fBPIP_GDB_PATH\fP environment is set to the path pointing to PiP-gdb executable file, then PiP-gdb is automatically attached when an exception signal (SIGSEGV or SIGHUP by default) is delivered\&. The exception signals can also be defined by setting the \fBPIP_GDB_SIGNALS\fP environment\&. Signal names (case insensitive) can be concatenated by the '+' or '-' symbol\&. 'all' is reserved to specify most of the signals\&. For example, 'ALL-TERM' means all signals excepting SIGTERM, another example, 'PIPE+INT' means SIGPIPE and SIGINT\&. If one of the specified or default signals is delivered, then PiP-gdb will be attached automatically\&. The PiP-gdb will show backtrace by default\&. If users specify \fBPIP_GDB_COMMAND\fP, a filename containing some GDB commands, then those GDB commands will be executed by PiP-gdb in batch mode\&.
 .PP
 If the \fBPIP_STOP_ON_START\fP environment is set, then the PiP library delivers SIGSTOP to a spawned PiP task which is about to start user program\&. If its value is a number in decimal, then the PiP task whose PiP-ID is the same with the specified number will be stopped\&. If the number is minus, then all PiP tasks will be stopped at the very beginning\&. Do not forget to compile your programs with a debug option\&.
 .PP
