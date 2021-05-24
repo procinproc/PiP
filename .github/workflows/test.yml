@@ -95,7 +95,7 @@ jobs:
       - name: test
         run: |
           set -x
-          docker run -v $(pwd):/host ${{ secrets.DOCKERHUB_USER }}/pip-glibc:HEAD-${{ matrix.distro }}-${{ matrix.arch }} /bin/sh -x /host/PiP/.github/workflows/test.sh
+          docker run -v $(pwd):/host --cap-add=SYS_PTRACE --security-opt=seccomp=unconfined ${{ secrets.DOCKERHUB_USER }}/pip-glibc:HEAD-${{ matrix.distro }}-${{ matrix.arch }} /bin/sh -x /host/PiP/.github/workflows/test.sh
 
       - name: upload test results
         if: always()
