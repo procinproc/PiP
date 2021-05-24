@@ -44,10 +44,30 @@ jobs:
 
     steps:
 
+      - name: determine pip_versions and pip_ref
+        id: pip_versions
+        run: |
+          set -x
+          case "${{ github.ref }}" in
+          refs/heads/pip-*)
+            pip_versions='${{ github.event.inputs.pip_versions }}'
+            pip_ref='${{ github.event.inputs.pip_ref }}'
+            ;;
+          *)
+            pip_versions='[""]'
+            pip_ref='${{ github.event.inputs.pip_ref }}'
+            if [ -z "$pip_ref" ]; then
+              pip_ref='${{ github.ref }}'
+            fi
+            ;;
+          esac
+          echo "::set-output name=pip_versions::${pip_versions}"
+          echo "::set-output name=pip_ref::${pip_ref}"
+
       - name: dispatch event
         uses: peter-evans/repository-dispatch@v1
         with:
           token: ${{ secrets.PIP_BUILD_TOKEN }}
           repository: ${{ github.repository }}
           event-type: pip-test-invoke
-          client-payload: '{ "distros": ${{ github.event.inputs.distros }}, "archs": ${{ github.event.inputs.archs }}, "pip_versions": ${{ github.event.inputs.pip_versions }}, "pip_ref": "${{ github.event.inputs.pip_ref }}", "pip_testsuite_ref": "${{ github.event.inputs.pip_testsuite_ref }}", "dispatch": "${{ github.event.inputs.dispatch }}" }'
+          client-payload: '{ "distros": ${{ github.event.inputs.distros }}, "archs": ${{ github.event.inputs.archs }}, "pip_versions": ${{ steps.pip_versions.outputs.pip_versions }}, "pip_ref": "${{ steps.pip_versions.outputs.pip_ref }}", "pip_testsuite_ref": "${{ github.event.inputs.pip_testsuite_ref }}", "dispatch": "${{ github.event.inputs.dispatch }}" }'
