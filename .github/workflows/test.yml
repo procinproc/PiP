@@ -101,7 +101,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v2
         with:
-          name: pip-test-${{ matrix.distro }}-${{ matrix.arch }}
+          name: pip-${{ matrix.pip_version }}-test-${{ matrix.distro }}-${{ matrix.arch }}
           path: PiP-Testsuite/**/test.log*
 
   dispatch:
