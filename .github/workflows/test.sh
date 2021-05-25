@@ -8,7 +8,13 @@ time make install &&
 
 cd /host/PiP-Testsuite &&
 ./configure --with-pip=$HOME/pip &&
-PIP_TEST_THRESHOLD=10 make test
-#:
-### FIXME:
-### the above line should be "time make test" instead of ":", but it hangs
+if true # <- change this to false to disable "make test"
+then
+	PIP_TEST_THRESHOLD=10; export PIP_TEST_THRESHOLD
+	case `uname -p` in
+	aarch64)	PIP_TEST_THRESHOLD=50;; # emulated, 10 times slower
+	*)		PIP_TEST_THRESHOLD=5;;
+	esac
+	export PIP_TEST_THRESHOLD
+	time make test
+fi
