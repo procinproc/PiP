@@ -128,6 +128,63 @@ fi
 python=`which ${PYTHON}`
 AC_SUBST(python)
 
+if test x"${CFLAG_PIC}" = "xno" ; then
+   CFLAG_PIC=""
+elif test x"${CFLAG_PIC}" = x ; then
+   CFLAG_PIC="-fPIC"
+else
+   CFLAG_PIC="${CFLAG_PIC}"
+fi
+AC_SUBST(CFLAG_PIC)
+
+if test x"${CFLAG_PIE}" = "xno" ; then
+   CFLAG_PIE=""
+elif test x"${CFLAG_PIE}" = x ; then
+   CFLAG_PIE="-fpie"
+else
+   CFLAG_PIE="${CFLAG_PIE}"
+fi
+AC_SUBST(CFLAG_PIE)
+
+if test x"${LDFLAG_PIE}" = "xno" ; then
+   LDFLAG_PIE=""
+elif test x"${LDFLAG_PIE}" = x ; then
+   LDFLAG_PIE="-pie"
+else
+   LDFLAG_PIE="${LDFLAG_PIE}"
+fi
+AC_SUBST(LDFLAG_PIE)
+
+CFLAGS_SAVE=${CFLAGS}
+LDFLAGS=${LDFLAGS_SAVE}
+
+CFLAGS="${CFLAG_PIC} ${CFLAGS}"
+
+AC_MSG_CHECKING([PIC compile flag (${CFLAGS})])
+AC_COMPILE_IFELSE(
+[AC_LANG_SOURCE([[main(){return 0;}]])],
+[AC_MSG_RESULT([OK])],
+[AC_MSG_ERROR([${CFLAG_PIC} is invalid])])
+
+CFLAGS="${CFLAG_PIE} ${CFLAGS}"
+
+AC_MSG_CHECKING([PIE compile flag (${CFLAGS})])
+AC_COMPILE_IFELSE(
+[AC_LANG_SOURCE([[main(){return 0;}]])],
+[AC_MSG_RESULT([OK])],
+[AC_MSG_ERROR([${CFLAG_PIE} is invalid])])
+
+LDFLAGS="${LDFLAG_PIE} ${LDFLAGS}"
+
+AC_MSG_CHECKING([PIE linker flag (${LDFLAGS})])
+AC_LINK_IFELSE(
+[AC_LANG_SOURCE([[main(){return 0;}]])],
+[AC_MSG_RESULT([OK])],
+[AC_MSG_ERROR([${LDFLAG_PIE} is invalid])])
+
+CFLAGS="${CFLAGS_SAVE}"
+LDFLAGS="${LDFLAGS_SAVE}"
+
 # Checks for libraries.
 
 # Checks for header files.

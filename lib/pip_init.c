@@ -66,20 +66,20 @@ int pip_raise_signal( pip_task_internal_t *taski, int sig ) {
 	  sig, strsignal(sig), 
 	  TA(taski)->pipid, MA(taski)->pid, AA(taski)->tid );
   if( AA(taski)->flag_exit == 0 ) {
-    if( TA(taski)->task_sched != taski &&
-	TA(taski)->schedq_len > 0 ) {
-      /* Not allowed to send a signal to an inactive task */
-      RETURN( EPERM );
-    } else if( pip_is_threaded_() ) {
+    if( pip_is_threaded_() ) {
 #ifndef USE_TGKILL
-      err = pthread_kill( MA(taski)->thread, sig );
+      if( MA(taski)->thread != 0 ) {
+	err = pthread_kill( MA(taski)->thread, sig );
+      }
 #else
-      err = tgkill( AA(taski)->pid, AA(taski)->tid, sig );
+      if( AA(taski)->pid != 0 && AA(taski)->tid != 0 ) {
+	err = tgkill( AA(taski)->pid, AA(taski)->tid, sig );
+      }
 #endif
     } else {
       DBGF( "taski->annex->tid: %d", AA(taski)->tid );
       err = 0;
-      if( kill( AA(taski)->tid, sig ) != 0 ) {
+      if( AA(taski)->tid != 0 &&  kill( AA(taski)->tid, sig ) != 0 ) {
 	err = errno;
       }
     }

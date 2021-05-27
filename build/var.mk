@@ -44,10 +44,9 @@ PROGRAMS = $(PROGRAM)
 PROGRAMS_TO_INSTALL = $(PROGRAMS)
 LIBRARIES = $(LIBRARY)
 
-PIC_CFLAG     = -fPIC
-PIE_CFLAG     = -fPIE
-PIC_LDFLAG    = -pic
-PIE_LDFLAG    = -pie
+PIC_CFLAG     = $(CFLAG_PIC)
+PIE_CFLAG     = $(CFLAG_PIE)
+PIE_LDFLAG    = $(LDFLAG_PIE)
 RDYNAMIC_FLAG = -rdynamic
 PTHREAD_FLAG  = -pthread
 DYLINKER_FLAG = -Wl,--dynamic-linker=$(dynamic_linker)

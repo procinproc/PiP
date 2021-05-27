@@ -10,9 +10,8 @@ cd /host/PiP-Testsuite &&
 ./configure --with-pip=$HOME/pip &&
 if true # <- change this to false to disable "make test"
 then
-	PIP_TEST_THRESHOLD=10; export PIP_TEST_THRESHOLD
 	case `uname -p` in
-	aarch64)	PIP_TEST_THRESHOLD=50;; # emulated, 10 times slower
+	aarch64)	PIP_TEST_THRESHOLD=10;;
 	*)		PIP_TEST_THRESHOLD=5;;
 	esac
 	export PIP_TEST_THRESHOLD
