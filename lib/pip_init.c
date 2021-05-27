@@ -64,17 +64,21 @@ int pip_raise_signal( pip_task_t *task, int sig ) {
 
   ENTERF( "raise signal (%d:%s) to PIPID:%d PID:%d TID:%d",
 	  sig, strsignal(sig), task->pipid, task->pid, task->tid );
-  if( task->flag_exit == 0 ) {	
+  if( task->flag_exit == 0 ) {
     /* not yet terminated */
     if( pip_is_threaded_() ) {
 #ifndef USE_TGKILL
-      err = pthread_kill( task->thread, sig );
+      if( task->thread != 0 ) {
+	err = pthread_kill( task->thread, sig );
+      }
 #else
-      err = tgkill( task->pid, task->tid, sig );
+      if( task->pid != 0 && task->tid != 0 ) {
+	err = tgkill( task->pid, task->tid, sig );
+      }
 #endif
     } else {
       err = 0;
-      if( kill( task->tid, sig ) != 0 ) {
+      if( task->tid != 0 && kill( task->tid, sig ) != 0 ) {
 	err = errno;
       }
     }

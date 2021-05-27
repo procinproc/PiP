@@ -75,9 +75,10 @@ glibc_incdir=@glibc_incdir@
 glibc_libdir=@glibc_libdir@
 dynamic_linker=@dynamic_linker@
 
-FLAG_FPIC="-fPIC"
-FLAG_FPIE="-fpie"
-FLAG_PIE="-pie"
+FLAG_FPIC="@CFLAG_PIC@"
+FLAG_FPIE="@CFLAG_PIE@"
+FLAG_PIE="@LDFLAG_PIE@"
+
 FLAG_RDYN="-rdynamic"
 FLAG_PTHREAD="-pthread"
 
