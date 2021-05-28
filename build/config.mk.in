@@ -32,6 +32,7 @@ glibc_lib = @glibc_lib@
 dynamic_linker = @dynamic_linker@
 
 DEFAULT_CC = @CC@
+DEFAULT_CC = @FC@
 DEFAULT_CFLAGS = @CFLAGS@
 DEFAULT_LDFLAGS = @LDFLAGS@
 DEFAULT_LIBS = @LIBS@
