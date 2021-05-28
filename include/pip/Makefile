@@ -38,7 +38,7 @@ srcdir = .
 
 HEADERS = pip.h pip_util.h \
 	pip_machdep.h pip_machdep_x86_64.h pip_machdep_aarch64.h \
-	pip_gdbif_enums.h pip_config.h \
+	pip_gdbif_enums.h pip_config.h pip_clone.h \
 	xpmem.h
 
 MAN3_SRCS = pip.h
