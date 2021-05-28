@@ -78,6 +78,7 @@ fi
 AC_SUBST(CC)
 AC_SUBST(CFLAGS)
 
+AC_ARG_VAR([FC], [Fortran compiler command])
 AC_CHECK_PROGS([FC],[gfortran g95 g77])
 AC_SUBST(FC)
 
@@ -88,6 +89,7 @@ fi
 python=`which ${PYTHON}`
 AC_SUBST(python)
 
+AC_ARG_VAR([CFLAG_PIC], [PIC compiler flag (default -fPIC)])
 if test x"${CFLAG_PIC}" = "xno" ; then
    CFLAG_PIC=""
 elif test x"${CFLAG_PIC}" = x ; then
@@ -97,6 +99,7 @@ else
 fi
 AC_SUBST(CFLAG_PIC)
 
+AC_ARG_VAR([CFLAG_PIE], [PIE compiler flag (default -fpie)])
 if test x"${CFLAG_PIE}" = "xno" ; then
    CFLAG_PIE=""
 elif test x"${CFLAG_PIE}" = x ; then
@@ -106,6 +109,7 @@ else
 fi
 AC_SUBST(CFLAG_PIE)
 
+AC_ARG_VAR([LDFLAG_PIE], [PIE linker flag (default -pie)])
 if test x"${LDFLAG_PIE}" = "xno" ; then
    LDFLAG_PIE=""
 elif test x"${LDFLAG_PIE}" = x ; then
