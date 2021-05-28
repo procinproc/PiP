@@ -137,7 +137,7 @@ static int pip_check_opt_and_env( uint32_t *optsp ) {
     }
     if( mode & ~PIP_MODE_PROCESS_PRELOAD ) {
       pip_err_mesg( "pip_preload.so is already loaded by LD_PRELOAD and "
-		    "process:preload must be specified at pip_init()" );
+		    "process:preload is the only possible choice of PiP mode" );
       RETURN( EPERM );
     }
     if( env == NULL || env[0] == '\0' ) {
@@ -152,7 +152,7 @@ static int pip_check_opt_and_env( uint32_t *optsp ) {
       goto done;
     } else {
       pip_err_mesg( "pip_preload.so is already loaded by LD_PRELOAD and "
-		    "process:preload is the only valid choice of PIP_MODE environment" );
+		    "process:preload is the only possible choice of PiP mode" );
       RETURN( EPERM );
     }
   } else {
@@ -215,6 +215,9 @@ static int pip_check_opt_and_env( uint32_t *optsp ) {
     break;
   default:
     RETURN( EINVAL );
+  }
+  if( desired == 0 ) {
+    RETURN( EPERM );
   }
 
   if( desired & PIP_MODE_PROCESS_GOT_BIT ) {
