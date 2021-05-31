@@ -125,7 +125,7 @@ jobs:
           echo "archs=<${{ toJSON(github.event.client_payload.archs) }}>"
           case "${{ github.event.client_payload.pip_ref }}" in
           '')
-            pip_versions="[$(echo "${{ toJSON(github.event.client_payload.pip_versions) }}" | sed -e 1d -e '$d' | awk 'NR>1 {print ","} {printf "\"%s\"", $1}' )]"
+            pip_versions="$(echo "${{ toJSON(github.event.client_payload.pip_versions) }}" | tr '\012' ' ' )"
             ;;
           *)
             pip_version=`echo ${{ github.event.client_payload.pip_ref }} | sed 's/.*pip-//'`
