@@ -70,4 +70,4 @@ jobs:
           token: ${{ secrets.PIP_BUILD_TOKEN }}
           repository: ${{ github.repository }}
           event-type: pip-test-invoke
-          client-payload: '{ "distros": ${{ github.event.inputs.distros }}, "archs": ${{ github.event.inputs.archs }}, "pip_versions": ${{ steps.pip_versions.outputs.pip_versions }}, "pip_ref": "${{ steps.pip_versions.outputs.pip_ref }}", "pip_testsuite_ref": "${{ github.event.inputs.pip_testsuite_ref }}", "dispatch": "${{ github.event.inputs.dispatch }}" }'
+          client-payload: '{ "distros": ${{ github.event.inputs.distros }}, "archs": ${{ github.event.inputs.archs }}, "pip_versions": ${{ steps.pip_versions.outputs.pip_versions }}, "pip_ref": "${{ steps.pip_versions.outputs.pip_ref }}", "pip_testsuite_ref": "${{ github.event.inputs.pip_testsuite_ref }}", "dispatch": ${{ github.event.inputs.dispatch }} }'
