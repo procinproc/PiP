@@ -942,11 +942,13 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
     char *prog = progp->prog;
     char *p = strrchr( prog, '/' );
     if( p == NULL ) {
-      args->prog      = prog;
+      args->prog      = strdup( prog );
+      args->prog_full = strdup( prog );
     } else {
-      args->prog      = p + 1;
-      args->prog_full = prog;
+      args->prog      = strdup( p + 1 );
+      args->prog_full = strdup( prog );
     }
+    ASSERT( args->prog != NULL && args->prog_full != NULL );
     DBGF( "prog:%s full:%s", args->prog, args->prog_full );
   }
   err = pip_copy_env( progp->envv, pipid, &args->envvec );
