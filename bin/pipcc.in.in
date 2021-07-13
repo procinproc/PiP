@@ -102,6 +102,11 @@ err_nostatic() {
     print_usage
 }
 
+err_runpath() {
+    echo >&2 "${cmd} does not allow the RUNPATH usage";
+    print_usage
+}
+
 is_linking=true
 pip_root=true
 pip_task=true
@@ -135,6 +140,7 @@ while [ "$1" != "" ]; do
 	--cflags)  cflags=true;;
 	--lflags)  lflags=true;;
 	-Bstatic|-static) err_nostatic;;
+	--enable-new-dtags) err_runpath;;
 	--version|-v) version=true; opts="${opts} $1";;
 	*)         opts="${opts} $1";;
     esac
@@ -258,7 +264,7 @@ if ${HAVE_PIPGLIBC} && [ x"${dynamic_linker}" != x"" ]; then
 fi
 
 PIP_COMMON_CFLAGS="${PIP_CFLAGS} ${GLIBC_CFLAGS}"
-PIP_COMMON_LDFLAGS="${PIP_LDFLAGS} ${GLIBC_LDFLAGS}"
+PIP_COMMON_LDFLAGS="${PIP_LDFLAGS} ${GLIBC_LDFLAGS} -Wl,--disable-new-dtags"
 PIP_COMMON_LDLIBS="-lpip -ldl"
 
 PIP_ROOT_CFLAGS="${PIP_COMMON_CFLAGS}"

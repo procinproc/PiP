@@ -40,16 +40,29 @@
 
 #include <sys/types.h>
 
+#define XPMEM_MAXADDR_SIZE	(size_t)(-1L)
+
+/*
+ * The following are the possible XPMEM related errors.
+ */
+/** Unknown thread due to fork() */
+#define XPMEM_ERRNO_NOPROC	2004
+
+/*
+ * Valid permit_type values for xpmem_make().
+ */
+enum {
+  /** Permit value are unix-style permissions with mask 0777. Any bit
+   * set outside this range is an error. This is the only valid permit
+   * mode at this time. */
+  XPMEM_PERMIT_MODE = 0x1,
+};
+
 /*
  * flags for segment permissions
  */
 #define XPMEM_RDONLY	0x1
 #define XPMEM_RDWR	0x2
-
-/*
- * Valid permit_type values for xpmem_make().
- */
-#define XPMEM_PERMIT_MODE	0x1
 
 typedef intptr_t xpmem_segid_t;	/* segid returned from xpmem_make() */
 typedef intptr_t xpmem_apid_t;	/* apid returned from xpmem_get() */

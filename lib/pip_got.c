@@ -40,6 +40,7 @@
 
 typedef struct {
   char	*dsoname;
+  char	**exclude;
   char 	*symname;
   void	*new_addr;
 } pip_phdr_itr_args;
@@ -52,7 +53,6 @@ typedef struct {
 static pip_got_patch_list_t    *pip_got_patch_list  = NULL;
 static int			pip_got_patch_size  = 0;
 static int			pip_got_patch_currp = 0;
-static int			pip_got_patch_ok    = 0;
 
 static void pip_unprotect_page( void *addr ) {
   FILE	 *fp_maps;
@@ -156,6 +156,7 @@ static int pip_replace_clone_itr( struct dl_phdr_info *info,
 				  void *args ) {
   pip_phdr_itr_args *itr_args = (pip_phdr_itr_args*) args;
   char	*dsoname  = itr_args->dsoname;
+  char **exclude  = itr_args->exclude;
   char	*symname  = itr_args->symname;
   void	*new_addr = itr_args->new_addr;
   char	*fname, *bname;
@@ -163,16 +164,24 @@ static int pip_replace_clone_itr( struct dl_phdr_info *info,
 
   fname = (char*) info->dlpi_name;
   if( fname == NULL ) return 0;
-  DBGF( "fname:%s", fname );
-  bname = strrchr( fname, '/' );
-  if( bname == NULL ) {
-    bname = fname;
-  } else {
+
+  ENTERF( "fname:'%s' dsoname:'%s'", fname, dsoname );
+
+  if( ( bname = strrchr( fname, '/' ) ) != NULL ) {
     bname ++;		/* skp '/' */
+  } else {
+    bname = fname;
   }
 
-  ENTERF( "fname:%s dsoname:%s", bname, dsoname );
-  if( dsoname  == NULL || *dsoname == '\0' ||
+  if( exclude != NULL && *bname != '\0' ) {
+    for( i=0; exclude[i]!=NULL; i++ ) {
+      if( strncmp( exclude[i], bname, strlen(exclude[i]) ) == 0 ) {
+	DBGF( "%s is excluded", exclude[i] );
+	return 0;
+      }
+    }
+  }
+  if( dsoname == NULL || *dsoname == '\0' ||
       strncmp( dsoname, bname, strlen(dsoname) ) == 0 ) {
     ElfW(Dyn) 	*dynsec = pip_get_dynsec( info );
     ElfW(Rela) 	*rela   = (ElfW(Rela)*) pip_get_dynent_ptr( dynsec, DT_JMPREL );
@@ -193,11 +202,10 @@ static int pip_replace_clone_itr( struct dl_phdr_info *info,
 	void	*secbase    = (void*) info->dlpi_addr;
 	void	**got_entry = (void**) ( secbase + rela->r_offset );
 
-	DBGF( "SYM[%d] '%s'  GOT:%p", i, sym, got_entry );
+	DBGF( "%s:GOT[%d] '%s'  GOT:%p", bname, i, sym, got_entry );
 	pip_unprotect_page( (void*) got_entry );
-	pip_add_got_patch( got_entry, *got_entry );
 	*got_entry = new_addr;
-	pip_got_patch_ok = 1;
+	pip_add_got_patch( got_entry, *got_entry );
 	break;
       }
     }
@@ -205,20 +213,20 @@ static int pip_replace_clone_itr( struct dl_phdr_info *info,
   return 0;
 }
 
-int pip_patch_GOT( char *dsoname, char *symname, void *new_addr ) {
+int pip_patch_GOT( char *dsoname, char **exclude, char *symname, void *new_addr ) {
   pip_phdr_itr_args itr_args;
 
   ENTER;
   itr_args.dsoname  = dsoname;
+  itr_args.exclude  = exclude;
   itr_args.symname  = symname;
   itr_args.new_addr = new_addr;
-  (void) dl_iterate_phdr( pip_replace_clone_itr, (void*) &itr_args );
-  RETURN_NE( pip_got_patch_ok );
+
+  RETURN_NE( dl_iterate_phdr( pip_replace_clone_itr, (void*) &itr_args ) );
 }
 
 void pip_undo_patch_GOT( void ) {
   ENTER;
   pip_undo_got_patch();
-  pip_got_patch_ok = 0;
   RETURNV;
 }

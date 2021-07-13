@@ -43,9 +43,19 @@
 
 void *pip_dlopen( const char *filename, int flag ) {
   void *handle;
-  pip_glibc_lock();
-  handle = dlopen( filename, flag );
-  pip_glibc_unlock();
+
+  if( pip_task != NULL ) {
+    Lmid_t lmid = pip_task->lmid;
+    DBGF( "[%d] lmid:%ld", pip_task->pipid, pip_task->lmid );
+    pip_glibc_lock();
+    handle = dlmopen( lmid, filename, flag );
+    pip_glibc_unlock();
+  } else {
+    DBG;
+    pip_glibc_lock();
+    handle = dlopen( filename, flag );
+    pip_glibc_unlock();
+  }
   return handle;
 }
 

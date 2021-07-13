@@ -36,6 +36,8 @@
 #include <pip/pip_internal.h>
 #include <pip/pip_gdbif.h>
 
+pip_sem_t		*pip_universal_lockp;
+
 pip_root_t		*pip_root       PIP_PRIVATE;
 pip_task_t		*pip_task       PIP_PRIVATE;
 struct pip_gdbif_root	*pip_gdbif_root PIP_PRIVATE;
@@ -449,11 +451,16 @@ void pip_debug_info( void ) {
 
 static void pip_exception_handler( int sig, siginfo_t *info, void *extra ) {
   ENTER;
-  if( pip_root != NULL ) pip_spin_lock( &pip_root->lock_bt );
-  {
-    pip_err_mesg( "*** Exception signal: %s (%d) !!", strsignal(sig), sig );
-    pip_debug_info();
+
+  pip_err_mesg( "*** Exception signal: %s (%d) !!", strsignal(sig), sig );
+
+  if( pip_root != NULL ) {
+    if( pip_root->flag_debug ) return;
+    pip_spin_lock( &pip_root->lock_bt );
+    pip_root->flag_debug = 1;
   }
+  pip_debug_info();
+
   if( pip_root != NULL ) {
     pip_spin_unlock( &pip_root->lock_bt );
     (void) pip_raise_signal( pip_root->task_root, SIGCONT );
@@ -663,7 +670,8 @@ int pip_init_task_implicitly( pip_root_t *root,
     } else {
       pip_root = root;
       pip_task = task;
-      pip_gdbif_root = root->gdbif_root;
+      pip_gdbif_root      = root->gdbif_root;
+      pip_universal_lockp = &root->universal_lock;
       if( !pip_is_threaded_() ) {
 	pip_debug_on_exceptions( root, task );
       }

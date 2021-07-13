@@ -107,10 +107,7 @@ for i; do
 done
 
 if $pipbuld ; then
-    predir=${SRCTOP}/preload;
-    bindir=${SRCTOP}/bin;
-elif [ -d $cwd/preload ]; then
-    predir=${SRCTOP}/preload;
+    predir=${SRCTOP}/lib;
     bindir=${SRCTOP}/bin;
 else
     predir=${INSTALLTOP}/lib;

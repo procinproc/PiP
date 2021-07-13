@@ -42,8 +42,9 @@
 #include <malloc.h>
 #include <sys/prctl.h>
 
-//#define PIP_NO_MALLOPT
 //#define DEBUG
+
+#define PIP_NO_MALLOPT
 
 /* the EVAL env. is to measure the time for calling dlmopen() */
 //#define EVAL
@@ -75,13 +76,18 @@ struct pip_gdbif_root	*pip_gdbif_root;
 
 #ifndef PIP_NO_MALLOPT
   /* heap (using brk or sbrk) is not safe in PiP */
-#ifdef M_MMAP_THRESHOLD
+#if defined( M_MMAP_THRESHOLD ) && defined( M_TRIM_THRESHOLD )
 void pip_donot_use_heap( void ) __attribute__ ((constructor));
 void pip_donot_usr_heap( void ) {
-  if( mallopt( M_MMAP_THRESHOLD, 1 ) == 1 ) {
+  if( mallopt( M_MMAP_THRESHOLD, 0 ) == 1 ) {
     DBGF( "mallopt(M_MMAP_THRESHOLD): succeeded" );
   } else {
     pip_warn_mesg( "mallopt(M_MMAP_THRESHOLD): failed !!!!!!" );
+  }
+  if( mallopt( M_TRIM_THRESHOLD, -1 ) == 1 ) {
+    DBGF( "mallopt(M_TRIM_THRESHOLD): succeeded" );
+  } else {
+    pip_warn_mesg( "mallopt(M_TRIM_THRESHOLD): failed !!!!!!" );
   }
 }
 #endif
@@ -491,6 +497,7 @@ static char *pip_prefix_dir( pip_root_t *root ) {
       ASSERT( ( p = realpath( prefix, NULL ) ) != NULL );
       free( libpip );
       free( prefix );
+      fclose( fp_maps );
       prefix = p;
       root->prefixdir = prefix;
       DBGF( "prefix: %s", prefix );
@@ -550,6 +557,8 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     pip_sem_init( &pip_root->lock_glibc );
     pip_sem_post( &pip_root->lock_glibc );
     pip_sem_init( &pip_root->sync_spawn );
+    pip_sem_init( &pip_root->universal_lock );
+    pip_sem_post( &pip_root->universal_lock );
     for( i=0; i<ntasks+1; i++ ) {
       pip_reset_task_struct( &pip_root->tasks[i] );
       pip_named_export_init( &pip_root->tasks[i] );
@@ -795,10 +804,15 @@ static int pip_copy_vec( char **vecadd,
 static int pip_copy_env( char **envsrc, int pipid, pip_char_vec_t *vecp ) {
   char rootenv[ENVLEN], taskenv[ENVLEN];
   char *preload_env    = getenv( "LD_PRELOAD" );
-  char *mmap_threshold = "MALLOC_MMAP_THRESHOLD_=1";
+#ifndef PIP_NO_MALLOPT
+  char *mmap_threshold = "MALLOC_MMAP_THRESHOLD_=0";
   char *mmap_max       = "MALLOC_MMAP_MAX_=4294967296"; /* 4GB */
-  char *addenv[] = { rootenv, taskenv, preload_env, mmap_threshold, mmap_max, NULL };
-
+  char *trim_threshold = "MALLOC_TRIM_THRESHOLD_=-1";
+  char *addenv[] = { rootenv, taskenv, preload_env, mmap_threshold, 
+		     mmap_max, trim_threshold, NULL };
+#else
+  char *addenv[] = { rootenv, taskenv, preload_env, NULL };
+#endif
   ASSERT( snprintf( rootenv, ENVLEN, "%s=%p", PIP_ROOT_ENV, pip_root ) > 0 );
   ASSERT( snprintf( taskenv, ENVLEN, "%s=%d", PIP_TASK_ENV, pipid    ) > 0 );
   return pip_copy_vec( addenv, envsrc, vecp );
@@ -889,6 +903,26 @@ static void pip_close_on_exec( void ) {
   }
 }
 
+static void pip_close_fds( void ) {
+  DIR *dir;
+  struct dirent *direntp;
+  int fd;
+
+  if( ( dir = opendir( PROCFD_PATH ) ) != NULL ) {
+    int fd_dir = dirfd( dir );
+    while( ( direntp = readdir( dir ) ) != NULL ) {
+      if( direntp->d_name[0] != '.' &&
+	  ( fd = strtol( direntp->d_name, NULL, 10 ) ) >= 0 &&
+	  fd != fd_dir ) {
+	(void) close( fd );
+	DBGF( "FD:%d is closed (terminated)", fd );
+      }
+    }
+    (void) closedir( dir );
+    (void) close( fd_dir );
+  }
+}
+
 static int pip_find_user_symbols( pip_spawn_program_t *progp,
 				  void *handle,
 				  pip_task_t *task ) {
@@ -944,9 +978,48 @@ pip_find_glibc_symbols( void *handle, pip_task_t *task ) {
     /* GLIBC misc. variables */
     symp->prog           = dlsym( handle, "__progname"      );
     symp->prog_full      = dlsym( handle, "__progname_full" );
+    /* pip_patch_GOT */
+    symp->patch_got      = dlsym( handle, "pip_patch_GOT"   );
+    /* pip_dlfcn */
+    symp->dlopen	 = dlsym( handle, "dlopen"          );
+    symp->dlmopen	 = dlsym( handle, "dlmopen"         );
+    symp->dlinfo	 = dlsym( handle, "dlinfo"          );
+    symp->dlsym		 = dlsym( handle, "dlsym"           );
+    symp->dladdr	 = dlsym( handle, "dladdr"          );
+    symp->dlclose	 = dlsym( handle, "dlclose"         );
+    symp->dlerror	 = dlsym( handle, "dlerror"         );
   }
   pip_glibc_unlock();
   RETURN( err );
+}
+
+static void pip_replace_dlfcn( pip_symbols_t *symp ) {
+  char *norep[] = { LIBNAME_LIBPIP, LIBNAME_PIPINIT, LIBNAME_PRELOAD, NULL };
+  int err = 0;
+
+  if( symp->patch_got != NULL ) {
+    if( ( err = symp->patch_got( NULL, norep, "dlopen",  symp->dlopen  ) != 0 ) ) {
+      pip_warn_mesg( "Unable to replace dlopen" );
+    }
+    if( ( err = symp->patch_got( NULL, norep, "dlmopen", symp->dlmopen ) != 0 ) ) {
+      pip_warn_mesg( "Unable to replace dlmopen" );
+    }
+    if( ( err = symp->patch_got( NULL, norep, "dlinfo",  symp->dlinfo  ) != 0 ) ) {
+      pip_warn_mesg( "Unable to replace dlinfo" );
+    }
+    if( ( err = symp->patch_got( NULL, norep, "dlsym",   symp->dlsym   ) != 0 ) ) {
+      pip_warn_mesg( "Unable to replace dlsym" );
+    }
+    if( ( err = symp->patch_got( NULL, norep, "dladdr",  symp->dladdr  ) != 0 ) ) {
+      pip_warn_mesg( "Unable to replace dladdr" );
+    }
+    if( ( err = symp->patch_got( NULL, norep, "dlclose", symp->dlclose ) != 0 ) ) {
+      pip_warn_mesg( "Unable to replace dlclose" );
+    }
+    if( ( err = symp->patch_got( NULL, norep, "dlerror", symp->dlerror ) != 0 ) ) {
+      pip_warn_mesg( "Unable to replace dlerror" );
+    }
+  }
 }
 
 #ifdef RTLD_DEEPBIND
@@ -1014,14 +1087,16 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
       }
     }
   }
+  pip_replace_dlfcn( &task->symbols );
+
   task->symbols.pip_init = impinit;
   task->loaded           = loaded;
   task->lmid             = lmid;
   RETURN( err );
 
  error:
-  if( loaded     != NULL ) pip_dlclose( loaded    );
-  if( ld_pipinit != NULL ) pip_dlclose( ld_pipinit);
+  if( loaded     != NULL ) pip_dlclose( loaded     );
+  if( ld_pipinit != NULL ) pip_dlclose( ld_pipinit );
   RETURN( err );
 }
 
@@ -1135,16 +1210,21 @@ static void pip_glibc_init( pip_symbols_t *symbols,
 #ifndef PIP_NO_MALLOPT
   /* heap (using brk or sbrk) is not safe in PiP */
   if( symbols->mallopt != NULL ) {
-#ifdef M_MMAP_THRESHOLD
-    if( symbols->mallopt( M_MMAP_THRESHOLD, 1 ) == 1 ) {
+#if defined( M_MMAP_THRESHOLD ) && defined( M_TRIM_THRESHOLD )
+    if( symbols->mallopt( M_MMAP_THRESHOLD, 0 ) == 1 ) {
       DBGF( "mallopt(M_MMAP_THRESHOLD): succeeded" );
     } else {
       pip_warn_mesg( "mallopt(M_MMAP_THRESHOLD): failed !!!!!!" );
     }
+    if( symbols->mallopt( M_TRIM_THRESHOLD, -1 ) == 1 ) {
+      DBGF( "mallopt(M_TRIM_THRESHOLD): succeeded" );
+    } else {
+      pip_warn_mesg( "mallopt(M_TRIM_THRESHOLD): failed !!!!!!" );
+    }
 #endif
   }
 #endif
-  /*** do we really need this? 
+  /*** do we really need this?   
   if( symbols->malloc_hook != 0x0 ) {
     *symbols->malloc_hook = 0x0;
   }
@@ -1192,7 +1272,6 @@ static void pip_return_from_start_func( pip_task_t *task,
   pip_gdbif_hook_after( task );
 
   DBGF( "PIPID:%d -- FORCE EXIT:%d", task->pipid, extval );
-  fflush( NULL );
 
   if( pip_is_threaded_() ) {	/* thread mode */
     task->flag_sigchld = 1;
@@ -1205,6 +1284,7 @@ static void pip_return_from_start_func( pip_task_t *task,
       pthread_exit( NULL );
     }
   } else {			/* process mode */
+    pip_close_fds();
     if( task->symbols.exit != NULL ) {
       task->symbols.exit( extval );
     } else {
@@ -1536,15 +1616,8 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
   if( ( err = pip_do_corebind( 0, coreno, &cpuset ) ) == 0 ) {
     /* corebinding should take place before loading solibs,     */
     /* hoping anon maps would be mapped onto the same numa node */
-    char **envv_root = environ;
-    /* environ must be saved before loading user program and  */
-    /* set to the specified one. this is because ld-linux and */
-    /* .init functions may refer and alter it                 */
-    environ = args->envvec.vec;
     PIP_ACCUM( time_load_prog,
 	       ( err = pip_load_prog( progp, args, task ) ) == 0 );
-    args->envvec.vec = environ;
-    environ = envv_root;
     /* and of course, the corebinding must be undone */
     (void) pip_undo_corebind( 0, coreno, &cpuset );
   }

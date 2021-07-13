@@ -101,6 +101,10 @@
 
 #define PIP_MIDLEN		(64)
 
+/* not to use heap when defined */
+/* the ocnsequence of this may slow malloc() and free() substantially !! */
+#define PIP_NO_MALLOPT
+
 struct pip_root;
 struct pip_task;
 
@@ -119,6 +123,14 @@ typedef int(*named_export_fin_t)(struct pip_task*);
 typedef int(*pip_init_t)(struct pip_root*,struct pip_task*);
 typedef
 int(*pip_clone_syscall_t)(int(*)(void*), void*, int, void*, pid_t*, void*, pid_t*);
+typedef int(*pip_patch_got_t)(char*, char**, char*, void*);
+typedef void*(*dlopen_t)(const char*, int);
+typedef void*(*dlmopen_t)(Lmid_t, const char*, int);
+typedef void*(*dlinfo_t)(void*, int, void*);
+typedef void*(*dlsym_t)(void*, const char*);
+typedef int(*dladdr_t)(void*, void*);
+typedef int(*dlclose_t)(void*);
+typedef char*(*dlerror_t)(void);
 
 typedef struct pip_symbol {
   main_func_t		main;	      /* main function address */
@@ -140,7 +152,18 @@ typedef struct pip_symbol {
   fflush_t		libc_fflush;  /* to call GLIBC fflush() at the end */
   exit_t		exit;	     /* call exit() from fork()ed process */
   pthread_exit_t	pthread_exit;	   /* (see above exit) */
-  void			*__reserved__[16]; /* reserved for future use */
+  /* pip_patch_GOT */
+  pip_patch_got_t	patch_got;
+  /* pip_dlfcn */
+  dlopen_t		dlopen;
+  dlmopen_t		dlmopen;
+  dlinfo_t		dlinfo;
+  dlsym_t		dlsym;
+  dladdr_t		dladdr;
+  dlclose_t		dlclose;
+  dlerror_t		dlerror;
+  /* reserved for future use */
+  void			*__reserved__[8]; /* reserved for future use */
 } pip_symbols_t;
 
 typedef struct pip_char_vec {
@@ -262,8 +285,12 @@ typedef struct pip_root {
   pip_spinlock_t	lock_tasks; /* lock for finding a new task id */
 
   char			*prefixdir;
+
+  int			flag_debug;
+
+  pip_sem_t		universal_lock;
   /* reserved for future use */
-  void			*__reserved__[16];
+  void			*__reserved__[14];
   /* tasks */
   pip_task_t		tasks[];
 } pip_root_t;
@@ -360,6 +387,8 @@ extern void pip_annul_task( pip_task_t* ) PIP_PRIVATE;
 extern void pip_debug_on_exceptions( pip_root_t*, pip_task_t* ) PIP_PRIVATE;
 
 extern int pip_debug_env( void );
+
+extern int pip_patch_GOT( char*, char**, char*, void* );
 
 extern struct pip_gdbif_root	*pip_gdbif_root PIP_PRIVATE;
 

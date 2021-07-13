@@ -49,12 +49,17 @@ LIBRARY_PIPINIT = $(LIBNAME_PIPINIT).$(SO_MAJOR_PIPINIT)
 LDFLAGS_PIPINIT = -shared $(DFLAGS_EXTRA) -Wl,-soname -Wl,$(LIBRARY_PIPINIT) \
 	$(PTHREAD_FLAG)
 
-LIBRARIES = $(LIBRARY) $(LIBRARY_PIPINIT)
+LIBRARY_PRELOAD = pip_preload.so
+LDFLAGS_PRELOAD = -shared -ldl
+
+LIBRARIES = $(LIBRARY) $(LIBRARY_PIPINIT) $(LIBRARY_PRELOAD)
 
 INTERP = $(dynamic_linker)
 
 CPPFLAGS += $(PIP_CPPFLAGS) -DINTERP=\"$(INTERP)\" \
+	-DLIBNAME_LIBPIP=\"$(LIBNAME)\" \
 	-DLIBNAME_PIPINIT=\"$(LIBNAME_PIPINIT)\" \
+	-DLIBNAME_PRELOAD=\"$(LIBRARY_PRELOAD)\" \
 	-DPIP_INSTALL_GLIBCDIR=\"$(glibc_libdir)\" \
 	-DPREFIX=\"$(prefix)\" \
 	-DLDLINUX=\"$(dynamic_linker)\" \
@@ -63,14 +68,15 @@ CFLAGS   += $(PIC_CFLAG) $(PTHREAD_FLAG)
 
 LIBMAIN = -Wl,-e,pip_main
 
-SRCS  = pip_main.c pip.c pip_init.c pip_util.c pip_gdb.c pip_2_backport.c pip_signal.c \
-	pip_wait.c pip_dlfcn.c pip_gdbif.c pip_got.c pip_clone.c pip_namexp.c \
-	pip_onstart.c
+SRCS  = pip_main.c pip.c pip_init.c pip_preload.c pip_got.c pip_clone.c \
+	pip_wait.c pip_util.c pip_namexp.c pip_onstart.c pip_2_backport.c \
+	pip_signal.c pip_dlfcn.c pip_gdb.c pip_gdbif.c
 
-OBJS_PIPINIT = pip_init.o
+OBJS_PIPINIT = pip_init.o pip_got.o
+OBJS_PRELOAD = pip_preload.o
 
 OBJS = pip_main.o pip.o pip_util.o pip_2_backport.o pip_signal.o pip_wait.o \
-	pip_dlfcn.o pip_gdbif.o pip_got.o pip_clone.o pip_namexp.o pip_onstart.o \
+	pip_dlfcn.o pip_gdbif.o pip_clone.o pip_namexp.o pip_onstart.o \
 	$(OBJS_PIPINIT)
 
 include $(top_srcdir)/build/rule.mk
@@ -91,6 +97,9 @@ $(LIBRARY_PIPINIT): $(LIBRARY) $(OBJS_PIPINIT) $(DEPINCS) Makefile
 	$(CC) $(LDFLAGS_PIPINIT) $(OBJS_PIPINIT) -o $@
 	$(RM) $(LIBNAME_PIPINIT)
 	ln -s $(LIBRARY_PIPINIT) $(LIBNAME_PIPINIT)
+
+$(LIBRARY_PRELOAD): $(OBJS_PRELOAD) $(DEPINCS) Makefile
+	$(CC) $(LDFLAGS_PRELOAD) $(OBJS_PRELOAD) -o $@
 
 # chmod is to make rpmbuild happy
 install:
