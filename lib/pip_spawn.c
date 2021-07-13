@@ -114,9 +114,15 @@ static int pip_copy_vec( char **vecadd,
 static int pip_copy_env( char **envsrc, int pipid, pip_char_vec_t *vecp ) {
   char rootenv[ENVLEN], taskenv[ENVLEN];
   char *preload_env    = getenv( "LD_PRELOAD" );
-  char *mmap_threshold = "MALLOC_MMAP_THRESHOLD_=1";
+#ifndef PIP_NO_MALLOPT
+  char *mmap_threshold = "MALLOC_MMAP_THRESHOLD_=0";
   char *mmap_max       = "MALLOC_MMAP_MAX_=4294967296"; /* 4*1024*1024*1024 */
-  char *addenv[] = { rootenv, taskenv, preload_env, mmap_threshold, mmap_max, NULL };
+  char *trim_threshold = "MALLOC_TRIM_THRESHOLD_=-1";
+  char *addenv[] = { rootenv, taskenv, preload_env, mmap_threshold, 
+		     mmap_max, trim_threshold, NULL };
+#else
+  char *addenv[] = { rootenv, taskenv, preload_env, NULL };
+#endif
 
   ASSERT( snprintf( rootenv, ENVLEN, "%s=%p", PIP_ROOT_ENV, pip_root ) > 0 );
   ASSERT( snprintf( taskenv, ENVLEN, "%s=%d", PIP_TASK_ENV, pipid    ) > 0 );
@@ -236,6 +242,26 @@ static int pip_list_coe_fds( int *fd_listp[] ) {
   RETURN( err );
 }
 
+void pip_close_fds( void ) {
+  DIR *dir;
+  struct dirent *direntp;
+  int fd;
+
+  if( ( dir = opendir( PROCFD_PATH ) ) != NULL ) {
+    int fd_dir = dirfd( dir );
+    while( ( direntp = readdir( dir ) ) != NULL ) {
+      if( direntp->d_name[0] != '.' &&
+	  ( fd = strtol( direntp->d_name, NULL, 10 ) ) >= 0 &&
+	  fd != fd_dir ) {
+	(void) close( fd );
+	DBGF( "FD:%d is closed (terminated)", fd );
+      }
+    }
+    (void) closedir( dir );
+    (void) close( fd_dir );
+  }
+}
+
 static int pip_find_user_symbols( pip_spawn_program_t *progp,
 				  void *handle,
 				  pip_task_internal_t *taski ) {
@@ -269,6 +295,34 @@ static int pip_find_user_symbols( pip_spawn_program_t *progp,
   RETURN( err );
 }
 
+static void pip_replace_dlfcn( pip_symbols_t *symp ) {
+  char *norep[] = { LIBNAME_LIBPIP, LIBNAME_PIPINIT, LIBNAME_PRELOAD, NULL };
+  int err = 0;
+
+  if( symp->patch_got != NULL ) {
+    if( ( err = symp->patch_got( NULL, norep, "dlopen",  symp->dlopen  ) != 0 ) ) {
+      pip_warn_mesg( "Unable to replace dlopen" );
+    }
+    if( ( err = symp->patch_got( NULL, norep, "dlmopen", symp->dlmopen ) != 0 ) ) {
+      pip_warn_mesg( "Unable to replace dlmopen" );
+    }
+    if( ( err = symp->patch_got( NULL, norep, "dlinfo",  symp->dlinfo  ) != 0 ) ) {
+      pip_warn_mesg( "Unable to replace dlinfo" );
+    }
+    if( ( err = symp->patch_got( NULL, norep, "dlsym",   symp->dlsym   ) != 0 ) ) {
+      pip_warn_mesg( "Unable to replace dlsym" );
+    }
+    if( ( err = symp->patch_got( NULL, norep, "dladdr",  symp->dladdr  ) != 0 ) ) {
+      pip_warn_mesg( "Unable to replace dladdr" );
+    }
+    if( ( err = symp->patch_got( NULL, norep, "dlclose", symp->dlclose ) != 0 ) ) {
+      pip_warn_mesg( "Unable to replace dlclose" );
+    }
+    if( ( err = symp->patch_got( NULL, norep, "dlerror", symp->dlerror ) != 0 ) ) {
+      pip_warn_mesg( "Unable to replace dlerror" );
+    }
+  }
+}
 
 #ifdef RTLD_DEEPBIND
 #define DLMOPEN_FLAGS	  (RTLD_NOW | RTLD_DEEPBIND)
@@ -301,6 +355,16 @@ pip_find_glibc_symbols( void *handle, pip_task_internal_t *taski ) {
       /* GLIBC misc. variables */
       symp->prog           = dlsym( handle, "__progname"      );
       symp->prog_full      = dlsym( handle, "__progname_full" );
+      /* pip_patch_GOT */
+      symp->patch_got      = dlsym( handle, "pip_patch_GOT"   );
+      /* pip_dlfcn */
+      symp->dlopen	   = dlsym( handle, "dlopen"          );
+      symp->dlmopen	   = dlsym( handle, "dlmopen"         );
+      symp->dlinfo	   = dlsym( handle, "dlinfo"          );
+      symp->dlsym	   = dlsym( handle, "dlsym"           );
+      symp->dladdr	   = dlsym( handle, "dladdr"          );
+      symp->dlclose	   = dlsym( handle, "dlclose"         );
+      symp->dlerror	   = dlsym( handle, "dlerror"         );
     }
   }
   pip_glibc_unlock();
@@ -309,7 +373,6 @@ pip_find_glibc_symbols( void *handle, pip_task_internal_t *taski ) {
   if( symp->libc_init == NULL && symp->environ == NULL ) {
     err = ENOEXEC;
   }
-  if( err ) pip_dlclose( handle );
   RETURN( err );
 }
 
@@ -372,14 +435,16 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_internal_t *taski ) {
       }
     }
   }
+  pip_replace_dlfcn( &MA(taski)->symbols );
+
   MA(taski)->symbols.pip_init = impinit;
   MA(taski)->loaded           = loaded;
   MA(taski)->lmid             = lmid;
   RETURN( err );
 
  error:
-  if( loaded     != NULL ) pip_dlclose( loaded    );
-  if( ld_pipinit != NULL ) pip_dlclose( ld_pipinit);
+  if( loaded     != NULL ) pip_dlclose( loaded     );
+  if( ld_pipinit != NULL ) pip_dlclose( ld_pipinit );
   RETURN( err );
 }
 
@@ -387,6 +452,7 @@ static int pip_load_prog( pip_spawn_program_t *progp,
 			  pip_spawn_args_t *args,
 			  pip_task_internal_t *taski ) {
   int 	err;
+
 
   ENTERF( "prog: %s", progp->prog );
 
@@ -501,11 +567,16 @@ static void pip_glibc_init( pip_symbols_t *symbols,
 #ifndef PIP_NO_MALLOPT
   /* heap (using brk or sbrk) is not safe in PiP */
   if( symbols->mallopt != NULL ) {
-#ifdef M_MMAP_THRESHOLD
-    if( symbols->mallopt( M_MMAP_THRESHOLD, 1 ) == 1 ) {
+#if defined( M_MMAP_THRESHOLD ) && defined( M_TRIM_THRESHOLD )
+    if( symbols->mallopt( M_MMAP_THRESHOLD, 0 ) == 1 ) {
       DBGF( "mallopt(M_MMAP_THRESHOLD): succeeded" );
     } else {
       pip_warn_mesg( "mallopt(M_MMAP_THRESHOLD): failed !!!!!!" );
+    }
+    if( symbols->mallopt( M_TRIM_THRESHOLD, -1 ) == 1 ) {
+      DBGF( "mallopt(M_TRIM_THRESHOLD): succeeded" );
+    } else {
+      pip_warn_mesg( "mallopt(M_TRIM_THRESHOLD): failed !!!!!!" );
     }
 #endif
   }
@@ -985,14 +1056,10 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
   pip_gdbif_task_new( task );
 
   if( ( err = pip_do_corebind( 0, coreno, &cpuset ) ) == 0 ) {
-    char **env_save = environ;
-    environ = args->envvec.vec;
     /* corebinding should take place before loading solibs,       */
     /* hoping anon maps would be mapped onto the closer numa node */
     PIP_ACCUM( time_load_prog,
 	       ( err = pip_load_prog( progp, args, task ) ) == 0 );
-    args->envvec.vec = environ;
-    environ = env_save;
     /* and of course, the corebinding must be undone */
     (void) pip_undo_corebind( 0, coreno, &cpuset );
   }

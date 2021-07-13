@@ -126,6 +126,7 @@ void pip_terminate_task( pip_task_internal_t *self ) {
       pthread_exit( NULL );
     }
   } else {			/* process mode */
+    pip_close_fds();
     if( MA(self)->symbols.exit != NULL ) {
       MA(self)->symbols.exit( WEXITSTATUS(AA(self)->status) );
     } else {

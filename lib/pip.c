@@ -59,14 +59,18 @@ extern pip_spinlock_t 	*pip_lock_clone;
 static pip_clone_t*	pip_cloneinfo = NULL;
 
 #ifndef PIP_NO_MALLOPT
-  /* heap (using brk or sbrk) is not safe in PiP */
 #ifdef M_MMAP_THRESHOLD
 void pip_donot_use_heap( void ) __attribute__ ((constructor));
 void pip_donot_usr_heap( void ) {
-  if( mallopt( M_MMAP_THRESHOLD, 1 ) == 1 ) {
+  if( mallopt( M_MMAP_THRESHOLD, 0 ) == 1 ) {
     DBGF( "mallopt(M_MMAP_THRESHOLD): succeeded" );
   } else {
     pip_warn_mesg( "mallopt(M_MMAP_THRESHOLD): failed !!!!!!" );
+  }
+  if( mallopt( M_TRIM_THRESHOLD, -1 ) == 1 ) {
+    DBGF( "mallopt(M_TRIM_THRESHOLD): succeeded" );
+  } else {
+    pip_warn_mesg( "mallopt(M_TRIM_THRESHOLD): failed !!!!!!" );
   }
 }
 #endif
@@ -221,7 +225,6 @@ static int pip_check_opt_and_env( uint32_t *optsp ) {
   }
 
   if( desired & PIP_MODE_PROCESS_GOT_BIT ) {
-    int pip_wrap_clone( void );
     if( pip_wrap_clone() == 0 ) {
       newmod = PIP_MODE_PROCESS_GOT;
       pip_lock_clone = &pip_lock_got_clone;
@@ -416,6 +419,7 @@ char *pip_prefix_dir( pip_root_t *root ) {
       ASSERT( ( p = realpath( prefix, NULL ) ) != NULL );
       free( libpip );
       free( prefix );
+      fclose( fp_maps );
       prefix = p;
       root->prefixdir = prefix;
       DBGF( "prefix: %s", prefix );
@@ -507,6 +511,8 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, uint32_t opts ) {
     pip_sem_init( &root->lock_glibc );
     pip_sem_post( &root->lock_glibc );
     pip_sem_init( &root->sync_spawn );
+    pip_sem_init( &root->universal_lock );
+    pip_sem_post( &root->universal_lock );
 
     pipid = PIP_PIPID_ROOT;
     pip_set_magic( root );

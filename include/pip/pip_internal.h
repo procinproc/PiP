@@ -148,6 +148,14 @@ typedef int  (*pip_clone_mostly_pthread_t)
 ( pthread_t *newthread, int, int, size_t, void *(*)(void *), void*, pid_t* );
 typedef int  (*pip_init_t)(struct pip_root*,struct pip_task_internal*);
 typedef int  (*pip_clone_syscall_t)(int(*)(void*),void*,int,void*,pid_t*,void*,pid_t*);
+typedef int(*pip_patch_got_t)(char*, char**, char*, void*);
+typedef void*(*dlopen_t)(const char*, int);
+typedef void*(*dlmopen_t)(Lmid_t, const char*, int);
+typedef void*(*dlinfo_t)(void*, int, void*);
+typedef void*(*dlsym_t)(void*, const char*);
+typedef int(*dladdr_t)(void*, void*);
+typedef int(*dlclose_t)(void*);
+typedef char*(*dlerror_t)(void);
 typedef struct pip_task_internal* (*pip_current_utask_t)( void );
 struct pip_gdbif_root;
 
@@ -176,7 +184,18 @@ typedef struct pip_symbols {
   fflush_t		libc_fflush; /* to call GLIBC fflush() at the end */
   exit_t		exit;	     /* call exit() from fork()ed process */
   pthread_exit_t	pthread_exit;	   /* (see above exit) */
-  void			*__reserved__[15]; /* reserved for future use */
+  /* pip_patch_GOT */
+  pip_patch_got_t	patch_got;
+  /* pip_dlfcn */
+  dlopen_t		dlopen;
+  dlmopen_t		dlmopen;
+  dlinfo_t		dlinfo;
+  dlsym_t		dlsym;
+  dladdr_t		dladdr;
+  dlclose_t		dlclose;
+  dlerror_t		dlerror;
+  /* reserved for future use */
+  void			*__reserved__[7]; /* reserved for future use */
 } pip_symbols_t;
 
 typedef struct pip_char_vec {
@@ -376,8 +395,12 @@ typedef struct pip_root {
   pip_spinlock_t		lock_bt; /* lock for backtrace */
 
   char				*prefixdir;
+
+  int				flag_debug;
+
+  pip_sem_t			universal_lock;
   /* reserved for future use */
-  void				*__reserved__[32];
+  void				*__reserved__[30];
 
   /* PiP tasks array */
   pip_task_internal_t		tasks[];
@@ -447,7 +470,7 @@ extern void pip_reset_task_struct( pip_task_internal_t* ) PIP_PRIVATE;
 extern void pip_finalize_task( pip_task_internal_t* ) PIP_PRIVATE;
 extern void pip_finalize_task_RC( pip_task_internal_t* ) PIP_PRIVATE;
 
-extern int  pip_patch_GOT( char*, char*, void* ) PIP_PRIVATE;
+extern int  pip_patch_GOT( char*, char**, char*, void* ) PIP_PRIVATE;
 extern void pip_undo_patch_GOT( void ) PIP_PRIVATE;
 extern int  pip_wrap_clone( void ) PIP_PRIVATE;
 
@@ -498,6 +521,7 @@ extern char *pip_get_prefix_dir( char* ) PIP_PRIVATE;
 extern void pip_debug_on_exceptions( pip_root_t*, pip_task_internal_t* ) 
   PIP_PRIVATE;
 extern void pip_onstart( pip_task_internal_t* ) PIP_PRIVATE;
+extern void pip_close_fds( void ) PIP_PRIVATE;
 
 INLINE int pip_are_flags_exclusive( uint32_t flags, uint32_t val ) {
   return ( flags & val ) == ( flags | val );
