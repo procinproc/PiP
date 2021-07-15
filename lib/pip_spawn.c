@@ -358,13 +358,13 @@ pip_find_glibc_symbols( void *handle, pip_task_internal_t *taski ) {
       /* pip_patch_GOT */
       symp->patch_got      = dlsym( handle, "pip_patch_GOT"   );
       /* pip_dlfcn */
-      symp->dlopen	   = dlsym( handle, "dlopen"          );
-      symp->dlmopen	   = dlsym( handle, "dlmopen"         );
-      symp->dlinfo	   = dlsym( handle, "dlinfo"          );
-      symp->dlsym	   = dlsym( handle, "dlsym"           );
-      symp->dladdr	   = dlsym( handle, "dladdr"          );
-      symp->dlclose	   = dlsym( handle, "dlclose"         );
-      symp->dlerror	   = dlsym( handle, "dlerror"         );
+      symp->dlopen	   = dlsym( handle, "pip_dlopen"      );
+      symp->dlmopen	   = dlsym( handle, "pip_dlmopen"     );
+      symp->dlinfo	   = dlsym( handle, "pip_dlinfo"      );
+      symp->dlsym	   = dlsym( handle, "pip_dlsym"       );
+      symp->dladdr	   = dlsym( handle, "pip_dladdr"      );
+      symp->dlclose	   = dlsym( handle, "pip_dlclose"     );
+      symp->dlerror	   = dlsym( handle, "pip_dlerror"      );
     }
   }
   pip_glibc_unlock();
