@@ -44,8 +44,6 @@
 
 //#define DEBUG
 
-#define PIP_NO_MALLOPT
-
 /* the EVAL env. is to measure the time for calling dlmopen() */
 //#define EVAL
 
@@ -965,12 +963,12 @@ pip_find_glibc_symbols( void *handle, pip_task_t *task ) {
   {
     /* the GLIBC _init() seems not callable. It seems that */
     /* dlmopen()ed name space does not setup VDSO properly */
-    symp->ctype_init       = dlsym( handle, "__ctype_init"  );
-    symp->mallopt          = dlsym( handle, "mallopt"       );
-    symp->libc_fflush      = dlsym( handle, "fflush"        );
-    symp->malloc_hook      = dlsym( handle, "__malloc_hook" );
-    symp->exit	           = dlsym( handle, "exit"          );
-    symp->pthread_exit     = dlsym( handle, "pthread_exit"  );
+    symp->ctype_init     = dlsym( handle, "__ctype_init"    );
+    symp->mallopt        = dlsym( handle, "mallopt"         );
+    symp->libc_fflush    = dlsym( handle, "fflush"          );
+    symp->malloc_hook    = dlsym( handle, "__malloc_hook"   );
+    symp->exit	         = dlsym( handle, "exit"            );
+    symp->pthread_exit   = dlsym( handle, "pthread_exit"    );
     /* GLIBC variables */
     symp->libc_argcp     = dlsym( handle, "__libc_argc"     );
     symp->libc_argvp     = dlsym( handle, "__libc_argv"     );
@@ -981,13 +979,13 @@ pip_find_glibc_symbols( void *handle, pip_task_t *task ) {
     /* pip_patch_GOT */
     symp->patch_got      = dlsym( handle, "pip_patch_GOT"   );
     /* pip_dlfcn */
-    symp->dlopen	 = dlsym( handle, "dlopen"          );
-    symp->dlmopen	 = dlsym( handle, "dlmopen"         );
-    symp->dlinfo	 = dlsym( handle, "dlinfo"          );
-    symp->dlsym		 = dlsym( handle, "dlsym"           );
-    symp->dladdr	 = dlsym( handle, "dladdr"          );
-    symp->dlclose	 = dlsym( handle, "dlclose"         );
-    symp->dlerror	 = dlsym( handle, "dlerror"         );
+    symp->dlopen	 = dlsym( handle, "pip_dlopen"      );
+    symp->dlmopen	 = dlsym( handle, "pip_dlmopen"     );
+    symp->dlinfo	 = dlsym( handle, "pip_dlinfo"      );
+    symp->dlsym		 = dlsym( handle, "pip_dlsym"       );
+    symp->dladdr	 = dlsym( handle, "pip_dladdr"      );
+    symp->dlclose	 = dlsym( handle, "pip_dlclose"     );
+    symp->dlerror	 = dlsym( handle, "pip_dlerror"     );
   }
   pip_glibc_unlock();
   RETURN( err );
@@ -1224,11 +1222,11 @@ static void pip_glibc_init( pip_symbols_t *symbols,
 #endif
   }
 #endif
-  /*** do we really need this?   
+  /*** do we really need this?     ***/
+
   if( symbols->malloc_hook != 0x0 ) {
     *symbols->malloc_hook = 0x0;
   }
-  ***/
 }
 
 static void pip_glibc_fin( pip_symbols_t *symbols ) {

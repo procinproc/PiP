@@ -151,9 +151,9 @@ static void *pip_get_dynent_ptr( ElfW(Dyn) *dyn, int type ) {
   return NULL;
 }
 
-static int pip_replace_clone_itr( struct dl_phdr_info *info,
-				  size_t size,
-				  void *args ) {
+static int pip_replace_got_itr( struct dl_phdr_info *info,
+				size_t size,
+				void *args ) {
   pip_phdr_itr_args *itr_args = (pip_phdr_itr_args*) args;
   char	*dsoname  = itr_args->dsoname;
   char **exclude  = itr_args->exclude;
@@ -165,7 +165,7 @@ static int pip_replace_clone_itr( struct dl_phdr_info *info,
   fname = (char*) info->dlpi_name;
   if( fname == NULL ) return 0;
 
-  ENTERF( "fname:'%s' dsoname:'%s'", fname, dsoname );
+  //ENTERF( "fname:'%s' dsoname:'%s'", fname, dsoname );
 
   if( ( bname = strrchr( fname, '/' ) ) != NULL ) {
     bname ++;		/* skp '/' */
@@ -176,7 +176,6 @@ static int pip_replace_clone_itr( struct dl_phdr_info *info,
   if( exclude != NULL && *bname != '\0' ) {
     for( i=0; exclude[i]!=NULL; i++ ) {
       if( strncmp( exclude[i], bname, strlen(exclude[i]) ) == 0 ) {
-	DBGF( "%s is excluded", exclude[i] );
 	return 0;
       }
     }
@@ -197,7 +196,7 @@ static int pip_replace_clone_itr( struct dl_phdr_info *info,
         symidx = ELF32_R_SYM(rela->r_info);
       }
       char *sym = strtab + symtab[symidx].st_name;
-      DBGF( "%s : %s", sym, symname );
+      //DBGF( "%s : %s", sym, symname );
       if( strcmp( sym, symname ) == 0 ) {
 	void	*secbase    = (void*) info->dlpi_addr;
 	void	**got_entry = (void**) ( secbase + rela->r_offset );
@@ -222,7 +221,7 @@ int pip_patch_GOT( char *dsoname, char **exclude, char *symname, void *new_addr 
   itr_args.symname  = symname;
   itr_args.new_addr = new_addr;
 
-  RETURN_NE( dl_iterate_phdr( pip_replace_clone_itr, (void*) &itr_args ) );
+  RETURN_NE( dl_iterate_phdr( pip_replace_got_itr, (void*) &itr_args ) );
 }
 
 void pip_undo_patch_GOT( void ) {
