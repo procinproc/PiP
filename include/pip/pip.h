@@ -1486,6 +1486,8 @@ void pip_spawn_hook( pip_spawn_hook_t *hook,
   pid_t  pip_gettid( void );
   void   pip_glibc_lock( void );
   void   pip_glibc_unlock( void );
+  void   pip_universal_lock( void );
+  void   pip_universal_unlock( void );
   void   pip_debug_info( void );
   size_t pip_idstr( char*, size_t );
   int    pip_check_pie( const char*, int );

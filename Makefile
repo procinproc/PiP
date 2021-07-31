@@ -73,7 +73,7 @@ post-documents-hook:
 post-veryclean-hook:
 	$(RM) -r autom4te.cache
 	$(RM) release/version.conf
-	$(RM) config.log config.status include/pip_config.h
+	$(RM) config.log config.status
 	$(MAKE) -C doc post-veryclean-hook
 	$(RM) build/config.mk
 

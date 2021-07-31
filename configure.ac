@@ -68,6 +68,12 @@ AC_SUBST(glibc_libdir)
 AC_SUBST(glibc_lib)
 AC_SUBST(dynamic_linker)
 
+getconf=`type -P getconf`
+if test -x $getconf; then
+   cache_line_size=`$getconf LEVEL1_DCACHE_LINESIZE`
+   AC_DEFINE_UNQUOTED([CACHE_LINE_SIZE], [${cache_line_size}], ["Cache Line Size"])
+fi
+
 # Checks for programs.
 AC_PROG_CC
 AC_PROG_INSTALL

@@ -106,7 +106,7 @@ for i; do
     esac
 done
 
-if $pipbuld ; then
+if $pipbuild ; then
     predir=${SRCTOP}/lib;
     bindir=${SRCTOP}/bin;
 else

@@ -39,89 +39,60 @@
 #include <link.h>
 
 typedef struct {
-  char	*dsoname;
-  char	**exclude;
-  char 	*symname;
-  void	*new_addr;
+  char			*dsoname;
+  char			**exclude;
+  pip_patch_list_t	*patch_list;
 } pip_phdr_itr_args;
 
 typedef struct {
-  void 	**got_entry;
-  void	*old_addr;
-} pip_got_patch_list_t;
+  void 			**got_entry;
+  void			*old_addr;
+} pip_got_undo_list_t;
 
-static pip_got_patch_list_t    *pip_got_patch_list  = NULL;
-static int			pip_got_patch_size  = 0;
-static int			pip_got_patch_currp = 0;
+static pip_got_undo_list_t	*pip_got_undo_list = NULL;
+static int			pip_got_undo_size  = 0;
+static int			pip_got_undo_currp = 0;
 
 static void pip_unprotect_page( void *addr ) {
-  FILE	 *fp_maps;
-  size_t sz, l;
   ssize_t pgsz = sysconf( _SC_PAGESIZE );
-  char	 *line;
-  char	 perm[4];
-  void	 *sta, *end;
   void   *page;
 
   ASSERT( pgsz > 0 );
-  ASSERT( ( fp_maps = fopen( "/proc/self/maps", "r" ) ) != NULL );
-
   page = (void*) ( (uintptr_t)addr & ~( pgsz - 1 ) );
-
-  line = NULL;
-  sz   = 0;
-  while( ( l = getline( &line, &sz, fp_maps ) ) > 0 ) {
-    //DBGF( "l:%d sz:%d line(%p):%s", (int)l, (int)sz, line, line );
-    if( l == sz ) {
-      ASSERT( ( line = (char*)realloc(line,l+1) ) != NULL );
-    }
-    line[l] = '\0';
-    if( sscanf( line, "%p-%p %4s", &sta, &end, perm ) == 3 ) {
-      if( sta <= addr  &&  addr < end ) {
-	if( perm[0] == 'r' && perm[1] == 'w' ) {
-	  /* the target page is already readable and writable */
-	} else {
-	  ASSERT( mprotect( page, (size_t) pgsz, PROT_READ | PROT_WRITE ) == 0 );
-	}
-	break;
-      }
-    }
-  }
-  if( line != NULL ) free( line );
-  fclose( fp_maps );
+  ASSERT( mprotect( page, (size_t) pgsz, PROT_READ | PROT_WRITE ) == 0 );
 }
 
 static void pip_undo_got_patch( void ) {
   int i;
-  for( i=0; i<pip_got_patch_currp; i++ ) {
-    void **got_entry = pip_got_patch_list[i].got_entry;
-    void *old_addr   = pip_got_patch_list[i].old_addr;
+  for( i=0; i<pip_got_undo_currp; i++ ) {
+    void **got_entry = pip_got_undo_list[i].got_entry;
+    void *old_addr   = pip_got_undo_list[i].old_addr;
     *got_entry = old_addr;
   }
-  free( pip_got_patch_list );
-  pip_got_patch_list  = NULL;
-  pip_got_patch_size  = 0;
-  pip_got_patch_currp = 0;
+  free( pip_got_undo_list );
+  pip_got_undo_list  = NULL;
+  pip_got_undo_size  = 0;
+  pip_got_undo_currp = 0;
 }
 
 static void pip_add_got_patch( void **got_entry, void *old_addr ) {
-  if( pip_got_patch_list == NULL ) {
+  if( pip_got_undo_list == NULL ) {
     size_t pgsz = sysconf(_SC_PAGESIZE);
-    pip_page_alloc( pgsz, (void**) &pip_got_patch_list );
-    pip_got_patch_size  = pgsz / sizeof(pip_got_patch_list_t);
-    pip_got_patch_currp = 0;
-  } else if( pip_got_patch_currp == pip_got_patch_size ) {
-    pip_got_patch_list_t *expanded;
-    int			 newsz = pip_got_patch_size * 2;
-    pip_page_alloc( newsz*sizeof(pip_got_patch_list_t), (void**) &expanded );
-    memcpy( expanded, pip_got_patch_list, pip_got_patch_currp );
-    free( pip_got_patch_list );
-    pip_got_patch_list = expanded;
-    pip_got_patch_size = newsz;
+    pip_page_alloc( pgsz, (void**) &pip_got_undo_list );
+    pip_got_undo_size  = pgsz / sizeof(pip_got_undo_list_t);
+    pip_got_undo_currp = 0;
+  } else if( pip_got_undo_currp == pip_got_undo_size ) {
+    pip_got_undo_list_t *expanded;
+    int			 newsz = pip_got_undo_size * 2;
+    pip_page_alloc( newsz*sizeof(pip_got_undo_list_t), (void**) &expanded );
+    memcpy( expanded, pip_got_undo_list, pip_got_undo_currp );
+    free( pip_got_undo_list );
+    pip_got_undo_list = expanded;
+    pip_got_undo_size = newsz;
   }
-  pip_got_patch_list[pip_got_patch_currp].got_entry = got_entry;
-  pip_got_patch_list[pip_got_patch_currp].old_addr  = old_addr;
-  pip_got_patch_currp ++;
+  pip_got_undo_list[pip_got_undo_currp].got_entry = got_entry;
+  pip_got_undo_list[pip_got_undo_currp].old_addr  = old_addr;
+  pip_got_undo_currp ++;
 }
 
 static ElfW(Dyn) *pip_get_dynsec( struct dl_phdr_info *info ) {
@@ -155,17 +126,16 @@ static int pip_replace_got_itr( struct dl_phdr_info *info,
 				size_t size,
 				void *args ) {
   pip_phdr_itr_args *itr_args = (pip_phdr_itr_args*) args;
-  char	*dsoname  = itr_args->dsoname;
-  char **exclude  = itr_args->exclude;
-  char	*symname  = itr_args->symname;
-  void	*new_addr = itr_args->new_addr;
-  char	*fname, *bname;
-  int	i;
+  char	       *dsoname = itr_args->dsoname;
+  char        **exclude = itr_args->exclude;
+  pip_patch_list_t *list = itr_args->patch_list;
+  pip_patch_list_t *patch;
+  char	*fname, *bname, *symname;
+  void	*new_addr;
+  int	i, j;
 
   fname = (char*) info->dlpi_name;
   if( fname == NULL ) return 0;
-
-  //ENTERF( "fname:'%s' dsoname:'%s'", fname, dsoname );
 
   if( ( bname = strrchr( fname, '/' ) ) != NULL ) {
     bname ++;		/* skp '/' */
@@ -184,42 +154,51 @@ static int pip_replace_got_itr( struct dl_phdr_info *info,
       strncmp( dsoname, bname, strlen(dsoname) ) == 0 ) {
     ElfW(Dyn) 	*dynsec = pip_get_dynsec( info );
     ElfW(Rela) 	*rela   = (ElfW(Rela)*) pip_get_dynent_ptr( dynsec, DT_JMPREL );
+    ElfW(Rela) 	*irela;
     ElfW(Sym)	*symtab = (ElfW(Sym)*)  pip_get_dynent_ptr( dynsec, DT_SYMTAB );
     char	*strtab = (char*)       pip_get_dynent_ptr( dynsec, DT_STRTAB );
     int		nrela   = pip_get_dynent_val(dynsec,DT_PLTRELSZ)/sizeof(ElfW(Rela));
 
-    for( i=0; i<nrela; i++,rela++ ) {
-      int symidx;
-      if( sizeof(void*) == 8 ) {
-        symidx = ELF64_R_SYM(rela->r_info);
-      } else {
-        symidx = ELF32_R_SYM(rela->r_info);
-      }
-      char *sym = strtab + symtab[symidx].st_name;
-      //DBGF( "%s : %s", sym, symname );
-      if( strcmp( sym, symname ) == 0 ) {
-	void	*secbase    = (void*) info->dlpi_addr;
-	void	**got_entry = (void**) ( secbase + rela->r_offset );
+    for( i=0; ; i++ ) {
+      patch = &list[i];
+      symname  = patch->name;
+      new_addr = patch->addr;
+      DBGF( "symname: '%s'  addr: %p", symname, new_addr );
+      if( symname == NULL ) break;
 
-	DBGF( "%s:GOT[%d] '%s'  GOT:%p", bname, i, sym, got_entry );
-	pip_unprotect_page( (void*) got_entry );
-	*got_entry = new_addr;
-	pip_add_got_patch( got_entry, *got_entry );
-	break;
+      irela = rela;
+      for( j=0; j<nrela; j++,irela++ ) {
+	int symidx;
+	if( sizeof(void*) == 8 ) {
+	  symidx = ELF64_R_SYM(irela->r_info);
+	} else {
+	  symidx = ELF32_R_SYM(irela->r_info);
+	}
+	char *sym = strtab + symtab[symidx].st_name;
+	//DBGF( "%s : %s", sym, symname );
+	if( strcmp( sym, symname ) == 0 ) {
+	  void	*secbase    = (void*) info->dlpi_addr;
+	  void	**got_entry = (void**) ( secbase + irela->r_offset );
+	  
+	  DBGF( "%s:GOT[%d] '%s'  GOT:%p", bname, j, sym, got_entry );
+	  pip_unprotect_page( (void*) got_entry );
+	  *got_entry = new_addr;
+	  pip_add_got_patch( got_entry, *got_entry );
+	  break;
+	}
       }
     }
   }
   return 0;
 }
 
-int pip_patch_GOT( char *dsoname, char **exclude, char *symname, void *new_addr ) {
+int pip_patch_GOT( char *dsoname, char **exclude, pip_patch_list_t *patch_list ) {
   pip_phdr_itr_args itr_args;
 
   ENTER;
-  itr_args.dsoname  = dsoname;
-  itr_args.exclude  = exclude;
-  itr_args.symname  = symname;
-  itr_args.new_addr = new_addr;
+  itr_args.dsoname    = dsoname;
+  itr_args.exclude    = exclude;
+  itr_args.patch_list = patch_list;
 
   RETURN_NE( dl_iterate_phdr( pip_replace_got_itr, (void*) &itr_args ) );
 }

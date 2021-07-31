@@ -81,11 +81,18 @@ pip_clone( int(*fn)(void*), void *child_stack, int flags, void *args, ... ) {
   RETURN_NE( retval );
 }
 
+#define CLONE_SYSCALL	"__clone"
+
 int pip_wrap_clone( void ) {
+  pip_patch_list_t patch_list[2] = { { NULL } };
+
   ENTER;
-  pip_clone_orig = pip_dlsym( RTLD_DEFAULT, "__clone" );
+  pip_clone_orig = pip_dlsym( RTLD_DEFAULT, CLONE_SYSCALL );
   if( pip_clone_orig == NULL ) RETURN( ENOSYS );
-  if( pip_patch_GOT( "libpthread.so", NULL, "__clone", pip_clone ) ) {
+
+  patch_list[0].name = CLONE_SYSCALL;
+  patch_list[0].addr = pip_clone;
+  if( pip_patch_GOT( "libpthread.so", NULL, patch_list ) ) {
     RETURN( EPERM );
   }
   RETURN( 0 );

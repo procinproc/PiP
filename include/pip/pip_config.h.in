@@ -16,3 +16,6 @@
 
 /* Define to the version of this package. */
 #define PACKAGE_VERSION @PACKAGE_VERSION@
+
+/* cache line size */
+#define CACHE_LINE_SIZE @CACHE_LINE_SIZE@

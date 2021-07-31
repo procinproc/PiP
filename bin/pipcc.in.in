@@ -242,12 +242,12 @@ fi
 PIP_CFLAGS="-I${PIP_INCDIR}"
 PIP_LDFLAGS="-L${PIP_LIBDIR} -Wl,-rpath=${PIP_LIBDIR}"
 
-if [ -f ${PIP_INCDIR}/pip/pip_config.h ]; then
+if [ -f ${PIP_INCDIR}/pip/pip.h ]; then
     PIP_VERSION_MAJOR=`echo "${PIP_VERSION}" | cut -d '.' -f 1`
     PIP_VERSION_MINOR=`echo "${PIP_VERSION}" | cut -d '.' -f 2`
     PIP_VERSION_SUBMINOR=`echo "${PIP_VERSION}" | cut -d '.' -f 3`
 else
-    echo >&2 "${cmd}: Unable to find pip_config.h"
+    echo >&2 "${cmd}: Unable to find pip.h"
     exit 1
 fi
 

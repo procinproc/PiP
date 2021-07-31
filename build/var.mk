@@ -94,7 +94,8 @@ DEPINCS = $(PIP_INCDIR)/pip/pip_config.h		\
 	  $(PIP_INCDIR)/pip/pip_gdbif.h			\
 	  $(PIP_INCDIR)/pip/pip_gdbif_func.h		\
 	  $(PIP_INCDIR)/pip/pip_gdbif_queue.h		\
-	  $(PIP_INCDIR)/pip/pip_gdbif_enums.h
+	  $(PIP_INCDIR)/pip/pip_gdbif_enums.h		\
+	  $(PIP_INCDIR)/pip/xpmem.h
 
 DEPLIBS = $(PIP_LIBDIR)/libpip.so 			\
 	  $(PIP_LIBDIR)/libpip_init.so

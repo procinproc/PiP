@@ -991,31 +991,19 @@ pip_find_glibc_symbols( void *handle, pip_task_t *task ) {
   RETURN( err );
 }
 
-static void pip_replace_dlfcn( pip_symbols_t *symp ) {
+static void pip_replace_glibcfunc( pip_symbols_t *symp ) {
   char *norep[] = { LIBNAME_LIBPIP, LIBNAME_PIPINIT, LIBNAME_PRELOAD, NULL };
-  int err = 0;
-
+  pip_patch_list_t patch[] = { { "dlopen",  symp->dlopen  },
+			       { "dlmopen", symp->dlmopen },
+			       { "dlinfo",  symp->dlinfo  },
+			       { "dlsym",   symp->dlsym   },
+			       { "dladdr",  symp->dladdr  },
+			       { "dlclose", symp->dlclose },
+			       { "dlerror", symp->dlerror },
+			       { NULL,      NULL          } };
   if( symp->patch_got != NULL ) {
-    if( ( err = symp->patch_got( NULL, norep, "dlopen",  symp->dlopen  ) != 0 ) ) {
-      pip_warn_mesg( "Unable to replace dlopen" );
-    }
-    if( ( err = symp->patch_got( NULL, norep, "dlmopen", symp->dlmopen ) != 0 ) ) {
-      pip_warn_mesg( "Unable to replace dlmopen" );
-    }
-    if( ( err = symp->patch_got( NULL, norep, "dlinfo",  symp->dlinfo  ) != 0 ) ) {
-      pip_warn_mesg( "Unable to replace dlinfo" );
-    }
-    if( ( err = symp->patch_got( NULL, norep, "dlsym",   symp->dlsym   ) != 0 ) ) {
-      pip_warn_mesg( "Unable to replace dlsym" );
-    }
-    if( ( err = symp->patch_got( NULL, norep, "dladdr",  symp->dladdr  ) != 0 ) ) {
-      pip_warn_mesg( "Unable to replace dladdr" );
-    }
-    if( ( err = symp->patch_got( NULL, norep, "dlclose", symp->dlclose ) != 0 ) ) {
-      pip_warn_mesg( "Unable to replace dlclose" );
-    }
-    if( ( err = symp->patch_got( NULL, norep, "dlerror", symp->dlerror ) != 0 ) ) {
-      pip_warn_mesg( "Unable to replace dlerror" );
+    if( symp->patch_got( NULL, norep, patch ) != 0 ) {
+      pip_warn_mesg( "Unable to replace dlfcn" );
     }
   }
 }
@@ -1085,7 +1073,7 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
       }
     }
   }
-  pip_replace_dlfcn( &task->symbols );
+  pip_replace_glibcfunc( &task->symbols );
 
   task->symbols.pip_init = impinit;
   task->loaded           = loaded;
@@ -1222,11 +1210,11 @@ static void pip_glibc_init( pip_symbols_t *symbols,
 #endif
   }
 #endif
-  /*** do we really need this?     ***/
-
+  /*** do we really need this?    
   if( symbols->malloc_hook != 0x0 ) {
     *symbols->malloc_hook = 0x0;
   }
+ ***/
 }
 
 static void pip_glibc_fin( pip_symbols_t *symbols ) {
@@ -1902,3 +1890,12 @@ void pip_glibc_lock( void ) {
 void pip_glibc_unlock( void ) {
   if( pip_root != NULL ) pip_sem_post( &pip_root->lock_glibc );
 }
+
+void pip_universal_lock( void ) {
+  if( pip_root != NULL ) pip_sem_wait( &pip_root->universal_lock );
+}
+
+void pip_universal_unlock( void ) {
+  if( pip_root != NULL ) pip_sem_post( &pip_root->universal_lock );
+}
+

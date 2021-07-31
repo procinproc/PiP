@@ -108,22 +108,21 @@
 struct pip_root;
 struct pip_task;
 
+typedef struct pip_patch_list {
+  char	*name;
+  void	*addr;
+} pip_patch_list_t;
+
 typedef	int(*main_func_t)(int,char**,char**);
 typedef	int(*start_func_t)(void*);
 typedef int(*mallopt_t)(int,int);
-typedef void(*free_t)(void*);
 typedef void(*pthread_init_t)(int,char**,char**);
 typedef	void(*ctype_init_t)(void);
-typedef void(*glibc_init_t)(int,char**,char**);
 typedef void(*add_stack_user_t)(void);
 typedef	void(*fflush_t)(FILE*);
 typedef void (*exit_t)(int);
 typedef void (*pthread_exit_t)(void*);
-typedef int(*named_export_fin_t)(struct pip_task*);
-typedef int(*pip_init_t)(struct pip_root*,struct pip_task*);
-typedef
-int(*pip_clone_syscall_t)(int(*)(void*), void*, int, void*, pid_t*, void*, pid_t*);
-typedef int(*pip_patch_got_t)(char*, char**, char*, void*);
+
 typedef void*(*dlopen_t)(const char*, int);
 typedef void*(*dlmopen_t)(Lmid_t, const char*, int);
 typedef void*(*dlinfo_t)(void*, int, void*);
@@ -131,6 +130,18 @@ typedef void*(*dlsym_t)(void*, const char*);
 typedef int(*dladdr_t)(void*, void*);
 typedef int(*dlclose_t)(void*);
 typedef char*(*dlerror_t)(void);
+
+typedef void*(*malloc_t)(size_t);
+typedef void(*free_t)(void*);
+typedef void*(*calloc_t)(size_t, size_t);
+typedef void*(*realloc_t)(void*, size_t);
+typedef int(*posix_memalign_t)(void**, size_t, size_t);
+
+typedef int(*named_export_fin_t)(struct pip_task*);
+typedef int(*pip_init_t)(struct pip_root*,struct pip_task*);
+typedef
+int(*pip_clone_syscall_t)(int(*)(void*), void*, int, void*, pid_t*, void*, pid_t*);
+typedef int(*pip_patch_got_t)(char*, char**, pip_patch_list_t*);
 
 typedef struct pip_symbol {
   main_func_t		main;	      /* main function address */
@@ -388,7 +399,7 @@ extern void pip_debug_on_exceptions( pip_root_t*, pip_task_t* ) PIP_PRIVATE;
 
 extern int pip_debug_env( void );
 
-extern int pip_patch_GOT( char*, char**, char*, void* );
+extern int pip_patch_GOT( char*, char**, pip_patch_list_t* );
 
 extern struct pip_gdbif_root	*pip_gdbif_root PIP_PRIVATE;
 

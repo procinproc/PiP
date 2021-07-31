@@ -39,6 +39,7 @@
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
 
 #include <sys/types.h>
+#include <stdint.h>
 
 #define XPMEM_MAXADDR_SIZE	(size_t)(-1L)
 
@@ -61,8 +62,10 @@ enum {
 /*
  * flags for segment permissions
  */
-#define XPMEM_RDONLY	0x1
-#define XPMEM_RDWR	0x2
+#define XPMEM_RDONLY			(0x1)
+#define XPMEM_RDWR			(0x2)
+#define XPMEM_CURRENT_VERSION		(0x00022000)
+#define XPMEM_CURRENT_VERSION_STRING	"2.2"
 
 typedef intptr_t xpmem_segid_t;	/* segid returned from xpmem_make() */
 typedef intptr_t xpmem_apid_t;	/* apid returned from xpmem_get() */
@@ -73,17 +76,10 @@ struct xpmem_addr {
 };
 
 static inline int xpmem_version(void) {
-#define XPMEM_CURRENT_VERSION		(0x00026003)
   return XPMEM_CURRENT_VERSION;
 }
 
-static inline
-xpmem_segid_t xpmem_make( void *vaddr,
-			  size_t size,
-			  int permit_type,
-			  void *permit_value ) {
-  return (xpmem_segid_t) vaddr;
-}
+xpmem_segid_t xpmem_make( void*, size_t, int, void* );
 
 static inline
 int xpmem_remove( xpmem_segid_t segid ) {

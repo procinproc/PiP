@@ -52,7 +52,11 @@ LDFLAGS_PIPINIT = -shared $(DFLAGS_EXTRA) -Wl,-soname -Wl,$(LIBRARY_PIPINIT) \
 LIBRARY_PRELOAD = pip_preload.so
 LDFLAGS_PRELOAD = -shared -ldl
 
-LIBRARIES = $(LIBRARY) $(LIBRARY_PIPINIT) $(LIBRARY_PRELOAD)
+SO_MAJOR_XPMEM = 0
+LIBNAME_XPMEM = libxpmem.so
+LIBRARY_XPMEM = $(LIBNAME_XPMEM).$(SO_MAJOR_XPMEM)
+
+LIBRARIES = $(LIBRARY) $(LIBRARY_PIPINIT) $(LIBRARY_PRELOAD) $(LIBRARY_XPMEM)
 
 INTERP = $(dynamic_linker)
 
@@ -70,7 +74,7 @@ LIBMAIN = -Wl,-e,pip_main
 
 SRCS  = pip_main.c pip.c pip_init.c pip_preload.c pip_got.c pip_clone.c \
 	pip_wait.c pip_util.c pip_namexp.c pip_onstart.c pip_2_backport.c \
-	pip_signal.c pip_dlfcn.c pip_gdb.c pip_gdbif.c
+	pip_signal.c pip_dlfcn.c pip_gdb.c pip_gdbif.c xpmem.c
 
 OBJS_PIPINIT = pip_init.o pip_got.o
 OBJS_PRELOAD = pip_preload.o
@@ -79,12 +83,14 @@ OBJS = pip_main.o pip.o pip_util.o pip_2_backport.o pip_signal.o pip_wait.o \
 	pip_dlfcn.o pip_gdbif.o pip_clone.o pip_namexp.o pip_onstart.o \
 	$(OBJS_PIPINIT)
 
+OBJS_XPMEM = xpmem.o
+
 include $(top_srcdir)/build/rule.mk
 
 BUILD_H = $(top_srcdir)/include/pip/build.h
 
 $(BUILD_H): $(top_srcdir)/include/pip/pip_config.h
-	( cd ../include/pip ; $(MAKE) header )
+	$(MAKE) -C ../include/pip header
 
 $(OBJS): $(BUILD_H) $(DEPINCS) 
 
@@ -101,14 +107,22 @@ $(LIBRARY_PIPINIT): $(LIBRARY) $(OBJS_PIPINIT) $(DEPINCS) Makefile
 $(LIBRARY_PRELOAD): $(OBJS_PRELOAD) $(DEPINCS) Makefile
 	$(CC) $(LDFLAGS_PRELOAD) $(OBJS_PRELOAD) -o $@
 
+$(LIBRARY_XPMEM): $(OBJS_XPMEM) $(DEPINCS) Makefile
+	$(CC) $(OBJS_XPMEM) -shared -o $@
+	$(RM) $(LIBNAME_XPMEM)
+	ln -s $(LIBRARY_XPMEM) $(LIBNAME_XPMEM)
+
 # chmod is to make rpmbuild happy
 install:
 	chmod 0755 $(DESTDIR)$(libdir)/$(LIBRARY) \
-		$(DESTDIR)$(libdir)/$(LIBRARY_PIPINIT)
+		$(DESTDIR)$(libdir)/$(LIBRARY_PIPINIT) \
+		$(DESTDIR)$(libdir)/$(LIBRARY_XPMEM)
 	$(RM) $(DESTDIR)$(libdir)/$(LIBNAME) \
-		$(DESTDIR)$(libdir)/$(LIBNAME_PIPINIT)
+		$(DESTDIR)$(libdir)/$(LIBNAME_PIPINIT) \
+		$(DESTDIR)$(libdir)/$(LIBNAME_XPMEM)
 	ln -s $(LIBRARY) $(DESTDIR)$(libdir)/$(LIBNAME)
 	ln -s $(LIBRARY_PIPINIT) $(DESTDIR)$(libdir)/$(LIBNAME_PIPINIT)
+	ln -s $(LIBRARY_XPMEM) $(DESTDIR)$(libdir)/$(LIBNAME_XPMEM)
 
 debug:
 	CPPFLAGS="-DDEBUG" $(MAKE) all;
