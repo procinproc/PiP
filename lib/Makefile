@@ -43,26 +43,23 @@ LIBNAME  = libpip.so
 LIBRARY  = $(LIBNAME).$(SO_MAJOR)
 LDFLAGS_PIP = -shared -Wl,-soname -Wl,$(LIBRARY) $(PTHREAD_FLAG)
 
-SO_MAJOR_PIPINIT = 0
-LIBNAME_PIPINIT = libpip_init.so
-LIBRARY_PIPINIT = $(LIBNAME_PIPINIT).$(SO_MAJOR_PIPINIT)
-LDFLAGS_PIPINIT = -shared $(DFLAGS_EXTRA) -Wl,-soname -Wl,$(LIBRARY_PIPINIT) \
-	$(PTHREAD_FLAG)
-
 LIBRARY_PRELOAD = pip_preload.so
 LDFLAGS_PRELOAD = -shared -ldl
+
+#LIBNAME_PIPINIT = libpip_init.so
+#LIBRARY_PIPINIT = $(LIBNAME_PIPINIT).$(SO_MAJOR)
 
 SO_MAJOR_XPMEM = 0
 LIBNAME_XPMEM = libxpmem.so
 LIBRARY_XPMEM = $(LIBNAME_XPMEM).$(SO_MAJOR_XPMEM)
 
-LIBRARIES = $(LIBRARY) $(LIBRARY_PIPINIT) $(LIBRARY_PRELOAD) $(LIBRARY_XPMEM)
+#LIBRARIES = $(LIBRARY) $(LIBRARY_PRELOAD) $(LIBRARY_PIPINIT) $(LIBRARY_XPMEM)
+LIBRARIES = $(LIBRARY) $(LIBRARY_PRELOAD) $(LIBRARY_XPMEM)
 
 INTERP = $(dynamic_linker)
 
 CPPFLAGS += $(PIP_CPPFLAGS) -DINTERP=\"$(INTERP)\" \
 	-DLIBNAME_LIBPIP=\"$(LIBNAME)\" \
-	-DLIBNAME_PIPINIT=\"$(LIBNAME_PIPINIT)\" \
 	-DLIBNAME_PRELOAD=\"$(LIBRARY_PRELOAD)\" \
 	-DPIP_INSTALL_GLIBCDIR=\"$(glibc_libdir)\" \
 	-DPREFIX=\"$(prefix)\" \
@@ -72,18 +69,18 @@ CFLAGS   += $(PIC_CFLAG) $(PTHREAD_FLAG)
 
 LIBMAIN = -Wl,-e,pip_main
 
-SRCS  = pip_main.c pip.c pip_init.c pip_preload.c pip_got.c pip_clone.c \
-	pip_wait.c pip_util.c pip_namexp.c pip_onstart.c pip_2_backport.c \
-	pip_signal.c pip_dlfcn.c pip_gdb.c pip_gdbif.c xpmem.c
+SRCS  = pip_init.c pip_main.c pip.c pip_2_backport.c pip_wait.c \
+	pip_namexp.c pip_clone.c pip_signal.c pip_util.c \
+	pip_preload.c pip_got.c pip_wrapper.c \
+	pip_onstart.c pip_gdb.c pip_gdbif.c \
+	xpmem.c
 
-OBJS_PIPINIT = pip_init.o pip_got.o
+OBJS  = pip_init.o pip_main.o pip.o pip_2_backport.o pip_wait.o \
+	pip_namexp.o pip_clone.o pip_signal.o pip_util.o \
+	pip_got.o pip_onstart.o pip_gdbif.o pip_wrapper.o
+
 OBJS_PRELOAD = pip_preload.o
-
-OBJS = pip_main.o pip.o pip_util.o pip_2_backport.o pip_signal.o pip_wait.o \
-	pip_dlfcn.o pip_gdbif.o pip_clone.o pip_namexp.o pip_onstart.o \
-	$(OBJS_PIPINIT)
-
-OBJS_XPMEM = xpmem.o
+OBJS_XPMEM   = xpmem.o
 
 include $(top_srcdir)/build/rule.mk
 
@@ -99,13 +96,13 @@ $(LIBRARY): $(OBJS) Makefile
 	$(RM) $(LIBNAME)
 	ln -s $(LIBRARY) $(LIBNAME)
 
-$(LIBRARY_PIPINIT): $(LIBRARY) $(OBJS_PIPINIT) $(DEPINCS) Makefile
-	$(CC) $(LDFLAGS_PIPINIT) $(OBJS_PIPINIT) -o $@
-	$(RM) $(LIBNAME_PIPINIT)
-	ln -s $(LIBRARY_PIPINIT) $(LIBNAME_PIPINIT)
-
 $(LIBRARY_PRELOAD): $(OBJS_PRELOAD) $(DEPINCS) Makefile
 	$(CC) $(LDFLAGS_PRELOAD) $(OBJS_PRELOAD) -o $@
+
+#$(LIBRARY_PIPINIT): $(OBJS_PIPINIT) $(DEPINCS) Makefile
+#	$(CC) $(OBJS_PIPINIT) -shared -o $@
+#	$(RM) $(LIBNAME_PIPINIT)
+#	ln -s $(LIBRARY_PIPINIT) $(LIBNAME_PIPINIT)
 
 $(LIBRARY_XPMEM): $(OBJS_XPMEM) $(DEPINCS) Makefile
 	$(CC) $(OBJS_XPMEM) -shared -o $@
@@ -115,13 +112,11 @@ $(LIBRARY_XPMEM): $(OBJS_XPMEM) $(DEPINCS) Makefile
 # chmod is to make rpmbuild happy
 install:
 	chmod 0755 $(DESTDIR)$(libdir)/$(LIBRARY) \
-		$(DESTDIR)$(libdir)/$(LIBRARY_PIPINIT) \
+		$(DESTDIR)$(libdir)/$(LIBRARY_PRELOAD) \
 		$(DESTDIR)$(libdir)/$(LIBRARY_XPMEM)
 	$(RM) $(DESTDIR)$(libdir)/$(LIBNAME) \
-		$(DESTDIR)$(libdir)/$(LIBNAME_PIPINIT) \
 		$(DESTDIR)$(libdir)/$(LIBNAME_XPMEM)
 	ln -s $(LIBRARY) $(DESTDIR)$(libdir)/$(LIBNAME)
-	ln -s $(LIBRARY_PIPINIT) $(DESTDIR)$(libdir)/$(LIBNAME_PIPINIT)
 	ln -s $(LIBRARY_XPMEM) $(DESTDIR)$(libdir)/$(LIBNAME_XPMEM)
 
 debug:
@@ -134,4 +129,4 @@ TAGS:
 	ctags -Re
 
 post-clean-hook:
-	$(RM) $(OBJS_PIPINIT) $(LIBNAME) $(LIBNAME_PIPINIT)
+	$(RM) $(LIBRARIES) $(LIBNAME) $(LIBNAME_XPMEM) $(OBJS_PIPINIT)

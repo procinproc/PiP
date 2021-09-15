@@ -75,6 +75,8 @@ glibc_incdir=@glibc_incdir@
 glibc_libdir=@glibc_libdir@
 dynamic_linker=@dynamic_linker@
 
+malloc_ldflags="@malloc_ldflags@"
+
 FLAG_FPIC="@CFLAG_PIC@"
 FLAG_FPIE="@CFLAG_PIE@"
 FLAG_PIE="@LDFLAG_PIE@"
@@ -264,7 +266,7 @@ if ${HAVE_PIPGLIBC} && [ x"${dynamic_linker}" != x"" ]; then
 fi
 
 PIP_COMMON_CFLAGS="${PIP_CFLAGS} ${GLIBC_CFLAGS}"
-PIP_COMMON_LDFLAGS="${PIP_LDFLAGS} ${GLIBC_LDFLAGS} -Wl,--disable-new-dtags"
+PIP_COMMON_LDFLAGS="${malloc_ldflags} ${PIP_LDFLAGS} ${GLIBC_LDFLAGS} -Wl,--disable-new-dtags"
 PIP_COMMON_LDLIBS="-lpip -ldl"
 
 PIP_ROOT_CFLAGS="${PIP_COMMON_CFLAGS}"
@@ -275,7 +277,7 @@ PIP_TASK_CFLAGS="${PIP_COMMON_CFLAGS} ${FLAG_FPIC}"
 # LDLINUX must be specified, if any, even for PiP tasks
 # because they should be able to run as normal programs, not as PiP tasks.
 # they are compiled with the patched GLIBC header files
-# so they must be "linked" with the pacthed ld-linux.
+# and so, they will NOT run without the pacthed GLIBC (ld-linux).
 PIP_TASK_LDFLAGS="${PIP_COMMON_LDFLAGS} ${GLIBC_LDLINUX} ${FLAG_PIE} ${FLAG_RDYN}"
 PIP_TASK_LDLIBS="${PIP_COMMON_LDLIBS}"
 

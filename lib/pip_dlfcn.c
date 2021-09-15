@@ -45,12 +45,9 @@ void *pip_dlopen( const char *filename, int flag ) {
   void *handle;
 
   if( pip_task != NULL && filename != NULL ) {
-    Lmid_t lmid = pip_task->lmid;
-    DBGF( "[%d] lmid:%ld", pip_task->pipid, pip_task->lmid );
     pip_glibc_lock();
-    handle = dlmopen( lmid, filename, flag );
+    handle = dlmopen( pip_task->lmid, filename, flag );
     pip_glibc_unlock();
-    DBG;
   } else {
     DBG;
     pip_glibc_lock();
@@ -78,9 +75,11 @@ int pip_dlinfo( void *handle, int request, void *info ) {
 
 void *pip_dlsym( void *handle, const char *symbol ) {
   void *addr;
+  DBGF( "%s", symbol );
   pip_glibc_lock();
   addr = dlsym( handle, symbol );
   pip_glibc_unlock();
+  DBGF( "%s:%p", symbol, addr );
   return addr;
 }
 

@@ -39,9 +39,6 @@
 
 extern int pip_root_p_( void );
 
-extern pip_root_t *pip_root;
-extern pip_task_t *pip_task;
-
 int pip_is_debug_build() {
 #ifdef DEBUG
   return 1;

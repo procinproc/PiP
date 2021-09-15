@@ -31,6 +31,8 @@ glibc_libdir = @glibc_libdir@
 glibc_lib = @glibc_lib@
 dynamic_linker = @dynamic_linker@
 
+malloc_ldflags = @malloc_ldflags@
+
 DEFAULT_CC = @CC@
 DEFAULT_FC = @FC@
 DEFAULT_CFLAGS = @CFLAGS@

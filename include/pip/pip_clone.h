@@ -54,44 +54,6 @@
 
 #ifndef DOXYGEN_INPROGRESS
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
-#include <pip/pip_machdep.h>
-
-#define PIP_LOCK_UNLOCKED	(0)
-#define PIP_LOCK_OTHERWISE	(0xFFFFFFFF)
-
-typedef
-int(*clone_syscall_t)(int(*)(void*), void*, int, void*, pid_t*, void*, pid_t*);
-
-typedef struct pip_clone {
-  pip_spinlock_t lock;	     /* lock */
-} pip_clone_t;
-
-INLINE pip_spinlock_t
-pip_clone_lock( pid_t tid, pip_spinlock_t *lockp ) {
-  pip_spinlock_t oldval;
-
-  while( 1 ) {
-    oldval = pip_spin_trylock_wv( lockp, PIP_LOCK_OTHERWISE );
-    if( oldval == tid ) {
-      /* called and locked by PiP lib */
-      break;
-    }
-    if( oldval == PIP_LOCK_UNLOCKED ) { /* lock succeeds */
-      /* not called by PiP lib */
-      break;
-    }
-  }
-  return oldval;
-}
-
-INLINE void pip_clone_unlock( pip_spinlock_t *lockp ) {
-  pip_spin_unlock( lockp );
-}
-
 INLINE int pip_clone_flags( int flags ) {
   flags &= ~(CLONE_FS);		/* 0x00200 */
   flags &= ~(CLONE_FILES);	/* 0x00400 */

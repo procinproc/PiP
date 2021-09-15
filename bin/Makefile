@@ -47,12 +47,12 @@ MAN1_SRCS = pip-exec.c pipcc pipfc pip-mode.in pip-check.in pip-man.in \
 
 CPPFLAGS += $(PIP_CPPFLAGS) $(DBGFLAG)
 
+all: $(EXTRA_PROGRAMS) FORCE
+
 debug:
 	DBGFLAG=-DDEBUG $(MAKE) all
 
 include $(top_srcdir)/build/rule.mk
-
-all: $(EXTRA_PROGRAMS) FORCE
 
 FORCE:
 	chmod +x pip-check pip-mode pip-man pips

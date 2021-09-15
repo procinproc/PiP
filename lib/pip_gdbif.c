@@ -82,7 +82,7 @@ void pip_gdbif_load( pip_task_t *task ) {
 	gdbif_task->load_address = dli.dli_fbase;
       }
     }
-    /* dli.dli_fname is same with task->args.prog and may be a relative path */
+    /* dli.dli_fname may return a relative path, so it is useless */
     DBGF( "[%d] task:%p gdbif_task:%p", task->pipid, task, gdbif_task );
     gdbif_task->realpathname = task->args.prog_full;
   }

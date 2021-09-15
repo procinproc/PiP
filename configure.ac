@@ -3,7 +3,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([Process-in-Processs],
-	[2.1.0],
+	[2.2.0],
 	[procinproc-info@googlegroups.com],
 	[PiP],
 	[https://github.com/procinproc/PiP/])
@@ -57,6 +57,28 @@ if ! test -d "${glibc_incdir}" ; then
 fi
 AC_MSG_RESULT([${glibc_incdir}])
 
+AC_MSG_CHECKING([malloc library])
+AC_ARG_WITH([malloc],
+  [AS_HELP_STRING([--with-malloc=PATH_TO_MALLOC.SO],
+                  [malloc library path (optional)])])
+case "$with_malloc" in
+""|yes|no) have_malloc=false;;
+*) if nm ${with_malloc} | grep "T malloc" > /dev/null 2>&1;
+    then have_malloc=true; else have_malloc=false; fi;;
+esac
+if ${have_malloc}; then
+  if test -x "${with_malloc}"; then
+    AC_MSG_RESULT([${with_malloc}])
+    malloc_libdir="`dirname ${with_malloc}`"
+    malloc_libname="`basename ${with_malloc} | sed 's/lib\(.*\)\.so/\1/'`"
+    malloc_ldflags="-Wl,-rpath=${malloc_libdir} -L${malloc_libdir} -l${malloc_libname}"
+  else
+    AC_MSG_ERROR([can't find ${with_malloc}])
+  fi
+else
+  malloc_ldflags=""
+fi
+
 AC_SUBST(prefix)
 AC_SUBST(exec_prefix)
 AC_SUBST(includedir)
@@ -67,6 +89,7 @@ AC_SUBST(glibc_incdir)
 AC_SUBST(glibc_libdir)
 AC_SUBST(glibc_lib)
 AC_SUBST(dynamic_linker)
+AC_SUBST(malloc_ldflags)
 
 getconf=`type -P getconf`
 if test -x $getconf; then

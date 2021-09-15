@@ -38,6 +38,8 @@
 
 #ifndef DOXYGEN_INPROGRESS
 
+#include <dlfcn.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -47,7 +49,8 @@ extern "C" {
   void *pip_dlmopen( long lmid, const char *path, int flag );
   int   pip_dlinfo( void *handle, int request, void *info );
   void *pip_dlsym( void *handle, const char *symbol );
-  int   pip_dladdr( void *addr, void *info );
+  int   pip_dladdr( const void *addr, Dl_info *info );
+  void *pip_dlvsym( void*__restrict, const char*, const char* );
   int   pip_dlclose( void *handle );
   char *pip_dlerror( void );
 

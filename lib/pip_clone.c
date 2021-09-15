@@ -43,12 +43,13 @@ static pip_spinlock_t pip_lock_clone( pid_t tid ) {
   pip_spinlock_t oldval;
 
   while( 1 ) {
-    oldval = pip_spin_trylock_wv( &pip_lock_got_clone, PIP_LOCK_OTHERWISE );
+    oldval = pip_spin_trylock_wv( &pip_lock_got_clone, 
+				  PIP_CLONE_LOCK_OTHERWISE );
     if( oldval == tid ) {
       /* called and locked by PiP lib */
       break;
     }
-    if( oldval == PIP_LOCK_UNLOCKED ) { /* lock succeeds */
+    if( oldval == PIP_CLONE_LOCK_UNLOCKED ) { /* lock succeeds */
       /* not called by PiP lib */
       break;
     }

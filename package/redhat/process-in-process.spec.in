@@ -3,17 +3,17 @@
 #	env QA_RPATHS=3 rpmbuild -bb process-in-process.spec
 #
 
-%define base_prefix	/opt/process-in-process
-%define _prefix		%{base_prefix}/pip-2
+%define base_prefix		/opt/process-in-process
+%define _prefix			%{base_prefix}/pip-2
 
-%define glibc_libdir	%{base_prefix}/pip-glibc/lib
-%define libpip_version	0
-%define libpip_init_version	0
-%define pip_tarname	PiP
+%define glibc_libdir		%{base_prefix}/pip-glibc/lib
+%define libpip_version		0
+%define libxpmem_version	0
+%define pip_tarname		PiP
 
 # workaround for "error: Empty %files file ..../debugsourcefiles.list"
 # on wallaby2 (this doesn't happen on jupiter05 for some reason)
-%global debug_package	%{nil}
+%global debug_package		%{nil}
 
 Name: process-in-process
 Version: @PACKAGE_VERSION@
@@ -73,9 +73,9 @@ make DESTDIR="$RPM_BUILD_ROOT" doc
 %attr(0755,root,root) %{_bindir}/printpipmode
 # libs
 %defattr(-,root,root)
-%attr(0755,root,root) %{_libdir}/libpip_init.so.%{libpip_init_version}
 %attr(0755,root,root) %{_libdir}/libpip.so.%{libpip_version}
 %attr(0755,root,root) %{_libdir}/pip_preload.so
+%attr(0755,root,root) %{_libdir}/libxpmem.so.%{libxpmem_version}
 # devel
 %{_prefix}/include
 %{_libdir}/libpip_init.so

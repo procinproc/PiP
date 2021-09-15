@@ -76,12 +76,9 @@
 #include <pip/pip_clone.h>
 #include <pip/pip_debug.h>
 
-#define PIP_BASE_VERSION	(0x3100U)
+#define PIP_BASE_VERSION	(0x3200U)
 
 #define PIP_API_VERSION		PIP_BASE_VERSION
-
-#define PIP_ROOT_ENV		"PIP_ROOT"
-#define PIP_TASK_ENV		"PIP_TASK"
 
 #define PIP_MAGIC_WORD		"PrcInPrc"
 #define PIP_MAGIC_WLEN		(8)
@@ -97,13 +94,12 @@
 #define PIP_STACK_SIZE_MAX	(16*1024*1024*1024LU) /* 16 GiB */
 #define PIP_STACK_ALIGN		(256)
 
+#define PIP_CLONE_LOCK_UNLOCKED		(0)
+#define PIP_CLONE_LOCK_OTHERWISE	(0xFFFFFFFF)
+
 #define PIP_MASK32		(0xFFFFFFFF)
 
 #define PIP_MIDLEN		(64)
-
-/* not to use heap when defined */
-/* the ocnsequence of this may slow malloc() and free() substantially !! */
-#define PIP_NO_MALLOPT
 
 struct pip_root;
 struct pip_task;
@@ -115,7 +111,6 @@ typedef struct pip_patch_list {
 
 typedef	int(*main_func_t)(int,char**,char**);
 typedef	int(*start_func_t)(void*);
-typedef int(*mallopt_t)(int,int);
 typedef void(*pthread_init_t)(int,char**,char**);
 typedef	void(*ctype_init_t)(void);
 typedef void(*add_stack_user_t)(void);
@@ -123,6 +118,7 @@ typedef	void(*fflush_t)(FILE*);
 typedef void (*exit_t)(int);
 typedef void (*pthread_exit_t)(void*);
 
+/**
 typedef void*(*dlopen_t)(const char*, int);
 typedef void*(*dlmopen_t)(Lmid_t, const char*, int);
 typedef void*(*dlinfo_t)(void*, int, void*);
@@ -130,18 +126,15 @@ typedef void*(*dlsym_t)(void*, const char*);
 typedef int(*dladdr_t)(void*, void*);
 typedef int(*dlclose_t)(void*);
 typedef char*(*dlerror_t)(void);
-
-typedef void*(*malloc_t)(size_t);
-typedef void(*free_t)(void*);
-typedef void*(*calloc_t)(size_t, size_t);
-typedef void*(*realloc_t)(void*, size_t);
-typedef int(*posix_memalign_t)(void**, size_t, size_t);
+**/
 
 typedef int(*named_export_fin_t)(struct pip_task*);
-typedef int(*pip_init_t)(struct pip_root*,struct pip_task*);
+typedef int(*pip_init_t)(struct pip_root*,struct pip_task*,char**);
 typedef
 int(*pip_clone_syscall_t)(int(*)(void*), void*, int, void*, pid_t*, void*, pid_t*);
 typedef int(*pip_patch_got_t)(char*, char**, pip_patch_list_t*);
+typedef
+int(*clone_syscall_t)(int(*)(void*), void*, int, void*, pid_t*, void*, pid_t*);
 
 typedef struct pip_symbol {
   main_func_t		main;	      /* main function address */
@@ -157,24 +150,17 @@ typedef struct pip_symbol {
   char			***environ;    /* to set the environ variable */
   /* GLIBC init funcs */
   ctype_init_t		ctype_init;   /* to call GLIBC __ctype_init() */
-  long long		*malloc_hook; /* not used */
   /* GLIBC functions */
-  mallopt_t		mallopt;      /* to call GLIBC mallopt() */
+  void			*unused_slot_0; /* not used */
+  void			*unused_slot_1;	/* not used */
   fflush_t		libc_fflush;  /* to call GLIBC fflush() at the end */
-  exit_t		exit;	     /* call exit() from fork()ed process */
-  pthread_exit_t	pthread_exit;	   /* (see above exit) */
+  exit_t		exit;  /* call exit() from fork()ed process */
+  pthread_exit_t	pthread_exit; /* (see above exit) */
   /* pip_patch_GOT */
   pip_patch_got_t	patch_got;
-  /* pip_dlfcn */
-  dlopen_t		dlopen;
-  dlmopen_t		dlmopen;
-  dlinfo_t		dlinfo;
-  dlsym_t		dlsym;
-  dladdr_t		dladdr;
-  dlclose_t		dlclose;
-  dlerror_t		dlerror;
+
   /* reserved for future use */
-  void			*__reserved__[8]; /* reserved for future use */
+  void			*__reserved__[17]; /* reserved for future use */
 } pip_symbols_t;
 
 typedef struct pip_char_vec {
@@ -259,6 +245,70 @@ typedef struct pip_env {
   char	*__reserved__[16];
 } pip_env_t;
 
+typedef struct pip_clone {
+  pip_spinlock_t lock;	     /* lock */
+} pip_clone_t;
+
+typedef struct pip_recursive_lock {
+  pip_atomic_t	count;
+  pid_t		owner;
+  int		nrecursive;
+  pip_sem_t	semaphore;
+} pip_recursive_lock_t;
+
+INLINE void pip_sem_init( pip_sem_t *sem ) {
+  (void) sem_init( sem, 1, 0 );
+}
+
+INLINE void pip_sem_post( pip_sem_t *sem ) {
+  errno = 0;
+  (void) sem_post( sem );
+  ASSERT( errno == 0 );
+}
+
+INLINE void pip_sem_wait( pip_sem_t *sem ) {
+  errno = 0;
+  (void) sem_wait( sem );
+  ASSERT( errno == 0 || errno == EINTR );
+}
+
+INLINE void pip_sem_fin( pip_sem_t *sem ) {
+  (void) sem_destroy( sem );
+}
+
+INLINE void pip_recursive_lock_init( pip_recursive_lock_t *lock ) {
+  memset( lock, 0, sizeof(pip_recursive_lock_t) );
+  pip_sem_init( &lock->semaphore );
+}
+
+INLINE void pip_recursive_lock_lock( pip_recursive_lock_t *lock ) {
+  pid_t 	tid = pip_gettid();
+  pip_atomic_t 	count = pip_atomic_fetch_and_add( &lock->count, 1 );
+  if( count >= 1 ) {
+    if( tid != lock->owner ) pip_sem_wait( &lock->semaphore );
+  }
+  lock->owner = tid;
+  lock->nrecursive ++;
+}
+
+INLINE void pip_recursive_lock_unlock( pip_recursive_lock_t *lock ) {
+  pid_t 	tid = pip_gettid();
+  int		nrec;
+  pip_atomic_t 	count;
+  ASSERT( tid == lock->owner );
+  nrec = --lock->nrecursive;
+  if( nrec == 0 ) lock->owner = 0;
+  count = pip_atomic_sub_and_fetch( &lock->count, 1 );
+  if( count > 0 ) {
+    if( nrec == 0 ) pip_sem_post( &lock->semaphore );
+  }
+}
+
+INLINE void pip_recursive_lock_fin( pip_recursive_lock_t *lock ) {
+  pip_sem_fin( &lock->semaphore );
+  memset( lock, 0, sizeof(pip_recursive_lock_t) );
+}
+
 typedef struct pip_root {
   char			magic[PIP_MAGIC_WLEN];
   unsigned int		version;
@@ -266,7 +316,7 @@ typedef struct pip_root {
   size_t		size_root;
   size_t		size_task;
   void *volatile	export_root;
-  pip_spinlock_t	lock_ldlinux; /* lock for dl*() functions */
+  pip_spinlock_t	_unused_lock_ldlinux;
   size_t		page_size;
   unsigned int		opts;
   unsigned int		actual_mode;
@@ -277,8 +327,8 @@ typedef struct pip_root {
   int			pipid_curr;
 
   pip_clone_t		*cloneinfo;   /* only valid with process:preload */
-  pip_sem_t		lock_glibc; /* lock for GLIBC functions */
-  pip_sem_t		sync_spawn; /* Spawn synch */
+  pip_sem_t		lock_clone;   /* lock for clone */
+  pip_sem_t		sync_spawn;   /* Spawn synch */
 
   /* signal related members */
   sigset_t		old_sigmask;
@@ -300,8 +350,9 @@ typedef struct pip_root {
   int			flag_debug;
 
   pip_sem_t		universal_lock;
+  pip_recursive_lock_t	glibc_lock; /* 5 64-bit words */
   /* reserved for future use */
-  void			*__reserved__[14];
+  void			*__reserved__[11];
   /* tasks */
   pip_task_t		tasks[];
 } pip_root_t;
@@ -343,35 +394,15 @@ INLINE int pip_check_pipid( int *pipidp ) {
   return 0;
 }
 
-INLINE void pip_sem_init( pip_sem_t *sem ) {
-  (void) sem_init( sem, 1, 0 );
-}
-
-INLINE void pip_sem_post( pip_sem_t *sem ) {
-  errno = 0;
-  (void) sem_post( sem );
-  ASSERT( errno == 0 );
-}
-
-INLINE void pip_sem_wait( pip_sem_t *sem ) {
-  errno = 0;
-  (void) sem_wait( sem );
-  ASSERT( errno == 0 || errno == EINTR );
-}
-
-INLINE void pip_sem_fin( pip_sem_t *sem ) {
-  (void) sem_destroy( sem );
-}
-
 #define PIP_PRIVATE		__attribute__((visibility ("hidden")))
 
-extern int __attribute__ ((visibility ("default")))
-pip_init_task_implicitly( pip_root_t *root, pip_task_t *task );
-extern void pip_reset_task_struct( pip_task_t* )PIP_PRIVATE;
-extern pid_t pip_gettid( void );
+extern void pip_glibc_lock( void );
+extern void pip_glibc_unlock( void );
+extern void *pip_dlopen_unsafe( const char*, int ) PIP_PRIVATE;
+
+extern void pip_reset_task_struct( pip_task_t* ) PIP_PRIVATE;
 extern int  pip_tkill( int, int );
 
-extern void pip_page_alloc( size_t, void** ) PIP_PRIVATE;
 extern void pip_reset_task_struct( pip_task_t* ) PIP_PRIVATE;
 
 extern int  pip_get_thread( int pipid, pthread_t *threadp );
@@ -381,11 +412,9 @@ extern int  pip_is_shared_sighand( int *flagp );
 
 extern pip_task_t *pip_get_task_( int ) PIP_PRIVATE;
 extern int  pip_check_pipid( int* ) PIP_PRIVATE;
-extern int  pip_is_threaded_( void ) PIP_PRIVATE;
 
 extern void pip_set_signal_handler( int sig, void(*)(),
 				    struct sigaction* ) PIP_PRIVATE;
-extern int  pip_raise_signal( pip_task_t*, int ) PIP_PRIVATE;
 extern void pip_set_sigmask( int ) PIP_PRIVATE;
 extern void pip_unset_sigmask( void ) PIP_PRIVATE;
 extern int  pip_signal_wait( int ) PIP_PRIVATE;
@@ -395,11 +424,16 @@ extern void pip_set_exit_status( pip_task_t*, int ) PIP_PRIVATE;
 extern void pip_task_signaled( pip_task_t*, int ) PIP_PRIVATE;
 extern void pip_annul_task( pip_task_t* ) PIP_PRIVATE;
 
-extern void pip_debug_on_exceptions( pip_root_t*, pip_task_t* ) PIP_PRIVATE;
-
 extern int pip_debug_env( void );
 
-extern int pip_patch_GOT( char*, char**, pip_patch_list_t* );
+/* defined in libpip_init.so */
+extern int  pip_check_root_and_task( pip_root_t*, pip_task_t* );
+extern pid_t pip_gettid( void );
+extern int  pip_is_threaded_( void );
+extern void pip_page_alloc( size_t, void** );
+extern int  pip_raise_signal( pip_task_t*, int );
+extern void pip_debug_on_exceptions( pip_root_t*, pip_task_t* );
+extern int  pip_patch_GOT( char*, char**, pip_patch_list_t* );
 
 extern struct pip_gdbif_root	*pip_gdbif_root PIP_PRIVATE;
 
@@ -411,6 +445,12 @@ void pip_gdbif_initialize_root( int ) PIP_PRIVATE;
 void pip_gdbif_finalize_task( pip_task_t* ) PIP_PRIVATE;
 void pip_gdbif_hook_before( pip_task_t* ) PIP_PRIVATE;
 void pip_gdbif_hook_after( pip_task_t* ) PIP_PRIVATE;
+
+extern void *__libc_malloc( size_t size );
+extern void  __libc_free( void *ptr );
+extern void *__libc_calloc( size_t nmemb, size_t size );
+extern void *__libc_realloc( void *ptr, size_t size );
+extern int   __libc_mallopt( int param, int value );
 
 #endif /* DOXYGEN_SHOULD_SKIP_THIS */
 

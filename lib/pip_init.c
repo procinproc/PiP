@@ -38,9 +38,9 @@
 
 pip_sem_t		*pip_universal_lockp;
 
-pip_root_t		*pip_root       PIP_PRIVATE;
-pip_task_t		*pip_task       PIP_PRIVATE;
-struct pip_gdbif_root	*pip_gdbif_root PIP_PRIVATE;
+pip_root_t		*pip_root;
+pip_task_t		*pip_task;
+struct pip_gdbif_root	*pip_gdbif_root;
 
 static char *pip_path_gdb;
 static char *pip_command_gdb;
@@ -142,8 +142,9 @@ int pip_are_sizes_ok( pip_root_t *root ) {
 	  root->size_task  == sizeof( pip_task_t ) );
 }
 
-static int pip_check_root( pip_root_t *root ) {
-  int err = EPERM;
+int pip_check_root_and_task( pip_root_t *root, pip_task_t *task ) {
+  int pipid, err = EPERM;
+
   if( root == NULL ) {
     pip_err_mesg( "Invalid PiP root" );
     return err;
@@ -155,6 +156,16 @@ static int pip_check_root( pip_root_t *root ) {
     return err;
   } else if( !pip_are_sizes_ok( root ) ) {
     pip_err_mesg( "Size miss-match between PiP root and task" );
+    return err;
+  }
+  
+  if( task == NULL ) {
+    pip_err_mesg( "Invalid PiP task" );
+    return err;
+  }
+  pipid = task->pipid;
+  if( &root->tasks[pipid] != task ) {
+    pip_err_mesg( "Invalid PiP root and task" );
     return err;
   }
   return 0;
@@ -558,6 +569,7 @@ static void pip_set_gdb_sigset( char *env, sigset_t *sigs ) {
 }
 
 #define ROUNDUP(X,Y)		((((X)+(Y)-1)/(Y))*(Y))
+int(*pip_libc_posix_memalign)(void**,size_t,size_t) = NULL;
 
 void pip_page_alloc( size_t sz, void **allocp ) {
   size_t pgsz;
@@ -572,8 +584,12 @@ void pip_page_alloc( size_t sz, void **allocp ) {
   } else {
     pgsz = pip_root->page_size;
   }
+  if( pip_libc_posix_memalign == NULL ) {
+    ASSERT( ( pip_libc_posix_memalign = 
+	      pip_dlsym( RTLD_NEXT, "posix_memalign" ) ) != NULL );
+  }
   sz = ROUNDUP( sz, pgsz );
-  ASSERT( posix_memalign( allocp, pgsz, sz ) == 0 &&
+  ASSERT( pip_libc_posix_memalign( allocp, pgsz, sz ) == 0 &&
 	  *allocp != NULL );
 }
 
@@ -652,30 +668,25 @@ void pip_debug_on_exceptions( pip_root_t *root, pip_task_t *task ) {
 }
 
 /* the following function will be called implicitly */
-/* this function is called by PiP tasks only        */
-int pip_init_task_implicitly( pip_root_t *root,
-			      pip_task_t *task )
-  __attribute__ ((unused));	/* actually this is being used */
-int pip_init_task_implicitly( pip_root_t *root,
-			      pip_task_t *task ) {
-  ENTER;
-  int err = 0;
+/* this function is called only by PiP root         */
+int pip_init_task_implicitly( pip_root_t *root, pip_task_t *task, char **envv ) {
+  int i, err;
 
-  if( ( err = pip_check_root( root ) ) == 0 ) {
-    if( ( pip_root != NULL && pip_root != root ) ||
-	( pip_task != NULL && pip_task != task ) ||
-	( pip_gdbif_root != NULL &&
-	  pip_gdbif_root != root->gdbif_root ) ) {
-      err = ELIBSCN;
-    } else {
-      pip_root = root;
-      pip_task = task;
-      pip_gdbif_root      = root->gdbif_root;
-      pip_universal_lockp = &root->universal_lock;
-      if( !pip_is_threaded_() ) {
-	pip_debug_on_exceptions( root, task );
-      }
+  ENTERF( "root: %p  task : %p", root, task );
+  if( ( err = pip_check_root_and_task( root, task ) ) == 0 ) {
+    pip_root            = root;
+    pip_task            = task;
+    pip_gdbif_root      = root->gdbif_root;
+    pip_universal_lockp = &root->universal_lock;
+    if( !pip_is_threaded_() ) {
+      pip_debug_on_exceptions( root, task );
+    }
+    environ = NULL;
+    for( i=0; envv[i]!=NULL; i++ ) {
+      putenv( envv[i] );
     }
   }
+  DBGF( "pip_root: %p @ %p  piptask : %p @ %p", 
+	pip_root, &pip_root, pip_task, &pip_task );
   RETURN( err );
 }
