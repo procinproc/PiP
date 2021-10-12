@@ -1483,6 +1483,22 @@ void pip_spawn_hook( pip_spawn_hook_t *hook,
 
 #ifndef DOXYGEN_INPROGRESS
 
+  void *pip_malloc( size_t );
+  size_t pip_malloc_usable_size( void* );
+  void  pip_free( void* );
+  void *pip_calloc( size_t, size_t );
+  void *pip_realloc( void*, size_t );
+  int   pip_posix_memalign( void**, size_t, size_t );
+  char *pip_strdup( const char* );
+  char *pip_strndup( const char*, size_t );
+  void *pip_dlsym_unsafe( void*, const char* );
+  void *pip_dlsym( void*, const char* );
+  void *pip_dlopen_unsafe( const char*, int );
+  int   pip_dlclose( void* );
+  void *pip_dlmopen( long , const char*, int );
+  char *pip_dlerror( void );
+  int   pip_dlinfo( void*, int, void* );
+
   pid_t  pip_gettid( void );
   void   pip_glibc_lock( void );
   void   pip_glibc_unlock( void );

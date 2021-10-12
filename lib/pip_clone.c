@@ -85,7 +85,7 @@ pip_clone( int(*fn)(void*), void *child_stack, int flags, void *args, ... ) {
 #define CLONE_SYSCALL	"__clone"
 
 int pip_wrap_clone( void ) {
-  pip_patch_list_t patch_list[2] = { { NULL } };
+  pip_got_patch_list_t patch_list[2] = { { NULL } };
 
   ENTER;
   pip_clone_orig = pip_dlsym( RTLD_DEFAULT, CLONE_SYSCALL );

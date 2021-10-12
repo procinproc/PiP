@@ -71,13 +71,13 @@ LIBMAIN = -Wl,-e,pip_main
 
 SRCS  = pip_init.c pip_main.c pip.c pip_2_backport.c pip_wait.c \
 	pip_namexp.c pip_clone.c pip_signal.c pip_util.c \
-	pip_preload.c pip_got.c pip_wrapper.c \
+	pip_preload.c pip_elf.c pip_wrapper.c pip_malloc.c \
 	pip_onstart.c pip_gdb.c pip_gdbif.c \
 	xpmem.c
 
 OBJS  = pip_init.o pip_main.o pip.o pip_2_backport.o pip_wait.o \
 	pip_namexp.o pip_clone.o pip_signal.o pip_util.o \
-	pip_got.o pip_onstart.o pip_gdbif.o pip_wrapper.o
+	pip_elf.o pip_onstart.o pip_gdbif.o pip_wrapper.o pip_malloc.o
 
 OBJS_PRELOAD = pip_preload.o
 OBJS_XPMEM   = xpmem.o

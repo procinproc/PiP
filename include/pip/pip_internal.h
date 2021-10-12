@@ -81,7 +81,7 @@
 #define PIP_API_VERSION		PIP_BASE_VERSION
 
 #define PIP_MAGIC_WORD		"PrcInPrc"
-#define PIP_MAGIC_WLEN		(8)
+#define PIP_MAGIC_LEN		(8)
 
 #define PIP_MAPS_PATH		"/proc/self/maps"
 
@@ -104,10 +104,10 @@
 struct pip_root;
 struct pip_task;
 
-typedef struct pip_patch_list {
+typedef struct pip_got_patch_list {
   char	*name;
   void	*addr;
-} pip_patch_list_t;
+} pip_got_patch_list_t;
 
 typedef	int(*main_func_t)(int,char**,char**);
 typedef	int(*start_func_t)(void*);
@@ -118,21 +118,13 @@ typedef	void(*fflush_t)(FILE*);
 typedef void (*exit_t)(int);
 typedef void (*pthread_exit_t)(void*);
 
-/**
-typedef void*(*dlopen_t)(const char*, int);
-typedef void*(*dlmopen_t)(Lmid_t, const char*, int);
-typedef void*(*dlinfo_t)(void*, int, void*);
 typedef void*(*dlsym_t)(void*, const char*);
-typedef int(*dladdr_t)(void*, void*);
-typedef int(*dlclose_t)(void*);
-typedef char*(*dlerror_t)(void);
-**/
 
 typedef int(*named_export_fin_t)(struct pip_task*);
 typedef int(*pip_init_t)(struct pip_root*,struct pip_task*,char**);
 typedef
 int(*pip_clone_syscall_t)(int(*)(void*), void*, int, void*, pid_t*, void*, pid_t*);
-typedef int(*pip_patch_got_t)(char*, char**, pip_patch_list_t*);
+typedef int(*pip_patch_got_t)(char*, char**, pip_got_patch_list_t*);
 typedef
 int(*clone_syscall_t)(int(*)(void*), void*, int, void*, pid_t*, void*, pid_t*);
 
@@ -158,9 +150,10 @@ typedef struct pip_symbol {
   pthread_exit_t	pthread_exit; /* (see above exit) */
   /* pip_patch_GOT */
   pip_patch_got_t	patch_got;
-
+  /* dlsym */
+  dlsym_t		dlsym;
   /* reserved for future use */
-  void			*__reserved__[17]; /* reserved for future use */
+  void			*__reserved__[16]; /* reserved for future use */
 } pip_symbols_t;
 
 typedef struct pip_char_vec {
@@ -223,8 +216,10 @@ typedef struct pip_task {
   pid_t			pid_onstart;
   char			*onstart_script;
   Lmid_t		lmid;
+  /* malloc free list */
+  pip_atomic_t		*malloc_free_list;
   /* reserved for future use */
-  void			*__reserved__[16];
+  void			*__reserved__[15];
 } pip_task_t;
 
 extern pip_task_t	*pip_task;
@@ -299,8 +294,8 @@ INLINE void pip_recursive_lock_unlock( pip_recursive_lock_t *lock ) {
   nrec = --lock->nrecursive;
   if( nrec == 0 ) lock->owner = 0;
   count = pip_atomic_sub_and_fetch( &lock->count, 1 );
-  if( count > 0 ) {
-    if( nrec == 0 ) pip_sem_post( &lock->semaphore );
+  if( count > 0 && nrec == 0 ) {
+    pip_sem_post( &lock->semaphore );
   }
 }
 
@@ -309,8 +304,13 @@ INLINE void pip_recursive_lock_fin( pip_recursive_lock_t *lock ) {
   memset( lock, 0, sizeof(pip_recursive_lock_t) );
 }
 
+typedef struct pip_malloc_info {
+  int		magic;
+  int		pipid;
+} pip_malloc_info_t;
+
 typedef struct pip_root {
-  char			magic[PIP_MAGIC_WLEN];
+  char			magic[PIP_MAGIC_LEN];
   unsigned int		version;
   size_t		size_whole;
   size_t		size_root;
@@ -351,6 +351,7 @@ typedef struct pip_root {
 
   pip_sem_t		universal_lock;
   pip_recursive_lock_t	glibc_lock; /* 5 64-bit words */
+
   /* reserved for future use */
   void			*__reserved__[11];
   /* tasks */
@@ -396,6 +397,8 @@ INLINE int pip_check_pipid( int *pipidp ) {
 
 #define PIP_PRIVATE		__attribute__((visibility ("hidden")))
 
+extern void pip_free_all( void ) PIP_PRIVATE;
+
 extern void pip_glibc_lock( void );
 extern void pip_glibc_unlock( void );
 extern void *pip_dlopen_unsafe( const char*, int ) PIP_PRIVATE;
@@ -433,7 +436,7 @@ extern int  pip_is_threaded_( void );
 extern void pip_page_alloc( size_t, void** );
 extern int  pip_raise_signal( pip_task_t*, int );
 extern void pip_debug_on_exceptions( pip_root_t*, pip_task_t* );
-extern int  pip_patch_GOT( char*, char**, pip_patch_list_t* );
+extern int  pip_patch_GOT( char*, char**, pip_got_patch_list_t* );
 
 extern struct pip_gdbif_root	*pip_gdbif_root PIP_PRIVATE;
 

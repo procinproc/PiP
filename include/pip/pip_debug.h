@@ -129,6 +129,8 @@ INLINE int pip_debug_env( void ) {
     DBG_PRNT(__VA_ARGS__); DBG_OUTPUT; } while(0)
 
 
+extern int pip_dont_wrap_malloc;
+
 #ifdef DEBUG
 
 #define DBG_TAG_ENTER							\
@@ -176,9 +178,10 @@ INLINE int pip_debug_env( void ) {
   do { if(DBGSW) { DBG_PRTBUF; DBG_TAG_LEAVE; DBG_OUTPUT; }		\
     return; } while(0)
 
-#define ASSERTD(X)							\
-  if(DBGSW) { if(X) { NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);	\
-      pip_debug_info(); pip_abort(); } } while(0)
+#define ASSERTD(X)					\
+    if(DBGSW) { if(!(X)) { pip_dont_wrap_malloc=1;	\
+	NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);	\
+	pip_debug_info(); pip_abort(); } } while(0)
 
 #define SET_CURR_TASK(sched,task)	(sched)->annex->task_curr = task
 
@@ -203,11 +206,12 @@ INLINE int pip_debug_env( void ) {
 
 #endif	/* !DEBUG */
 
-#define ASSERT(X)							\
-  if(!(X)){NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);		\
+#define ASSERT(X)		   				\
+  if(!(X)){ pip_dont_wrap_malloc=1;				\
+    NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);		\
     pip_abort(); } else { DBGF( "{%s} -- Assertion OK", #X ); }
 
-#define NEVER_REACH_HERE						\
+#define NEVER_REACH_HERE					\
   do { NL_EMSG( "Should never reach here !!!!!!\n" ); } while(0)
 
 #define ERRJ		{ DBG;                goto error; }

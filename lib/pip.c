@@ -53,6 +53,8 @@
 
 extern void *pip_dlsym_unsafe( void*, const char* );
 
+int pip_malloc_emergency = 0;
+
 static pip_spinlock_t 	*pip_clone_lock;
 static pip_clone_t*	pip_cloneinfo   = NULL;
 
@@ -136,7 +138,7 @@ static int pip_count_vec( char **vecsrc ) {
 }
 
 static void pip_set_magic( pip_root_t *root ) {
-  memcpy( root->magic, PIP_MAGIC_WORD, PIP_MAGIC_WLEN );
+  memcpy( root->magic, PIP_MAGIC_WORD, PIP_MAGIC_LEN );
 }
 
 void pip_reset_task_struct( pip_task_t *taskp ) {
@@ -498,7 +500,6 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
 
   ENTERF( "pip_root: %p @ %p  piptask : %p @ %p", 
 	  pip_root, &pip_root, pip_task, &pip_task );
-
   if( pip_root != NULL && 
       pip_task != NULL &&
       pip_task == pip_root->task_root ) {
@@ -544,6 +545,7 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
       pip_reset_task_struct( &root->tasks[i] );
       pip_named_export_init( &root->tasks[i] );
     }
+
     if( rt_expp != NULL ) {
       root->export_root = *rt_expp;
     }
@@ -1594,6 +1596,8 @@ int pip_fin( void ) {
 
   ENTER;
   if( !pip_is_initialized() ) RETURN( EPERM );
+
+  pip_free_all();
   if( pip_root_p_() ) {
     ntasks = pip_root->ntasks;
     for( i=0; i<ntasks; i++ ) {

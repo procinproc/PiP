@@ -41,8 +41,8 @@
 typedef struct {
   char			*dsoname;
   char			**exclude;
-  pip_patch_list_t	*patch_list;
-} pip_phdr_itr_args;
+  pip_got_patch_list_t	*patch_list;
+} pip_got_patch_args;
 
 typedef struct {
   void 			**got_entry;
@@ -95,7 +95,7 @@ static void pip_add_got_patch( void **got_entry, void *old_addr ) {
   pip_got_undo_currp ++;
 }
 
-static ElfW(Dyn) *pip_get_dynsec( struct dl_phdr_info *info ) {
+static ElfW(Dyn) *pip_get_dynseg( struct dl_phdr_info *info ) {
   int i;
   for( i=0; i<info->dlpi_phnum; i++ ) {
     /* search DYNAMIC ELF section */
@@ -125,11 +125,11 @@ static void *pip_get_dynent_ptr( ElfW(Dyn) *dyn, int type ) {
 static int pip_replace_got_itr( struct dl_phdr_info *info,
 				size_t size,
 				void *args ) {
-  pip_phdr_itr_args *itr_args = (pip_phdr_itr_args*) args;
+  pip_got_patch_args *itr_args = (pip_got_patch_args*) args;
   char	       *dsoname = itr_args->dsoname;
   char        **exclude = itr_args->exclude;
-  pip_patch_list_t *list = itr_args->patch_list;
-  pip_patch_list_t *patch;
+  pip_got_patch_list_t *list = itr_args->patch_list;
+  pip_got_patch_list_t *patch;
   char	*fname, *bname, *symname;
   void	*new_addr;
   int	i, j;
@@ -152,12 +152,12 @@ static int pip_replace_got_itr( struct dl_phdr_info *info,
   }
   if( dsoname == NULL || *dsoname == '\0' ||
       strncmp( dsoname, bname, strlen(dsoname) ) == 0 ) {
-    ElfW(Dyn) 	*dynsec = pip_get_dynsec( info );
-    ElfW(Rela) 	*rela   = (ElfW(Rela)*) pip_get_dynent_ptr( dynsec, DT_JMPREL );
+    ElfW(Dyn) 	*dynseg = pip_get_dynseg( info );
+    ElfW(Rela) 	*rela   = (ElfW(Rela)*) pip_get_dynent_ptr( dynseg, DT_JMPREL );
     ElfW(Rela) 	*irela;
-    ElfW(Sym)	*symtab = (ElfW(Sym)*)  pip_get_dynent_ptr( dynsec, DT_SYMTAB );
-    char	*strtab = (char*)       pip_get_dynent_ptr( dynsec, DT_STRTAB );
-    int		nrela   = pip_get_dynent_val(dynsec,DT_PLTRELSZ)/sizeof(ElfW(Rela));
+    ElfW(Sym)	*symtab = (ElfW(Sym)*)  pip_get_dynent_ptr( dynseg, DT_SYMTAB );
+    char	*strtab = (char*)       pip_get_dynent_ptr( dynseg, DT_STRTAB );
+    int		nrela   = pip_get_dynent_val(dynseg,DT_PLTRELSZ)/sizeof(ElfW(Rela));
 
     for( i=0; ; i++ ) {
       patch = &list[i];
@@ -175,7 +175,6 @@ static int pip_replace_got_itr( struct dl_phdr_info *info,
 	  symidx = ELF32_R_SYM(irela->r_info);
 	}
 	char *sym = strtab + symtab[symidx].st_name;
-	//DBGF( "%s : %s", sym, symname );
 	if( strcmp( sym, symname ) == 0 ) {
 	  void	*secbase    = (void*) info->dlpi_addr;
 	  void	**got_entry = (void**) ( secbase + irela->r_offset );
@@ -192,8 +191,10 @@ static int pip_replace_got_itr( struct dl_phdr_info *info,
   return 0;
 }
 
-int pip_patch_GOT( char *dsoname, char **exclude, pip_patch_list_t *patch_list ) {
-  pip_phdr_itr_args itr_args;
+int pip_patch_GOT( char *dsoname, 
+		   char **exclude, 
+		   pip_got_patch_list_t *patch_list ) {
+  pip_got_patch_args itr_args;
 
   ENTER;
   itr_args.dsoname    = dsoname;

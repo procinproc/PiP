@@ -130,7 +130,7 @@ pid_t pip_gettid( void ) {
 int pip_is_magic_ok( pip_root_t *root ) {
   return strncmp( root->magic,
 		  PIP_MAGIC_WORD,
-		  PIP_MAGIC_WLEN ) == 0;
+		  PIP_MAGIC_LEN ) == 0;
 }
 
 int pip_is_version_ok( pip_root_t *root ) {
@@ -433,9 +433,9 @@ static void pip_show_pips( void ) {
     char *pips_name = "/bin/pips";
     char *pips_opts = " x";
     char *p;
-    ASSERT( ( pips_comm = malloc( strlen( prefix    ) +
-				  strlen( pips_name ) + 
-				  strlen( pips_opts ) + 1 ) ) 
+    ASSERT( ( pips_comm = pip_malloc ( strlen( prefix    ) +
+				      strlen( pips_name ) + 
+				      strlen( pips_opts ) + 1 ) ) 
 	    != NULL );
     p = stpcpy( pips_comm, prefix );
     p = stpcpy( p, pips_name );
@@ -446,7 +446,7 @@ static void pip_show_pips( void ) {
     } else {
       pip_err_mesg( "Unable to find pips" );
     }
-    free( pips_comm );
+    pip_free( pips_comm );
     sleep( 1 );			/* to flush out pips messages */
   }
   RETURNV;
@@ -569,8 +569,6 @@ static void pip_set_gdb_sigset( char *env, sigset_t *sigs ) {
 }
 
 #define ROUNDUP(X,Y)		((((X)+(Y)-1)/(Y))*(Y))
-int(*pip_libc_posix_memalign)(void**,size_t,size_t) = NULL;
-
 void pip_page_alloc( size_t sz, void **allocp ) {
   size_t pgsz;
 
@@ -584,12 +582,8 @@ void pip_page_alloc( size_t sz, void **allocp ) {
   } else {
     pgsz = pip_root->page_size;
   }
-  if( pip_libc_posix_memalign == NULL ) {
-    ASSERT( ( pip_libc_posix_memalign = 
-	      pip_dlsym( RTLD_NEXT, "posix_memalign" ) ) != NULL );
-  }
   sz = ROUNDUP( sz, pgsz );
-  ASSERT( pip_libc_posix_memalign( allocp, pgsz, sz ) == 0 &&
+  ASSERT( pip_posix_memalign( allocp, pgsz, sz ) == 0 &&
 	  *allocp != NULL );
 }
 
@@ -674,6 +668,8 @@ int pip_init_task_implicitly( pip_root_t *root, pip_task_t *task, char **envv ) 
 
   ENTERF( "root: %p  task : %p", root, task );
   if( ( err = pip_check_root_and_task( root, task ) ) == 0 ) {
+    extern void *_dl_sym(void *, const char *, void *);
+    task->symbols.dlsym = _dl_sym( RTLD_NEXT, "dlsym", pip_init_task_implicitly );
     pip_root            = root;
     pip_task            = task;
     pip_gdbif_root      = root->gdbif_root;
@@ -681,12 +677,10 @@ int pip_init_task_implicitly( pip_root_t *root, pip_task_t *task, char **envv ) 
     if( !pip_is_threaded_() ) {
       pip_debug_on_exceptions( root, task );
     }
-    environ = NULL;
-    for( i=0; envv[i]!=NULL; i++ ) {
-      putenv( envv[i] );
-    }
+    clearenv();
+    for( i=0; envv[i]!=NULL; i++ ) putenv( envv[i] );
   }
   DBGF( "pip_root: %p @ %p  piptask : %p @ %p", 
 	pip_root, &pip_root, pip_task, &pip_task );
-  RETURN( err );
+  return err;
 }
