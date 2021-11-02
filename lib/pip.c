@@ -46,14 +46,11 @@
 /* the EVAL env. is to measure the time for calling dlmopen() */
 //#define EVAL
 
-#define PIP_INTERNAL_FUNCS
 #include <pip/pip.h>
 #include <pip/pip_util.h>
 #include <pip/pip_gdbif.h>
 
 extern void *pip_dlsym_unsafe( void*, const char* );
-
-int pip_malloc_emergency = 0;
 
 static pip_spinlock_t 	*pip_clone_lock;
 static pip_clone_t*	pip_cloneinfo   = NULL;
@@ -141,12 +138,13 @@ static void pip_set_magic( pip_root_t *root ) {
   memcpy( root->magic, PIP_MAGIC_WORD, PIP_MAGIC_LEN );
 }
 
-void pip_reset_task_struct( pip_task_t *taskp ) {
-  void	*namexp = taskp->named_exptab;
-  memset( (void*) taskp, 0, sizeof(pip_task_t) );
-  taskp->pipid = PIP_PIPID_NULL;
-  taskp->type  = PIP_TYPE_NULL;
-  taskp->named_exptab = namexp;
+void pip_reset_task_struct( pip_task_t *task ) {
+  void	*namexp = task->named_exptab;
+  if( task->cpuset != NULL ) free( task->cpuset );
+  memset( (void*) task, 0, sizeof(pip_task_t) );
+  task->pipid = PIP_PIPID_NULL;
+  task->type  = PIP_TYPE_NULL;
+  task->named_exptab = namexp;
 }
 
 #include <elf.h>
@@ -425,24 +423,24 @@ static void pip_save_debug_envs( pip_root_t *root ) {
   char *env;
 
   if( ( env = getenv( PIP_ENV_STOP_ON_START ) ) != NULL && *env != '\0' ) {
-    root->envs.stop_on_start = strdup( env );
+    root->envs.stop_on_start = pip_strdup( env );
   }
   if( ( env = getenv( PIP_ENV_GDB_PATH      ) ) != NULL && *env != '\0' &&
       access( env, X_OK ) == 0 ) {
-    root->envs.gdb_path      = strdup( env );
+    root->envs.gdb_path      = pip_strdup( env );
   }
   if( ( env = getenv( PIP_ENV_GDB_COMMAND   ) ) != NULL && *env != '\0' &&
       access( env, R_OK ) == 0 ) {
-    root->envs.gdb_command   = strdup( env );
+    root->envs.gdb_command   = pip_strdup( env );
   }
   if( ( env = getenv( PIP_ENV_GDB_SIGNALS   ) ) != NULL && *env != '\0' ) {
-    root->envs.gdb_signals   = strdup( env );
+    root->envs.gdb_signals   = pip_strdup( env );
   }
   if( ( env = getenv( PIP_ENV_SHOW_MAPS     ) ) != NULL && *env != '\0' ) {
-    root->envs.show_maps     = strdup( env );
+    root->envs.show_maps     = pip_strdup( env );
   }
   if( ( env = getenv( PIP_ENV_SHOW_PIPS     ) ) != NULL && *env != '\0' ) {
-    root->envs.show_pips     = strdup( env );
+    root->envs.show_pips     = pip_strdup( env );
   }
 }
 
@@ -471,7 +469,8 @@ static char *pip_prefix_dir( void ) {
 	faddr     <  end ) {
       ASSERT( ( p = rindex( libpip, '/' ) ) != NULL );
       *p = '\0';
-      ASSERT( ( prefix = (char*) malloc( strlen( libpip ) + strlen( updir ) + 1 ) )
+      ASSERT( ( prefix = (char*) pip_malloc( strlen( libpip ) + 
+					     strlen( updir ) + 1 ) )
 	      != NULL );
       p = prefix;
       p = stpcpy( p, libpip );
@@ -739,10 +738,10 @@ static int pip_copy_vec( char **vecadd,
   vecln ++;		/* plus final NULL */
 
   sz = sizeof(char*) * vecln;
-  if( ( vecdst = (char**) malloc( sz    ) ) == NULL ) {
+  if( ( vecdst = (char**) pip_malloc( sz    ) ) == NULL ) {
     return ENOMEM;
   }
-  if( ( strs   = (char*)  malloc( veccc ) ) == NULL ) {
+  if( ( strs   = (char*)  pip_malloc( veccc ) ) == NULL ) {
     free( vecdst );
     free( strs   );
     return ENOMEM;
@@ -991,8 +990,16 @@ static int pip_load_prog( pip_spawn_program_t *progp,
   RETURN( err );
 }
 
-int pip_do_corebind( pid_t tid, uint32_t coreno, cpu_set_t *oldsetp ) {
+static int pip_redo_corebind( pip_task_t *task ) {
+  if( sched_setaffinity( task->tid, sizeof(cpu_set_t), task->cpuset ) != 0 ) {
+    RETURN( errno );
+  }
+  RETURN( 0 );
+}
+
+static int pip_do_corebind( pip_task_t *task, uint32_t coreno, cpu_set_t *oldsetp ) {
   cpu_set_t cpuset;
+  pid_t tid;
   int flags  = coreno & PIP_CPUCORE_FLAG_MASK;
   int i, err = 0;
 
@@ -1000,24 +1007,32 @@ int pip_do_corebind( pid_t tid, uint32_t coreno, cpu_set_t *oldsetp ) {
   /* PIP_CPUCORE_* flags are exclusive */
   if( ( flags & PIP_CPUCORE_ASIS ) != flags &&
       ( flags & PIP_CPUCORE_ABS  ) != flags ) RETURN( EINVAL );
-  if( flags & PIP_CPUCORE_ASIS ) RETURN( 0 );
+  if( !( flags & PIP_CPUCORE_ASIS ) ) {
+    coreno &= PIP_CPUCORE_CORENO_MASK;
+    if( coreno >= PIP_CPUCORE_CORENO_MAX ) RETURN ( EINVAL );
+  }
 
-  coreno &= PIP_CPUCORE_CORENO_MASK;
-  if( coreno >= PIP_CPUCORE_CORENO_MAX ) RETURN ( EINVAL );
+  task->cpuset = (cpu_set_t*) malloc( sizeof(cpu_set_t) );
+  ASSERTD( task->cpuset != NULL );
 
-  if( tid == 0 ) tid = pip_gettid();
-  if( oldsetp != NULL ) {
-    if( sched_getaffinity( tid, sizeof(cpuset), oldsetp ) != 0 ) {
-      RETURN( errno );
-    }
+  tid = pip_gettid();
+  if( sched_getaffinity( tid, sizeof(cpu_set_t), oldsetp ) != 0 ) {
+    err = errno;
+    goto error;
+  }
+
+  if( flags & PIP_CPUCORE_ASIS ) {
+    memcpy( task->cpuset, oldsetp, sizeof(cpu_set_t) );
+    RETURN( 0 );
   }
   /* the coreno might be absolute or not. this is beacuse */
   /* the Fujist A64FX CPU has non-contiguoes cpu numbers  */
   if( flags == 0 ) {		/* not absolute */
     int ncores, nth;
 
-    if( sched_getaffinity( tid, sizeof(cpuset), &cpuset ) != 0 ) {
-      RETURN( errno );
+    if( sched_getaffinity( tid, sizeof(cpu_set_t), &cpuset ) != 0 ) {
+      err = errno;
+      goto error;
     }
     if( ( ncores = CPU_COUNT( &cpuset ) ) ==  0 ) RETURN( 0 );
     coreno %= ncores;
@@ -1027,7 +1042,7 @@ int pip_do_corebind( pid_t tid, uint32_t coreno, cpu_set_t *oldsetp ) {
       if( nth-- == 0 ) {
 	CPU_ZERO( &cpuset );
 	CPU_SET( i, &cpuset );
-	if( sched_setaffinity( tid, sizeof(cpuset), &cpuset ) != 0 ) {
+	if( sched_setaffinity( tid, sizeof(cpu_set_t), &cpuset ) != 0 ) {
 	  err = errno;
 	}
 	break;
@@ -1043,16 +1058,23 @@ int pip_do_corebind( pid_t tid, uint32_t coreno, cpu_set_t *oldsetp ) {
       err = errno;
     }
   }
+  if( err ) {
+  error:
+    free( task->cpuset );
+    task->cpuset = NULL;
+  } else {
+    memcpy( task->cpuset, &cpuset, sizeof(cpu_set_t) );
+  }
   RETURN( err );
 }
 
-static int pip_undo_corebind( pid_t tid, uint32_t coreno, cpu_set_t *oldsetp ) {
+static int pip_undo_corebind( cpu_set_t *oldsetp ) {
+  pid_t tid;
   int err = 0;
 
   ENTER;
-  if( coreno & PIP_CPUCORE_ASIS ) RETURN( 0 );
-  if( tid == 0 ) tid = pip_gettid();
   /* here, do not call pthread_setaffinity().  See above comment. */
+  tid = pip_gettid();
   if( sched_setaffinity( tid, sizeof(cpu_set_t), oldsetp ) != 0 ) {
     err = errno;
   }
@@ -1175,7 +1197,7 @@ static char *pip_onstart_script( char *env, size_t len ) {
   char *script;
 
   ENTERF( "env:%s", env );
-  script = strndup( env, len );
+  script = pip_strndup( env, len );
   if( stat( script, &stbuf ) != 0 ) {
     pip_warn_mesg( "Unable to find file: %s (%s=%s)", 
 		   script, PIP_ENV_STOP_ON_START, env );
@@ -1200,10 +1222,10 @@ static char *pip_onstart_target( pip_task_t *task, char *env ) {
     return pip_onstart_script( env, strlen( env ) );
   } else if( env[0] == '@' ) {		/* no script */
     p = &env[1];
-    if( *p == '\0' ) return strdup( "" );
+    if( *p == '\0' ) return pip_strdup( "" );
     pipid = strtol( p, NULL, 10 );
     if( pipid < 0 || pipid == task->pipid ) {
-      return strdup( "" );
+      return pip_strdup( "" );
     }
   } else {
     q = p ++;			/* skip '@' */
@@ -1240,7 +1262,7 @@ static void *pip_do_spawn( void *thargs )  {
 
   pip_sem_post( &pip_root->sync_spawn );
 
-  if( ( err = pip_do_corebind( 0, coreno, NULL ) ) != 0 ) {
+  if( ( err = pip_redo_corebind( self ) ) != 0 ) {
     pip_warn_mesg( "failed to bound CPU core:%d (%d)", coreno, err );
     err = 0;
   }
@@ -1289,7 +1311,7 @@ static void *pip_do_spawn( void *thargs )  {
   if( ( err = self->symbols.pip_init( pip_root, self, envv ) ) != 0 ) {
     extval = err;
   } else {
-    /* calling before hook, if any */
+    /* calling the before hook, if any */
     if( before != NULL ) {
       if( ( err = before( hook_arg ) ) ) {
 	pip_warn_mesg( "try to spawn(%s), but the before hook at %p returns %d",
@@ -1420,11 +1442,11 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
     char *prog = progp->prog;
     char *p = strrchr( prog, '/' );
     if( p == NULL ) {
-      args->prog      = strdup( prog );
-      args->prog_full = strdup( prog );
+      args->prog      = pip_strdup( prog );
+      args->prog_full = pip_strdup( prog );
     } else {
-      args->prog      = strdup( p + 1 );
-      args->prog_full = strdup( prog );
+      args->prog      = pip_strdup( p + 1 );
+      args->prog_full = pip_strdup( prog );
     }
     ASSERT( args->prog != NULL && args->prog_full != NULL );
     DBGF( "prog:%s full:%s", args->prog, args->prog_full );
@@ -1437,7 +1459,7 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
     if( err ) ERRJ_ERR( err );
     args->argc = pip_count_vec( args->argvec.vec );
   } else {
-    if( ( args->funcname = strdup( progp->funcname ) ) == NULL ) {
+    if( ( args->funcname = pip_strdup( progp->funcname ) ) == NULL ) {
       ERRJ_ERR( ENOMEM );
     }
     args->start_arg = progp->arg;
@@ -1465,16 +1487,15 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
   DBGF( "ONSTART: '%s'", task->onstart_script );
   /* must be called before calling dlmopen() */
   pip_gdbif_task_new( task );
-
   {
-    cpu_set_t 	cpuset;
-    if( ( err = pip_do_corebind( 0, coreno, &cpuset ) ) == 0 ) {
+    cpu_set_t cpuset;
+    if( ( err = pip_do_corebind( task, coreno, &cpuset ) ) == 0 ) {
       /* core-binding should take place before loading solibs,    */
       /* hoping anon maps would be mapped onto the same numa node */
       PIP_ACCUM( time_load_prog,
 		 ( err = pip_load_prog( progp, args, task ) ) == 0 );
       /* and of course, the corebinding must be undone */
-      (void) pip_undo_corebind( 0, coreno, &cpuset );
+      (void) pip_undo_corebind( &cpuset );
     }
   }
   if( err != 0 ) goto error;
@@ -1770,4 +1791,16 @@ void pip_universal_unlock( void ) {
   if( pip_root != NULL ) {
     pip_sem_post( &pip_root->universal_lock );
   }
+}
+
+int pip_debug_env( void ) {
+  static int flag = 0;
+  if( !flag ) {
+    if( getenv( "PIP_NODEBUG" ) ) {
+      flag = -1;
+    } else {
+      flag = 1;
+    }
+  }
+  return flag > 0;
 }

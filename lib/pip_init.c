@@ -426,27 +426,31 @@ static void pip_show_pips( void ) {
   ENTER;
   char *env    = pip_root->envs.show_pips;
   char *prefix = pip_root->prefixdir;
-  char *pips_comm;
-  if( env != NULL                  && 
-      strcasecmp( env, "on" ) == 0 &&
-      prefix != NULL ) {
-    char *pips_name = "/bin/pips";
+  if( env                     != NULL && 
+      strcasecmp( env, "on" ) == 0    &&
+      prefix                  != NULL ) {
+    char *pips_comm = "/bin/pips";
     char *pips_opts = " x";
+    char *pips_exec;
     char *p;
-    ASSERT( ( pips_comm = pip_malloc ( strlen( prefix    ) +
-				      strlen( pips_name ) + 
+    DBG;
+    sleep(1);
+    ASSERT( ( pips_exec = pip_malloc( strlen( prefix    ) +
+				      strlen( pips_comm ) + 
 				      strlen( pips_opts ) + 1 ) ) 
 	    != NULL );
-    p = stpcpy( pips_comm, prefix );
-    p = stpcpy( p, pips_name );
-    if( access( pips_comm, X_OK ) == 0 ) {
-      pip_info_mesg( "*** Show PIPS (%s)", pips_comm );
+    DBG;
+    p = pips_exec;
+    p = stpcpy( p, prefix    );
+    p = stpcpy( p, pips_comm );
+    if( access( pips_exec, X_OK ) == 0 ) {
+      pip_info_mesg( "*** Show PIPS (%s)", pips_exec );
       stpcpy( p, pips_opts );
-      system( pips_comm );
+      system( pips_exec );
     } else {
       pip_err_mesg( "Unable to find pips" );
     }
-    pip_free( pips_comm );
+    pip_free( pips_exec );
     sleep( 1 );			/* to flush out pips messages */
   }
   RETURNV;
@@ -471,10 +475,8 @@ static void pip_exception_handler( int sig, siginfo_t *info, void *extra ) {
     pip_root->flag_debug = 1;
   }
   pip_debug_info();
-
   if( pip_root != NULL ) {
     pip_spin_unlock( &pip_root->lock_bt );
-    (void) pip_raise_signal( pip_root->task_root, SIGCONT );
   }
   RETURNV;
 }
@@ -596,6 +598,7 @@ void pip_debug_on_exceptions( pip_root_t *root, pip_task_t *task ) {
   static int		done = 0;
   int			i;
 
+  /* this function may be called twice (implicitly and explicitly) */
   if( done ) return;
   done = 1;
 

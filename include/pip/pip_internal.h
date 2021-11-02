@@ -218,8 +218,10 @@ typedef struct pip_task {
   Lmid_t		lmid;
   /* malloc free list */
   pip_atomic_t		*malloc_free_list;
+
+  cpu_set_t 		*cpuset;
   /* reserved for future use */
-  void			*__reserved__[15];
+  void			*__reserved__[14];
 } pip_task_t;
 
 extern pip_task_t	*pip_task;
@@ -352,8 +354,10 @@ typedef struct pip_root {
   pip_sem_t		universal_lock;
   pip_recursive_lock_t	glibc_lock; /* 5 64-bit words */
 
+  cpu_set_t 		*cpuset;
+
   /* reserved for future use */
-  void			*__reserved__[11];
+  void			*__reserved__[10];
   /* tasks */
   pip_task_t		tasks[];
 } pip_root_t;
