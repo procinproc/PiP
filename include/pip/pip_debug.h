@@ -67,8 +67,10 @@ extern size_t pip_idstr( char *buf, size_t sz );
 #define DBGBUFLEN	(512)
 #define DBGTAGLEN	(128)
 
-#define DBG_PRTBUF	char _dbuf[DBGBUFLEN]={'\0'};	\
-  			int _nn=DBGBUFLEN;
+#define DBG_PRTBUF	\
+  char *_dbuf = alloca(DBGBUFLEN);				\
+  memset(_dbuf,0,DBGBUFLEN);					\
+  int _nn=DBGBUFLEN
 #define DBG_PRNT(...)	do {				\
     snprintf(_dbuf+strlen(_dbuf),_nn,__VA_ARGS__);	\
     _nn=DBGBUFLEN-strlen(_dbuf); } while(0)
@@ -84,13 +86,14 @@ extern size_t pip_idstr( char *buf, size_t sz );
   do { int _dbuf_len = strlen( _dbuf ), _dbuf_rv;		\
     _dbuf_rv = write( 2, _dbuf, _dbuf_len );			\
     (void)_dbuf_rv;						\
-    _dbuf[0]='\0';_nn=DBGBUFLEN;} while(0)
+    memset(_dbuf,0,DBGBUFLEN);_nn=DBGBUFLEN;} while(0)
 
 #define DBG_NN
 
-#define DBG_TAG							\
-  do { char __tag[DBGTAGLEN]; pip_idstr(__tag,DBGTAGLEN);	\
-    DBG_PRNT("%s %s:%d %s()",__tag,				\
+#define DBG_TAG							   \
+  do { char *__tag=alloca(DBGTAGLEN);  memset(__tag,0,DBGTAGLEN);  \
+    pip_idstr(__tag,DBGTAGLEN);					   \
+    DBG_PRNT("%s %s:%d %s()",__tag,				   \
 	     basename(__FILE__), __LINE__, __func__ );	} while(0)
 
 #define EMSG(...)							\
@@ -105,8 +108,13 @@ extern size_t pip_idstr( char *buf, size_t sz );
   do { DBG_PRTBUF; DBG_PRNT("\n"); DBG_TAG; DBG_PRNT(": ");		\
     DBG_PRNT(__VA_ARGS__); DBG_OUTPUT; } while(0)
 
-
 extern int pip_dont_wrap_malloc;
+
+#define ASSERTD(X)		   				\
+  do { pip_dont_wrap_malloc=1;					\
+    if(!(X)) { NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);	\
+      pip_debug_info(); pip_abort();				\
+    } pip_dont_wrap_malloc=0; } while(0)
 
 #ifdef DEBUG
 
@@ -155,11 +163,17 @@ extern int pip_dont_wrap_malloc;
   do { if(DBGSW) { DBG_PRTBUF; DBG_TAG_LEAVE; DBG_OUTPUT; }		\
     return; } while(0)
 
-#define SET_CURR_TASK(sched,task)	(sched)->annex->task_curr = task
-
 #define DPAUSE	\
   do { struct timespec __ts; __ts.tv_sec=0; __ts.tv_nsec=1*1000*1000;	\
     nanosleep( &__ts, NULL ); } while(0)
+
+#define ASSERT(X)		   				\
+  do { pip_dont_wrap_malloc=1;					\
+    if(!(X)) { NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);	\
+      pip_debug_info(); pip_abort();				\
+    } else if(DBGSW) {						\
+      EMSG("{%s} Assertion SUCCEEDED",#X);			\
+    } pip_dont_wrap_malloc=0; } while(0)
 
 #else  /* DEBUG */
 
@@ -172,24 +186,9 @@ extern int pip_dont_wrap_malloc;
 #define RETURN_NE(X)		return(X)
 #define RETURNV			return
 #define DPAUSE
-
-#define SET_CURR_TASK(sched,task)
+#define ASSERT(X)		ASSERTD(X)
 
 #endif	/* !DEBUG */
-
-#define ASSERT(X)		   				\
-  do { pip_dont_wrap_malloc=1;					\
-    if(!(X)) { NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);	\
-      pip_debug_info(); pip_abort();				\
-    } else if(DBGSW) {						\
-      EMSG("{%s} Assertion SUCCEEDED",#X);			\
-    } pip_dont_wrap_malloc=0; } while(0)
-
-#define ASSERTD(X)		   				\
-  do { pip_dont_wrap_malloc=1;					\
-    if(!(X)) { NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);	\
-      pip_debug_info(); pip_abort();				\
-    } } while(0)
 
 #define NEVER_REACH_HERE					\
   do { NL_EMSG( "Should never reach here !!!!!!\n" ); } while(0)

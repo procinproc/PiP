@@ -834,39 +834,20 @@ int pip_is_coefd( int fd ) {
 
 static void pip_close_on_exec( void ) {
   DIR *dir;
-  struct dirent *direntp;
+  struct dirent dirent, *direntp;
   int fd;
 
 #define PROCFD_PATH		"/proc/self/fd"
   if( ( dir = opendir( PROCFD_PATH ) ) != NULL ) {
     int fd_dir = dirfd( dir );
-    while( ( direntp = readdir( dir ) ) != NULL ) {
+    while( readdir_r( dir, &dirent, &direntp ) == 0 &&
+	   direntp != NULL ) {
       if( direntp->d_name[0] != '.' &&
 	  ( fd = strtol( direntp->d_name, NULL, 10 ) ) >= 0 &&
 	  fd != fd_dir &&
 	  pip_is_coefd( fd ) ) {
 	(void) close( fd );
 	DBGF( "FD:%d is closed (CLOEXEC)", fd );
-      }
-    }
-    (void) closedir( dir );
-    (void) close( fd_dir );
-  }
-}
-
-static void pip_close_fds( void ) {
-  DIR *dir;
-  struct dirent *direntp;
-  int fd;
-
-  if( ( dir = opendir( PROCFD_PATH ) ) != NULL ) {
-    int fd_dir = dirfd( dir );
-    while( ( direntp = readdir( dir ) ) != NULL ) {
-      if( direntp->d_name[0] != '.' &&
-	  ( fd = strtol( direntp->d_name, NULL, 10 ) ) >= 0 &&
-	  fd != fd_dir ) {
-	(void) close( fd );
-	DBGF( "FD:%d is closed (terminated)", fd );
       }
     }
     (void) closedir( dir );
@@ -1114,51 +1095,43 @@ static void pip_glibc_fin( pip_symbols_t *symbols ) {
   }
 }
 
-static void pip_return_from_start_func( pip_task_t *task,
-					int extval ) {
+static void pip_return_from_start_func( pip_task_t *task, int extval ) {
   int err = 0;
 
   ENTER;
-  if( pip_gettid() != task->tid ) {
+  if( pip_gettid() == task->tid ) {
+    if( task->hook_after != NULL ) {
+      err = task->hook_after( task->hook_arg );
+      if( err ) {
+	pip_err_mesg( "PIPID:%d after-hook returns %d", task->pipid, err );
+      }
+      if( extval == 0 ) extval = err;
+    }
+    pip_glibc_fin( &task->symbols );
+    if( task->symbols.named_export_fin != NULL ) {
+      task->symbols.named_export_fin( task );
+    }
+    pip_gdbif_exit( task, WEXITSTATUS(extval) );
+    pip_gdbif_hook_after( task );
+  } else {
     /* when a PiP task fork()s and returns */
     /* from main this case happens         */
     DBGF( "return from a fork()ed process?" );
-    /* here we have to call the exit() in the same context */
-    if( task->symbols.exit != NULL ) {
-      task->symbols.exit( extval );
-    } else {
-      exit( extval );
-    }
-    NEVER_REACH_HERE;
+    goto call_exit;
   }
-  if( task->hook_after != NULL ) {
-    err = task->hook_after( task->hook_arg );
-    if( err ) {
-      pip_err_mesg( "PIPID:%d after-hook returns %d", task->pipid, err );
-    }
-    if( extval == 0 ) extval = err;
-  }
-  pip_glibc_fin( &task->symbols );
-  if( task->symbols.named_export_fin != NULL ) {
-    task->symbols.named_export_fin( task );
-  }
-  pip_gdbif_exit( task, WEXITSTATUS(extval) );
-  pip_gdbif_hook_after( task );
-
   DBGF( "PIPID:%d -- FORCE EXIT:%d", task->pipid, extval );
-
+  /* here we have to call the exit() in the same context, if possible */
   if( pip_is_threaded_() ) {	/* thread mode */
     task->flag_sigchld = 1;
-    if( pip_raise_signal( pip_root->task_root, SIGCHLD ) != 0 ) {
-      task->flag_sigchld = 0;
-    }
+    (void) pip_raise_signal( pip_root->task_root, SIGCHLD );
+
     if( task->symbols.pthread_exit != NULL ) {
       task->symbols.pthread_exit( NULL );
     } else {
       pthread_exit( NULL );
     }
   } else {			/* process mode */
-    pip_close_fds();
+  call_exit:
     if( task->symbols.exit != NULL ) {
       task->symbols.exit( extval );
     } else {
@@ -1294,20 +1267,14 @@ static void *pip_do_spawn( void *thargs )  {
 #endif
   if( !pip_is_shared_fd_() ) pip_close_on_exec();
 
-  /* PIP_STOP_ON_START */
-  DBGF( "ONSTART: %s", self->onstart_script );
   if( self->onstart_script != NULL ) {
-    pip_info_mesg( "PiP task[%d] will be SIGSTOPed (%s)",
-		   self->pipid, PIP_ENV_STOP_ON_START );
-    if( pip_raise_signal( self, SIGSTOP ) != 0 ) {
-      /* failed to send signal */
-      pip_warn_mesg( "PiP task[%d] failed to deliver SIGSTOP (%s)",
-		     self->pipid, PIP_ENV_STOP_ON_START );
-    }
+    /* PIP_STOP_ON_START (process mode only) */
+    DBGF( "ONSTART: %s", self->onstart_script );
+    ASSERT( pip_raise_signal( self, SIGSTOP ) == 0 );
   }
+
   pip_glibc_init( &self->symbols, args );
   DBGF( "pip_init:%p", self->symbols.pip_init );
-
   if( ( err = self->symbols.pip_init( pip_root, self, envv ) ) != 0 ) {
     extval = err;
   } else {
@@ -1479,6 +1446,10 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
       *env_stop != '\0' ) {
     if( !pip_is_threaded_() ) {
       task->onstart_script = pip_onstart_target( task, env_stop );
+      if( task->onstart_script != NULL ) {
+	pip_info_mesg( "PiP task[%d] will be SIGSTOPed (%s)",
+		       task->pipid, PIP_ENV_STOP_ON_START );
+      }
     } else {
       pip_warn_mesg( "%s=%s is NOT effective with (p)thread mode",
 		     PIP_ENV_STOP_ON_START, env_stop );
@@ -1558,7 +1529,6 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
 
   } else {
   error:			/* undo */
-    DBG;
     if( args != NULL ) {
       if( args->argvec.vec  != NULL ) free( args->argvec.vec  );
       if( args->argvec.strs != NULL ) free( args->argvec.strs );

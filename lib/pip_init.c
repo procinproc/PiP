@@ -435,22 +435,17 @@ static void pip_show_pips( void ) {
     char *p;
     DBG;
     sleep(1);
-    ASSERT( ( pips_exec = pip_malloc( strlen( prefix    ) +
-				      strlen( pips_comm ) + 
-				      strlen( pips_opts ) + 1 ) ) 
+    ASSERT( ( pips_exec = alloca( strlen( prefix    ) +
+				  strlen( pips_comm ) + 
+				  strlen( pips_opts ) + 1 ) ) 
 	    != NULL );
     DBG;
     p = pips_exec;
     p = stpcpy( p, prefix    );
     p = stpcpy( p, pips_comm );
-    if( access( pips_exec, X_OK ) == 0 ) {
-      pip_info_mesg( "*** Show PIPS (%s)", pips_exec );
-      stpcpy( p, pips_opts );
-      system( pips_exec );
-    } else {
-      pip_err_mesg( "Unable to find pips" );
-    }
-    pip_free( pips_exec );
+    pip_info_mesg( "*** Show PIPS (%s)", pips_exec );
+    stpcpy( p, pips_opts );
+    system( pips_exec );
     sleep( 1 );			/* to flush out pips messages */
   }
   RETURNV;
@@ -607,43 +602,39 @@ void pip_debug_on_exceptions( pip_root_t *root, pip_task_t *task ) {
     ASSERT( sigemptyset( &sigempty ) == 0 );
 
     if( !pip_is_threaded_() ) {
-      if( access( path, X_OK ) != 0 ) {
-	  pip_err_mesg( "Unable to execute (%s)", path );
+      pip_path_gdb = path;
+      if( ( command = root->envs.gdb_command ) != NULL ) {
+	pip_command_gdb = command;
+      }
+      if( ( signals = root->envs.gdb_signals ) != NULL ) {
+	pip_set_gdb_sigset( signals, &sigs );
       } else {
-	pip_path_gdb = path;
-	if( ( command = root->envs.gdb_command ) != NULL ) {
-	  pip_command_gdb = command;
-	}
-	if( ( signals = root->envs.gdb_signals ) != NULL ) {
-	  pip_set_gdb_sigset( signals, &sigs );
-	} else {
-	  ASSERT( sigaddset( &sigs, SIGHUP  ) == 0 );
-	  ASSERT( sigaddset( &sigs, SIGSEGV ) == 0 );
-	}
-	if( memcmp( &sigs, &sigempty, sizeof(sigs) ) != 0 ) {
-	  /* FIXME: since the sigaltstack is allocated  */
-	  /* by a PiP task, there is no chance to free  */
-	  void		*altstack;
-	  stack_t	sigstack;
+	ASSERT( sigaddset( &sigs, SIGHUP  ) == 0 );
+	ASSERT( sigaddset( &sigs, SIGSEGV ) == 0 );
+      }
+      if( memcmp( &sigs, &sigempty, sizeof(sigs) ) != 0 ) {
+	/* FIXME: since the sigaltstack is allocated  */
+	/* by a PiP task, there is no chance to free  */
+	void		*altstack;
+	stack_t	sigstack;
 
-	  pip_page_alloc( PIP_MINSIGSTKSZ, &altstack );
-	  task->sigalt_stack = altstack;
-	  memset( &sigstack, 0, sizeof( sigstack ) );
-	  sigstack.ss_sp   = altstack;
-	  sigstack.ss_size = PIP_MINSIGSTKSZ;
-	  ASSERT( sigaltstack( &sigstack, NULL ) == 0 );
+	pip_page_alloc( PIP_MINSIGSTKSZ, &altstack );
+	task->sigalt_stack = altstack;
+	memset( &sigstack, 0, sizeof( sigstack ) );
+	sigstack.ss_sp   = altstack;
+	sigstack.ss_size = PIP_MINSIGSTKSZ;
+	ASSERT( sigaltstack( &sigstack, NULL ) == 0 );
 
-	  memset( &sigact, 0, sizeof( sigact ) );
-	  sigact.sa_sigaction = pip_exception_handler;
-	  sigact.sa_mask      = sigs;
-	  sigact.sa_flags     = SA_RESETHAND | SA_ONSTACK;
+	memset( &sigact, 0, sizeof( sigact ) );
+	sigact.sa_sigaction = pip_exception_handler;
+	sigact.sa_mask      = sigs;
+	sigact.sa_flags     = SA_RESETHAND | SA_ONSTACK;
 
-	  for( i=0; sigtab[i].name!=NULL; i++ ) {
-	    int signum = sigtab[i].signum;
-	    if( sigismember( &sigs, signum ) ) {
-	      DBGF( "PiP-gdb on signal: %s ", sigtab[i].name );
-	      ASSERT( sigaction( signum, &sigact, NULL ) == 0 );
-	    }
+	for( i=0; sigtab[i].name!=NULL; i++ ) {
+	  int signum = sigtab[i].signum;
+	  if( sigismember( &sigs, signum ) ) {
+	    DBGF( "PiP-gdb on signal: %s ", sigtab[i].name );
+	    ASSERT( sigaction( signum, &sigact, NULL ) == 0 );
 	  }
 	}
       }
@@ -680,7 +671,8 @@ int pip_init_task_implicitly( pip_root_t *root, pip_task_t *task, char **envv ) 
     if( !pip_is_threaded_() ) {
       pip_debug_on_exceptions( root, task );
     }
-    clearenv();
+    //clearenv();
+    environ = NULL;
     for( i=0; envv[i]!=NULL; i++ ) putenv( envv[i] );
   }
   DBGF( "pip_root: %p @ %p  piptask : %p @ %p", 

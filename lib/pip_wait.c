@@ -82,6 +82,7 @@ pip_wait_thread( pip_task_t *task, int flag_blk ) {
 
   ENTERF( "PIPID:%d", task->pipid );
   if( !task->thread ) {
+    DBG;
     err = ECHILD;
   } else if( flag_blk ) {
     err = pthread_join( task->thread, NULL );
@@ -93,12 +94,14 @@ pip_wait_thread( pip_task_t *task, int flag_blk ) {
     DBGF( "pthread_tryjoin_np(): %s", strerror(err) );
   }
   if( err ) err = ECHILD;
+
   /* workaround (make sure) */
   if( err != 0 && task->flag_sigchld ) {
     struct timespec ts;
     char path[128];
     struct stat stbuf;
 
+    DBG;
     snprintf( path, 128, "/proc/%d/task/%d",
 	      getpid(), task->tid );
     while( 1 ) {
@@ -119,8 +122,7 @@ pip_wait_thread( pip_task_t *task, int flag_blk ) {
   RETURN( err );
 }
 
-static int
-pip_wait_syscall( pip_task_t *task, int flag_blk ) {
+static int pip_wait_syscall( pip_task_t *task, int flag_blk ) {
   int err = 0;
 
   ENTERF( "PIPID:%d", task->pipid );

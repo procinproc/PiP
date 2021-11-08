@@ -94,7 +94,7 @@ void pip_print_fd( FILE *fp, int fd ) {
 
 void pip_print_fds( FILE *fp ) {
   DIR *dir = opendir( "/proc/self/fd" );
-  struct dirent *de;
+  struct dirent de, *dep;
   char idstr[64];
   char fdpath[FDPATH_LEN];
   char fdname[RDLINK_BUF_SP];
@@ -105,11 +105,12 @@ void pip_print_fds( FILE *fp ) {
     int fd_dir = dirfd( dir );
     int fd;
 
-    while( ( de = readdir( dir ) ) != NULL ) {
-      sprintf( fdpath, "/proc/self/fd/%s", de->d_name );
+    while( readdir_r( dir, &de, &dep ) == 0 &&
+	   dep != NULL ) {
+      sprintf( fdpath, "/proc/self/fd/%s", dep->d_name );
       if( ( sz = readlink( fdpath, fdname, RDLINK_BUF ) ) > 0 ) {
 	fdname[sz] = '\0';
-	if( ( fd = atoi( de->d_name ) ) != fd_dir ) {
+	if( ( fd = atoi( dep->d_name ) ) != fd_dir ) {
 	  if( pip_is_coefd ( fd ) ) {
 	    fprintf( fp, "%s %s -> %s [COE]\n", idstr, fdpath, fdname );
 	  } else {
