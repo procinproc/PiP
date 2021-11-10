@@ -211,7 +211,6 @@ void *pip_malloc( size_t size ) {
     } else {
       pip_malloc_info_t	info;
       size_t		sz;
-      int		pipid;
       
       if( ( rv = __libc_malloc( size + sizeof(info) ) ) != NULL ) {
 	info.magic = PIP_MALLOC_MAGIC;

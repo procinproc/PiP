@@ -204,6 +204,8 @@ extern int pip_dont_wrap_malloc;
 #define DBGF_NNL(...)
 #define ENTER
 #define ENTERF(...)
+#define LEAVE
+#define LEAVEF(...)
 #define RETURN(X)		return(X)
 #define RETURN_NE(X)		return(X)
 #define RETURNV			return
