@@ -217,7 +217,7 @@ typedef struct pip_task {
   char			*onstart_script;
   Lmid_t		lmid;
   /* malloc free list */
-  pip_atomic_t		*malloc_free_list;
+  pip_atomic_t		malloc_free_list;
 
   cpu_set_t 		*cpuset;
   /* reserved for future use */
@@ -305,11 +305,6 @@ INLINE void pip_recursive_lock_fin( pip_recursive_lock_t *lock ) {
   pip_sem_fin( &lock->semaphore );
   memset( lock, 0, sizeof(pip_recursive_lock_t) );
 }
-
-typedef struct pip_malloc_info {
-  int		magic;
-  int		pipid;
-} pip_malloc_info_t;
 
 typedef struct pip_root {
   char			magic[PIP_MAGIC_LEN];

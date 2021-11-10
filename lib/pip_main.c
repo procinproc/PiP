@@ -37,11 +37,12 @@
 #include <pip/build.h>
 #include <getopt.h>
 
-const char interp[] __attribute__((section(".interp"))) = INTERP;
+const char interp[] __attribute__((section(".interp"))) = LDLINUX;
 
 #define OPTION(name,val)	{ #name, optional_argument, NULL, (val) }
 
 #define USAGE		(100)
+#define ALL		(1000)
 
 struct option opttab[] =
   { OPTION( name,      0 ),
@@ -56,6 +57,7 @@ struct option opttab[] =
     OPTION( debug,     9 ),
     OPTION( usage, USAGE ),
     OPTION( help,  USAGE ),
+    OPTION( all,     ALL ),
     { NULL, 0, NULL, 0 } };
 
 struct value_table {
@@ -64,14 +66,14 @@ struct value_table {
 };
 
 struct value_table valtab[] =
-  { { "Package", PACKAGE_NAME },
-    { "Version", PACKAGE_VERSION },
-    { "License", "the 2-clause simplified BSD License" },
-    { "Build OS", BUILD_OS },
-    { "Build CC", BUILD_CC },
-    { "Install Prefix", PREFIX },
-    { "PiP-glibc", PIP_INSTALL_GLIBCDIR },
-    { "ld-linux", LDLINUX },
+  { { "Package",     PACKAGE_NAME },
+    { "Version",     PACKAGE_VERSION },
+    { "License",     "the 2-clause simplified BSD License" },
+    { "Build OS",    BUILD_OS },
+    { "Build CC",    BUILD_CC },
+    { "Prefix dir",  NULL },
+    { "PiP-glibc",   PIP_INSTALL_GLIBCDIR },
+    { "ld-linux",    LDLINUX },
     { "Commit Hash", COMMIT_HASH },
     { "Debug build",
 #ifdef DEBUG
@@ -84,7 +86,7 @@ struct value_table valtab[] =
   };
 
 static void print_item( int item ) {
-  if( item < 0 ) {
+  if( item < 0 || item == ALL ) {
     int i;
     for( i=0; valtab[i].name!=NULL; i++ ) {
       printf( "%s:\t%s\n", valtab[i].name, valtab[i].value );
@@ -98,11 +100,11 @@ static void print_item( int item ) {
 
 static void print_usage( char *argv0 ) {
   int i;
-  fprintf( stderr, "%s [--%s", argv0, opttab[0].name );
-  for( i=1; opttab[i].name != NULL; i++ ) {
-    fprintf( stderr, "|--%s", opttab[i].name );
+  fprintf( stderr, "%s ", argv0 );
+  for( i=0; opttab[i].name != NULL; i++ ) {
+    fprintf( stderr, "[--%s]", opttab[i].name );
   }
-  fprintf( stderr, "]\n" );
+  fprintf( stderr, "\n" );
   exit( 1 );
 }
 
@@ -155,6 +157,7 @@ static int parse_cmdline( char ***argvp ) {
 }
 
 int pip_main( void ) {
+  extern char *pip_prefix_dir(void);
   char **argv;
   char *argv0;
   int argc;
@@ -162,6 +165,7 @@ int pip_main( void ) {
   if( ( argc = parse_cmdline( &argv ) ) > 0 ) {
     argv[0] = argv0 = basename( argv[0] );
   }
+  valtab[5].value = pip_prefix_dir();
   if( argc > 1 ) {
     int v;
     while( ( v = getopt_long_only( argc, argv, "", opttab, NULL ) ) >= 0 ) {

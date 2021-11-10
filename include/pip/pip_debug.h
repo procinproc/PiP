@@ -128,40 +128,62 @@ extern int pip_dont_wrap_malloc;
 	     basename(__FILE__), __LINE__, __func__ );	} while(0)
 
 #define DBG						\
-  if(DBGSW) { DBG_PRTBUF; DBG_TAG; DBG_OUTPUT; }
+  if(DBGSW) { pip_dont_wrap_malloc=1;			\
+    DBG_PRTBUF; DBG_TAG; DBG_OUTPUT;			\
+    pip_dont_wrap_malloc=0;}
 
 #define DBG_NL						\
   if(DBGSW) { DBG_PRTBUF; DBG_PRNT("\n"); DBG_OUTPUT; }
 
 #define DBGF(...)						\
-  if(DBGSW) { EMSG(__VA_ARGS__); }
+  if(DBGSW) { pip_dont_wrap_malloc=1;				\
+    EMSG(__VA_ARGS__);						\
+    pip_dont_wrap_malloc=0; }
 
 #define DBGF_NNL(...)						\
   if(DBGSW) { EMSG_NNL(__VA_ARGS__); }
 
 #define ENTER							\
-  if(DBGSW) { DBG_PRTBUF; DBG_TAG_ENTER; DBG_OUTPUT; }
+  if(DBGSW) { pip_dont_wrap_malloc=1;				\
+    DBG_PRTBUF; DBG_TAG_ENTER; DBG_OUTPUT;			\
+    pip_dont_wrap_malloc=0; }
 
 #define ENTERF(...)							\
-  if(DBGSW) do { DBG_PRTBUF; DBG_TAG_ENTER; DBG_PRNT(": ");	\
-      DBG_PRNT(__VA_ARGS__); DBG_OUTPUT; } while(0)
+  if(DBGSW) do { pip_dont_wrap_malloc=1;				\
+      DBG_PRTBUF; DBG_TAG_ENTER; DBG_PRNT(": ");			\
+      DBG_PRNT(__VA_ARGS__); DBG_OUTPUT;				\
+      pip_dont_wrap_malloc=0; } while(0)
+
+#define LEAVE							\
+  if(DBGSW) { pip_dont_wrap_malloc=1;				\
+    DBG_PRTBUF; DBG_TAG_LEAVE; DBG_OUTPUT;			\
+    pip_dont_wrap_malloc=0; }
+
+#define LEAVEF(...)							\
+  if(DBGSW) do { pip_dont_wrap_malloc=1;				\
+      DBG_PRTBUF; DBG_TAG_LEAVE; DBG_PRNT(": ");			\
+      DBG_PRNT(__VA_ARGS__); DBG_OUTPUT;				\
+      pip_dont_wrap_malloc=0; } while(0)
 
 #define RETURN(X)							\
   do { int __xxx=(X);							\
-    if(DBGSW) { DBG_PRTBUF; DBG_TAG_LEAVE;				\
+    if(DBGSW) { pip_dont_wrap_malloc=1;					\
+      DBG_PRTBUF; DBG_TAG_LEAVE;					\
       if(__xxx) { DBG_PRNT(": ERROR RETURN %d:'%s'",__xxx,strerror(__xxx)); \
-      } else { DBG_PRNT(": returns %d",__xxx); }			\
-      DBG_OUTPUT; } return (__xxx); } while(0)
+      } else { DBG_PRNT(": returns %d",__xxx); }  DBG_OUTPUT;		\
+      pip_dont_wrap_malloc=0; } return (__xxx); } while(0)
 
 #define RETURN_NE(X)							\
   do { int __xxx=(X);							\
-    if(DBGSW) { DBG_PRTBUF; DBG_TAG_LEAVE;				\
+    if(DBGSW) { pip_dont_wrap_malloc=1;					\
+      DBG_PRTBUF; DBG_TAG_LEAVE;					\
       DBG_PRNT(": returns %d",__xxx);					\
-      DBG_OUTPUT; } return (__xxx); } while(0)
+      DBG_OUTPUT; pip_dont_wrap_malloc=0; } return (__xxx); } while(0)
 
 #define RETURNV								\
-  do { if(DBGSW) { DBG_PRTBUF; DBG_TAG_LEAVE; DBG_OUTPUT; }		\
-    return; } while(0)
+  do { if(DBGSW) { pip_dont_wrap_malloc=1;				\
+      DBG_PRTBUF; DBG_TAG_LEAVE; DBG_OUTPUT;				\
+      pip_dont_wrap_malloc=0; } return; } while(0)
 
 #define DPAUSE	\
   do { struct timespec __ts; __ts.tv_sec=0; __ts.tv_nsec=1*1000*1000;	\

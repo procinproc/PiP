@@ -444,7 +444,7 @@ static void pip_save_debug_envs( pip_root_t *root ) {
   }
 }
 
-static char *pip_prefix_dir( void ) {
+char *pip_prefix_dir( void ) {
   FILE	 *fp_maps = NULL;
   size_t  sz = 0;
   ssize_t l;
@@ -1583,24 +1583,29 @@ int pip_spawn( char *prog,
 }
 
 int pip_fin( void ) {
-  int ntasks, i, err = 0;
+  int i, err = 0;
 
   ENTER;
   if( !pip_is_initialized() ) RETURN( EPERM );
 
   pip_free_all();
-  if( pip_root_p_() ) {
-    ntasks = pip_root->ntasks;
-    for( i=0; i<ntasks; i++ ) {
+  if( !pip_root_p_() ) {
+    pip_root = NULL;
+    pip_task = NULL;
+  } else {
+    for( i=0; i<pip_root->ntasks; i++ ) {
       if( pip_root->tasks[i].type != PIP_TYPE_NULL ) {
-	DBGF( "%d/%d [%d] -- BUSY", i, ntasks, pip_root->tasks[i].pipid );
+	DBGF( "%d/%d [%d] -- BUSY", 
+	      i, 
+	      pip_root->ntasks, 
+	      pip_root->tasks[i].pipid );
 	err = EBUSY;
 	break;
       }
     }
     if( err == 0 ) {
       void pip_named_export_fin_all( void );
-      pip_root_t *root;
+      pip_root_t *root = pip_root;
       /* SIGCHLD */
       pip_unset_sigmask();
       pip_unset_signal_handler( SIGCHLD,
@@ -1611,14 +1616,13 @@ int pip_fin( void ) {
       PIP_REPORT( time_load_prog );
       PIP_REPORT( time_dlmopen   );
 
-      memset( pip_root, 0, sizeof(pip_root_t) );
-      root = pip_root;
-      pip_root = NULL;
-      pip_task = NULL;
-
       void pip_undo_patch_GOT( void );
       pip_undo_patch_GOT();
 
+      pip_root = NULL;
+      pip_task = NULL;
+
+      memset( root, 0, sizeof(pip_root_t) );
       free( root );
     }
   }
