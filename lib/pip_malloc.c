@@ -36,8 +36,6 @@
 #include <pip/pip_internal.h>
 #include <malloc.h>
 
-int pip_dont_wrap_malloc = 0;
-
 #define PIP_MALLOC
 #ifdef PIP_MALLOC
 

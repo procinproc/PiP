@@ -52,6 +52,8 @@
 
 extern void *pip_dlsym_unsafe( void*, const char* );
 
+int pip_dont_wrap_malloc = 0;
+
 static pip_spinlock_t 	*pip_clone_lock;
 static pip_clone_t*	pip_cloneinfo   = NULL;
 

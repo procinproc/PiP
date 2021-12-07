@@ -233,6 +233,7 @@ typedef struct pip_task {
 } pip_task_t;
 
 extern pip_task_t	*pip_task;
+extern int 		pip_dont_wrap_malloc;
 
 #define PIP_FILLER_SZ	(PIP_CACHE_SZ-sizeof(pip_spinlock_t))
 

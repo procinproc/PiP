@@ -108,8 +108,6 @@ extern size_t pip_idstr( char *buf, size_t sz );
   do { DBG_PRTBUF; DBG_PRNT("\n"); DBG_TAG; DBG_PRNT(": ");		\
     DBG_PRNT(__VA_ARGS__); DBG_OUTPUT; } while(0)
 
-extern int pip_dont_wrap_malloc;
-
 #define ASSERTD(X)		   				\
   do { pip_dont_wrap_malloc=1;					\
     if(!(X)) { NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);	\
