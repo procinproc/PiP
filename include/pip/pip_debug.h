@@ -215,7 +215,7 @@ extern int pip_dont_wrap_malloc;
 #endif	/* !DEBUG */
 
 #define NEVER_REACH_HERE					\
-  do { NL_EMSG( "Should never reach here !!!!!!\n" ); } while(0)
+  do { NL_EMSG( "Should never reach here !!!!!!\n" ); for(;;); } while(0)
 
 #define ERRJ		{ DBG;                goto error; }
 #define ERRJ_ERRNO	{ DBG; err=errno;     goto error; }

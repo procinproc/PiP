@@ -101,8 +101,11 @@
 
 #define PIP_MIDLEN		(64)
 
-struct pip_root;
-struct pip_task;
+#define PIP_PRIVATE		__attribute__((visibility ("hidden")))
+#define PIP_NORETURN		__attribute__((noreturn))
+
+struct pip_root PIP_PRIVATE;
+struct pip_task PIP_PRIVATE;
 
 typedef struct pip_got_patch_list {
   char	*name;
@@ -117,11 +120,12 @@ typedef void(*add_stack_user_t)(void);
 typedef	void(*fflush_t)(FILE*);
 typedef void (*exit_t)(int);
 typedef void (*pthread_exit_t)(void*);
-
 typedef void*(*dlsym_t)(void*, const char*);
+typedef void(*pip_set_opts_t)(char*,char*);
 
 typedef int(*named_export_fin_t)(struct pip_task*);
 typedef int(*pip_init_t)(struct pip_root*,struct pip_task*,char**);
+typedef int(*pip_fin_t)(void);
 typedef
 int(*pip_clone_syscall_t)(int(*)(void*), void*, int, void*, pid_t*, void*, pid_t*);
 typedef int(*pip_patch_got_t)(char*, char**, pip_got_patch_list_t*);
@@ -146,14 +150,18 @@ typedef struct pip_symbol {
   void			*unused_slot_0; /* not used */
   void			*unused_slot_1;	/* not used */
   fflush_t		libc_fflush;  /* to call GLIBC fflush() at the end */
-  exit_t		exit;  /* call exit() from fork()ed process */
+  exit_t		exit;
   pthread_exit_t	pthread_exit; /* (see above exit) */
   /* pip_patch_GOT */
   pip_patch_got_t	patch_got;
   /* dlsym */
   dlsym_t		dlsym;
+  /* pip_fin_task_implicitly */
+  pip_fin_t		pip_fin;
+  /* PiP-glibc */
+  pip_set_opts_t	pip_set_opts;
   /* reserved for future use */
-  void			*__reserved__[16]; /* reserved for future use */
+  void			*__reserved__[15]; /* reserved for future use */
 } pip_symbols_t;
 
 typedef struct pip_char_vec {
@@ -394,13 +402,9 @@ INLINE int pip_check_pipid( int *pipidp ) {
   return 0;
 }
 
-#define PIP_PRIVATE		__attribute__((visibility ("hidden")))
-
 extern void pip_free_all( void ) PIP_PRIVATE;
-
-extern void pip_glibc_lock( void );
-extern void pip_glibc_unlock( void );
 extern void *pip_dlopen_unsafe( const char*, int ) PIP_PRIVATE;
+extern void *pip_find_dso_symbol( void*, char*, char* ) PIP_PRIVATE;
 
 extern void pip_reset_task_struct( pip_task_t* ) PIP_PRIVATE;
 extern int  pip_tkill( int, int );
@@ -425,6 +429,7 @@ extern void pip_onstart( pip_task_t* ) PIP_PRIVATE;
 extern void pip_set_exit_status( pip_task_t*, int ) PIP_PRIVATE;
 extern void pip_task_signaled( pip_task_t*, int ) PIP_PRIVATE;
 extern void pip_annul_task( pip_task_t* ) PIP_PRIVATE;
+extern void pip_pthread_exit( void* ) PIP_PRIVATE;
 
 extern int pip_debug_env( void );
 

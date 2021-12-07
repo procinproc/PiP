@@ -94,7 +94,7 @@ void pip_print_fd( FILE *fp, int fd ) {
 
 void pip_print_fds( FILE *fp ) {
   DIR *dir = opendir( "/proc/self/fd" );
-  struct dirent de, *dep;
+  struct dirent *dep;
   char idstr[64];
   char fdpath[FDPATH_LEN];
   char fdname[RDLINK_BUF_SP];
@@ -105,8 +105,7 @@ void pip_print_fds( FILE *fp ) {
     int fd_dir = dirfd( dir );
     int fd;
 
-    while( readdir_r( dir, &de, &dep ) == 0 &&
-	   dep != NULL ) {
+    while( ( dep = readdir( dir ) ) == 0 ) {
       sprintf( fdpath, "/proc/self/fd/%s", dep->d_name );
       if( ( sz = readlink( fdpath, fdname, RDLINK_BUF ) ) > 0 ) {
 	fdname[sz] = '\0';

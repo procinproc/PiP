@@ -33,55 +33,26 @@
  * $
  */
 
-#ifdef AH
-
-#define _GNU_SOURCE
-#include <pip/pip_internal.h>
-#include <dlfcn.h>
-void *pip_dlsym_unsafe( void *handle, const char *symbol ) {
-  return dlsym( handle, symbol );
-}
-void *pip_dlsym( void *handle, const char *symbol ) {
-  return dlsym( handle, symbol );
-}
-static void *pip_dlsym_next( const char *symbol ) {
-  return dlsym( RTLD_NEXT, symbol );
-}
-void *pip_dlopen_unsafe( const char *filename, int flag ) {
-  return dlopen( filename, flag );
-}
-int pip_dlclose( void *handle ) {
-  return dlclose( handle );
-}
-void *pip_dlmopen( long lmid, const char *path, int flag ) {
-  return dlmopen( lmid, path, flag );
-}
-char *pip_dlerror( void ) {
-  return dlerror();
-}
-int pip_dlinfo( void *handle, int request, void *info ) {
-  return dlinfo( handle, request, info );
-}
-#endif
-
 #include <pip/pip_internal.h>
 #include <pip/pip_dlfcn.h>
 
 /* safe (locked) dl* functions */
 
-void *pip_dlsym_unsafe( void *handle, const char *symbol ) {
-  extern void *_dl_sym(void *, const char *, void *);
-  static void *(*pip_libc_dlsym)(void*, const char*)=NULL;
-
+static void *pip_libc_dlsym_unsafe( void *handle, const char *symbol ) {
+  static  void*(*pip_libc_dlsym)(void*,const char*) = NULL;
   if( pip_libc_dlsym == NULL ) {
-    if( pip_task != NULL ) {
-      pip_libc_dlsym = pip_task->symbols.dlsym;
-    } else {
-      pip_libc_dlsym = _dl_sym( RTLD_NEXT, "dlsym", pip_dlsym_unsafe );
-    }
+    pip_libc_dlsym = pip_find_dso_symbol( handle, "libdl.so", "dlsym" );
     ASSERT( pip_libc_dlsym != NULL );
   }
   return pip_libc_dlsym( handle, symbol );
+}
+
+void *pip_dlsym_unsafe( void *handle, const char *symbol ) {
+  return pip_libc_dlsym_unsafe( handle, symbol );
+}
+
+void *pip_dlsym_next_unsafe( const char *symbol ) {
+  return pip_libc_dlsym_unsafe( RTLD_NEXT, symbol );
 }
 
 void *pip_dlsym( void *handle, const char *symbol ) {
@@ -91,37 +62,12 @@ void *pip_dlsym( void *handle, const char *symbol ) {
   return addr;
 }
 
-static void *pip_dlsym_next( const char *symbol ) {
-  return pip_dlsym( RTLD_NEXT, symbol );
-}
-
-static void *pip_dlsym_next_unsafe( const char *symbol ) {
-  return pip_dlsym_unsafe( RTLD_NEXT, symbol );
-}
-
 void *dlsym( void *handle, const char *symbol ) {
   return pip_dlsym( handle, symbol );
 }
 
-void *pip_dlmopen( long lmid, const char *path, int flag ) {
-  static void *(*libc_dlmopen)( long,  const char*, int ) = NULL;
-  pip_glibc_lock();
-  if( libc_dlmopen == NULL ) {
-    libc_dlmopen = pip_dlsym_next_unsafe( "dlmopen" );
-    if( libc_dlmopen == NULL ) return NULL;
-  }
-  void *handle = libc_dlmopen( lmid, path, flag );
-  DBG;
-  pip_glibc_unlock();
-  return handle;
-}
-
-void *dlmopen( long lmid, const char *path, int flag ) {
-  return pip_dlmopen( lmid, path, flag );
-}
-
 void *pip_dlopen_unsafe( const char *filename, int flag ) {
-static void *(*pip_libc_dlopen)( const char*, int ) = NULL;
+  static void *(*pip_libc_dlopen)( const char*, int ) = NULL;
   if( pip_libc_dlopen == NULL ) {
     ASSERT( ( pip_libc_dlopen = pip_dlsym_next_unsafe( "dlopen" ) ) != NULL ) ; 
   }
@@ -137,13 +83,27 @@ void *pip_dlopen( const char *filename, int flag ) {
 }
 
 void *dlopen( const char *filename, int flag ) {
-  void *handle;
-  if( pip_task != NULL && filename != NULL ) {
-    handle = pip_dlmopen( pip_task->lmid, filename, flag );
-  } else {
-    handle = pip_dlopen( filename, flag );
+  return pip_dlopen( filename, flag );
+}
+
+void *pip_dlmopen_unsafe( Lmid_t lmid, const char *filename, int flag ) {
+  static void*(*pip_libc_dlmopen)( Lmid_t, const char*, int ) = NULL;
+  if( pip_libc_dlmopen == NULL ) {
+    ASSERT( ( pip_libc_dlmopen = pip_dlsym_next_unsafe( "dlmopen" ) ) != NULL ) ; 
   }
+  void *rv = pip_libc_dlmopen( lmid, filename, flag );
+  return rv;
+}
+
+void *pip_dlmopen( Lmid_t lmid, const char *filename, int flag ) {
+  pip_glibc_lock();
+  void *handle = pip_dlmopen_unsafe( lmid, filename, flag );
+  pip_glibc_unlock();
   return handle;
+}
+
+void *dlmopen( Lmid_t lmid, const char *filename, int flag ) {
+  return pip_dlmopen( lmid, filename, flag );
 }
 
 int pip_dlinfo( void *handle, int request, void *info ) {
@@ -175,10 +135,10 @@ int dlclose( void *handle ) {
 
 char *pip_dlerror( void ) {
   static char*(*libc_dlerror)( void ) = NULL;
-  if( libc_dlerror == NULL ) {
-    libc_dlerror = pip_dlsym_next( "dlerror" );
-  }
   pip_glibc_lock();
+  if( libc_dlerror == NULL ) {
+    libc_dlerror = pip_dlsym_next_unsafe( "dlerror" );
+  }
   char *dlerr = libc_dlerror();
   pip_glibc_unlock();
   return dlerr;
@@ -190,10 +150,10 @@ char *dlerror( void ) {
 
 int pip_dladdr(const void *addr, Dl_info *info) {
   static int(*libc_dladdr)(const void*, Dl_info*);
-  if( libc_dladdr == NULL ) {
-    libc_dladdr = pip_dlsym_next( "dladdr" );
-  }
   pip_glibc_lock();
+  if( libc_dladdr == NULL ) {
+    libc_dladdr = pip_dlsym_next_unsafe( "dladdr" );
+  }
   int rv = libc_dladdr( addr, info );
   pip_glibc_unlock();
   return rv;
@@ -206,36 +166,38 @@ int dladdr(const void *addr, Dl_info *info) {
 void*
 pip_dlvsym(void *__restrict handle, const char *symbol, const char *version) {
   static void*(*libc_dlvsym)(void*__restrict, const char*, const char* );
-  if( libc_dlvsym == NULL ) {
-    libc_dlvsym = pip_dlsym_next( "dlvsym" );
-  }
   pip_glibc_lock();
+  if( libc_dlvsym == NULL ) {
+    libc_dlvsym = pip_dlsym_next_unsafe( "dlvsym" );
+  }
   void *rv = libc_dlvsym( handle, symbol, version );
   pip_glibc_unlock();
   return rv;
 }
 
 void *dlvsym(void *__restrict handle, const char *symbol, const char *version) {
-  return pip_dlvsym(handle, symbol, version);
+  return pip_dlvsym( handle, symbol, version );
 }
 
 /* misc. */
 
 void *pip_sbrk( intptr_t inc ) {
   static void*(*pip_libc_sbrk)(intptr_t) = NULL;
+  pip_glibc_lock();
   if( pip_libc_sbrk == NULL ) {
-    pip_libc_sbrk = pip_dlsym( RTLD_NEXT, "sbrk" );
+    pip_libc_sbrk = pip_dlsym_next_unsafe( "sbrk" );
     if( pip_libc_sbrk == NULL ) {
       errno = ENOSYS;
       return (void*)-1;
     }
   }
-  printf( ">> pip_sbrk()\n" );
-  pip_glibc_lock();
   void *rv = pip_libc_sbrk( inc );
   pip_glibc_lock();
-  printf( "<< pip_sbrk()\n" );
   return rv;
+}
+
+void *sbrk( intptr_t inc ) {
+  return pip_sbrk( inc );
 }
 
 #include <sys/types.h>
@@ -248,38 +210,65 @@ int getaddrinfo(const char *node, const char *service,
   static int(*pip_libc_getaddrinfo)(const char*, const char*,
 				    const struct addrinfo*,
 				    struct addrinfo**);
-  ENTER;
+  pip_glibc_lock();
   if( pip_libc_getaddrinfo == NULL ) {
     ASSERT( ( pip_libc_getaddrinfo = 
-	      pip_dlsym( RTLD_NEXT, "getaddrinfo" ) ) != NULL ) ; 
+	      pip_dlsym_next_unsafe( "getaddrinfo" ) ) != NULL ) ; 
   }
-  printf( ">> getaddrinfo()\n" );
-  pip_glibc_lock();
   int rv = pip_libc_getaddrinfo( node, service, hints, res );
   pip_glibc_unlock();
-  printf( "<< getaddrinfo()\n" );
-  RETURN( rv );
+  return rv;
 }
 
 void freeaddrinfo(struct addrinfo *res) {
   static void(*pip_libc_freeaddrinfo)(struct addrinfo*);
+  pip_glibc_lock();
   if( pip_libc_freeaddrinfo == NULL ) {
     ASSERT( ( pip_libc_freeaddrinfo = 
-	      pip_dlsym( RTLD_NEXT, "freeaddrinfo" ) ) != NULL ) ; 
+	      pip_dlsym_next_unsafe( "freeaddrinfo" ) ) != NULL ) ; 
   }
-  pip_glibc_lock();
   pip_libc_freeaddrinfo( res );
   pip_glibc_unlock();
 }
 
 const char *gai_strerror(int errcode) {
   static char*(*pip_libc_gai_strerror)(int);
+  pip_glibc_lock();
   if( pip_libc_gai_strerror == NULL ) {
     ASSERT( ( pip_libc_gai_strerror = 
-	      pip_dlsym( RTLD_NEXT, "gai_strerror" ) ) != NULL ) ; 
+	      pip_dlsym_next_unsafe( "gai_strerror" ) ) != NULL ) ; 
   }
-  pip_glibc_lock();
   char *rv = pip_libc_gai_strerror( errcode );
   pip_glibc_unlock();
   return rv;
+}
+
+void exit( int ) PIP_NORETURN;
+void exit( int status ) {
+  pip_exit( status );
+  NEVER_REACH_HERE;
+}
+
+void pip_pthread_exit( void* ) PIP_NORETURN;
+void pip_pthread_exit( void *retval ) {
+  static void(*pip_libc_pthread_exit)(void*);
+  if( pip_root != NULL   && 
+      pip_task != NULL   &&
+      pip_is_threaded_() &&
+      pip_task->tid == pip_gettid() ) {
+    pip_task->flag_sigchld = 1;
+    (void) pip_raise_signal( pip_root->task_root, SIGCHLD );
+  }
+  if( pip_libc_pthread_exit == NULL ) {
+    ASSERT( ( pip_libc_pthread_exit = 
+	      pip_dlsym_next_unsafe( "pthread_exit" ) ) != NULL ) ; 
+  }
+  pip_libc_pthread_exit( retval );
+  NEVER_REACH_HERE;
+}
+
+void pthread_exit( void* ) PIP_NORETURN;
+void pthread_exit( void *retval ) {
+  pip_pthread_exit( retval );
+  NEVER_REACH_HERE;
 }

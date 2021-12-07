@@ -124,11 +124,11 @@ static void *pip_get_dynent_ptr( ElfW(Dyn) *dyn, int type ) {
 
 static int pip_replace_got_itr( struct dl_phdr_info *info,
 				size_t size,
-				void *args ) {
-  pip_got_patch_args *itr_args = (pip_got_patch_args*) args;
-  char	       *dsoname = itr_args->dsoname;
-  char        **exclude = itr_args->exclude;
-  pip_got_patch_list_t *list = itr_args->patch_list;
+				void *got_args ) {
+  pip_got_patch_args *args = (pip_got_patch_args*) got_args;
+  char	       *dsoname = args->dsoname;
+  char        **exclude = args->exclude;
+  pip_got_patch_list_t *list = args->patch_list;
   pip_got_patch_list_t *patch;
   char	*fname, *bname, *symname;
   void	*new_addr;
@@ -194,18 +194,94 @@ static int pip_replace_got_itr( struct dl_phdr_info *info,
 int pip_patch_GOT( char *dsoname, 
 		   char **exclude, 
 		   pip_got_patch_list_t *patch_list ) {
-  pip_got_patch_args itr_args;
+  pip_got_patch_args got_args;
 
   ENTER;
-  itr_args.dsoname    = dsoname;
-  itr_args.exclude    = exclude;
-  itr_args.patch_list = patch_list;
+  got_args.dsoname    = dsoname;
+  got_args.exclude    = exclude;
+  got_args.patch_list = patch_list;
 
-  RETURN_NE( dl_iterate_phdr( pip_replace_got_itr, (void*) &itr_args ) );
+  RETURN_NE( dl_iterate_phdr( pip_replace_got_itr, (void*) &got_args ) );
 }
 
 void pip_undo_patch_GOT( void ) {
   ENTER;
   pip_undo_got_patch();
   RETURNV;
+}
+
+
+static void *pip_find_symbol( char *symname,
+			      off_t base, 
+			      ElfW(Sym) *symtab, 
+			      char *strtab ) {
+  int i;
+
+  ENTER;
+  for( i=0;; i++ ) {
+    char *name = strtab + symtab[i].st_name;
+    if( name == NULL || *name == '\0' ) continue;
+    if( strcmp( name, symname ) == 0  ) {
+      return (void*) symtab[i].st_value + base;
+    }
+  }
+  NEVER_REACH_HERE;
+  return NULL;
+}
+
+static void *pip_find_symtab( char *symname, 
+			      off_t secbase, 
+			      ElfW(Dyn) *dyn ) {
+  ElfW(Sym)	*symtab = NULL;
+  char		*strtab = NULL;
+  int 		i;
+  ENTER;
+  for( i=0; dyn[i].d_tag!=0||dyn[i].d_un.d_val!=0; i++ ) {
+    switch( (int) dyn[i].d_tag ) {
+    case DT_SYMTAB: 
+      symtab = (ElfW(Sym)*) dyn[i].d_un.d_ptr;
+      break;
+    case DT_STRTAB:
+      strtab = (char*)      dyn[i].d_un.d_ptr;
+      break;
+    }
+    if( symtab != NULL && strtab != NULL ) {
+      return pip_find_symbol( symname, secbase, symtab, strtab );
+    }
+  }
+  DBG;
+  return NULL;
+}
+
+/* Do not try to find a symbol which may not exsi in the DSO file !! */
+void *pip_find_dso_symbol( void *loaded, char *dsoname, char *symname ) {
+  struct link_map *lm;
+  Dl_info info;
+  void	*glibc_func = malloc;
+
+  ENTERF( "%s:%s", dsoname, symname );
+  if( loaded == NULL         || 
+      loaded == RTLD_DEFAULT ||
+      loaded == RTLD_NEXT ) {
+    /* since we have dlopen wrapper, we cannot call dlopen to get link map */
+    ASSERT( dladdr1( glibc_func, &info, &loaded, RTLD_DL_LINKMAP ) > 0 );
+  }
+  lm = (struct link_map*) loaded;
+  while( lm != NULL ) {
+    char *fname = (char*) lm->l_name;
+    char *bname;
+    DBGF( "fname:%s", fname );
+    if( fname != NULL && *fname != '\0' ) {
+      if( ( bname = strrchr( fname, '/' ) ) != NULL ) {
+	bname ++;		/* skp '/' */
+      } else {
+	bname = fname;
+      }
+      if( strncmp( dsoname, bname, strlen(dsoname) ) == 0 ) {
+	return pip_find_symtab( symname, (off_t) lm->l_addr, lm->l_ld );
+      }
+    }
+    lm = lm->l_next;
+  }
+  return NULL;
 }

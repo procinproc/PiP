@@ -88,7 +88,7 @@ int pip_raise_signal( pip_task_t *task, int sig ) {
   RETURN( err );
 }
 
-void pip_abort( void ) __attribute__((noreturn));
+void pip_abort( void ) PIP_NORETURN;
 void pip_abort( void ) {
   /* thin function may be called either root or tasks */
   ENTER;
@@ -678,4 +678,11 @@ int pip_init_task_implicitly( pip_root_t *root, pip_task_t *task, char **envv ) 
   DBGF( "pip_root: %p @ %p  piptask : %p @ %p", 
 	pip_root, &pip_root, pip_task, &pip_task );
   return err;
+}
+
+int pip_fin_task_implicitly( void ) {
+  DBG;
+  pip_root = NULL;
+  pip_task = NULL;
+  return 0;
 }

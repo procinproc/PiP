@@ -1483,6 +1483,9 @@ void pip_spawn_hook( pip_spawn_hook_t *hook,
 
 #ifndef DOXYGEN_INPROGRESS
 
+  void pip_glibc_lock( void );
+  void pip_glibc_unlock( void );
+
   void *pip_malloc( size_t );
   size_t pip_malloc_usable_size( void* );
   void  pip_free( void* );

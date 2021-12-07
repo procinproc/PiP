@@ -121,6 +121,8 @@ size_t WEAK_ATTR malloc_usable_size( void *ptr ) {
 static int pip_get_pipid_curr( void ) {
   int pipid;
 
+  DBGF( "pip_root : %p (%p)  pip_task : %p (%p)", 
+	pip_root, &pip_root, pip_task, &pip_task );
   ASSERT( pip_root != NULL && pip_task != NULL );
   pipid = pip_task->pipid;
   if( ( pipid < 0 || pipid > pip_root->ntasks ) &&

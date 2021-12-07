@@ -371,7 +371,7 @@ static int pip_check_opt_and_env( int *optsp ) {
       goto done;
     } else if( !( desired & PIP_MODE_PTHREAD_BIT) ) {
       pip_err_mesg( "%s mode is requested but pip_clone_mostly_pthread() "
-		    "cannot not be found in (PiP-)glibc",
+		    "cannot not be found in PiP-glibc",
 		    PIP_ENV_MODE_PROCESS_PIPCLONE );
       RETURN( EPERM );
     }
@@ -489,6 +489,32 @@ char *pip_prefix_dir( void ) {
   return NULL;			/* dummy */
 }
 
+static void
+pip_find_glibc_symbols( void *handle, pip_task_t *task ) {
+  pip_symbols_t *symp = &task->symbols;
+
+  pip_glibc_lock();		/* to protect dlsym */
+  {
+    /* the GLIBC _init() seems not callable. It seems that */
+    /* dlmopen()ed name space does not setup VDSO properly */
+    symp->ctype_init     = pip_dlsym_unsafe( handle, "__ctype_init"    );
+    symp->libc_fflush    = pip_dlsym_unsafe( handle, "fflush"          );
+    symp->exit	         = pip_dlsym_unsafe( handle, "exit"            );
+    symp->pthread_exit   = pip_dlsym_unsafe( handle, "pthread_exit"    );
+    /* GLIBC variables */
+    symp->environ        = pip_dlsym_unsafe( handle, "environ"         );
+    /* GLIBC misc. variables */
+    symp->prog           = pip_dlsym_unsafe( handle, "__progname"      );
+    symp->prog_full      = pip_dlsym_unsafe( handle, "__progname_full" );
+    /* PiP-glibc */
+    symp->pip_set_opts   = pip_dlsym_unsafe( handle, "pip_set_opts"    );
+  }
+  pip_glibc_unlock();
+
+  ASSERT( symp->exit         != NULL );
+  ASSERT( symp->pthread_exit != NULL );
+}
+
 int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
   void pip_named_export_init( pip_task_t* );
   pip_root_t	*root;
@@ -557,6 +583,7 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     root->task_root->tid    = pip_gettid();
     pip_task = root->task_root;
     pip_root = root;
+    pip_find_glibc_symbols( RTLD_NEXT, pip_task );
     {
       char sym[] = "R*";
       sym[1] = pip_cmd_name_symbol( root->opts );
@@ -834,14 +861,13 @@ int pip_is_coefd( int fd ) {
 
 static void pip_close_on_exec( void ) {
   DIR *dir;
-  struct dirent dirent, *direntp;
+  struct dirent *direntp;
   int fd;
 
 #define PROCFD_PATH		"/proc/self/fd"
   if( ( dir = opendir( PROCFD_PATH ) ) != NULL ) {
     int fd_dir = dirfd( dir );
-    while( readdir_r( dir, &dirent, &direntp ) == 0 &&
-	   direntp != NULL ) {
+    while( ( direntp = readdir( dir ) ) != NULL ) {
       if( direntp->d_name[0] != '.' &&
 	  ( fd = strtol( direntp->d_name, NULL, 10 ) ) >= 0 &&
 	  fd != fd_dir &&
@@ -884,31 +910,6 @@ static int pip_find_user_symbols( pip_spawn_program_t *progp,
   RETURN( err );
 }
 
-static int
-pip_find_glibc_symbols( void *handle, pip_task_t *task ) {
-  pip_symbols_t *symp = &task->symbols;
-  int err = 0;
-
-  pip_glibc_lock();		/* to protect dlsym */
-  {
-    /* the GLIBC _init() seems not callable. It seems that */
-    /* dlmopen()ed name space does not setup VDSO properly */
-    symp->ctype_init     = pip_dlsym_unsafe( handle, "__ctype_init"    );
-    symp->libc_fflush    = pip_dlsym_unsafe( handle, "fflush"          );
-    symp->exit	         = pip_dlsym_unsafe( handle, "exit"            );
-    symp->pthread_exit   = pip_dlsym_unsafe( handle, "pthread_exit"    );
-    /* GLIBC variables */
-    symp->libc_argcp     = pip_dlsym_unsafe( handle, "__libc_argc"     );
-    symp->libc_argvp     = pip_dlsym_unsafe( handle, "__libc_argv"     );
-    symp->environ        = pip_dlsym_unsafe( handle, "environ"         );
-    /* GLIBC misc. variables */
-    symp->prog           = pip_dlsym_unsafe( handle, "__progname"      );
-    symp->prog_full      = pip_dlsym_unsafe( handle, "__progname_full" );
-  }
-  pip_glibc_unlock();
-  RETURN( err );
-}
-
 #ifdef RTLD_DEEPBIND
 #define DLMOPEN_FLAGS	  (RTLD_NOW | RTLD_DEEPBIND)
 #else
@@ -919,8 +920,9 @@ static int
 pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
   const char 	*path = progp->prog;
   Lmid_t	lmid;
-  pip_init_t	impinit     = NULL;
-  void 		*loaded     = NULL;
+  pip_init_t	impinit = NULL;
+  pip_fin_t 	impfin  = NULL;
+  void 		*loaded = NULL;
   int		err = 0;
 
   ENTERF( "path:%s", path );
@@ -933,7 +935,7 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
     goto error;
   }
 
-  if( ( err = pip_find_glibc_symbols( loaded, task       ) ) ) goto error;
+  pip_find_glibc_symbols( loaded, task );
   if( ( err = pip_find_user_symbols( progp, loaded, task ) ) ) goto error;
   if( pip_dlinfo( loaded, RTLD_DI_LMID, &lmid ) != 0 ) {
     pip_err_mesg( "Unable to obtain Lmid - %s", pip_dlerror() );
@@ -948,9 +950,16 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
     err = ELIBBAD;
     goto error;
   }
+  impfin = (pip_fin_t) pip_dlsym( loaded, "pip_fin_task_implicitly" );
+  if( impfin == NULL ) {
+    DBGF( "dlsym: %s", pip_dlerror() );
+    err = ELIBBAD;
+    goto error;
+  }
   task->lmid             = lmid;
   task->loaded           = loaded;
   task->symbols.pip_init = impinit;
+  task->symbols.pip_fin  = impfin;
   RETURN( err );
 
  error:
@@ -1065,14 +1074,6 @@ static int pip_undo_corebind( cpu_set_t *oldsetp ) {
 static void pip_glibc_init( pip_symbols_t *symbols,
 			    pip_spawn_args_t *args ) {
   /* setting GLIBC variables */
-  if( symbols->libc_argcp != NULL ) {
-    DBGF( "&__libc_argc=%p", symbols->libc_argcp );
-    *symbols->libc_argcp = args->argc;
-  }
-  if( symbols->libc_argvp != NULL ) {
-    DBGF( "&__libc_argv=%p", symbols->libc_argvp );
-    *symbols->libc_argvp = args->argvec.vec;
-  }
   if( symbols->prog != NULL ) {
     *symbols->prog = args->prog;
   }
@@ -1095,14 +1096,22 @@ static void pip_glibc_fin( pip_symbols_t *symbols ) {
   }
 }
 
-static void pip_return_from_start_func( pip_task_t *task, int extval ) {
-  int err = 0;
+static void pip_do_exit( pip_task_t *task, int extval ) {
+  void *loaded = NULL;
+  int is_threaded = 0, err = 0;
 
   ENTER;
+  if( !pip_is_initialized() ) {
+    DBG;
+    goto call_exit;
+  } else if( task == NULL ) {
+    DBG;
+    goto force_exit;
+  }
   if( pip_gettid() == task->tid ) {
+    DBG;
     if( task->hook_after != NULL ) {
-      err = task->hook_after( task->hook_arg );
-      if( err ) {
+      if( ( err = task->hook_after( task->hook_arg ) ) != 0 ) {
 	pip_err_mesg( "PIPID:%d after-hook returns %d", task->pipid, err );
       }
       if( extval == 0 ) extval = err;
@@ -1119,30 +1128,35 @@ static void pip_return_from_start_func( pip_task_t *task, int extval ) {
     DBGF( "return from a fork()ed process?" );
     goto call_exit;
   }
-  DBGF( "PIPID:%d -- FORCE EXIT:%d", task->pipid, extval );
+  if( task != NULL ) {
+    loaded = task->loaded;
+    if( ( is_threaded = pip_is_threaded_() ) ) {	/* thread mode */
+      task->flag_sigchld = 1;
+      (void) pip_raise_signal( pip_root->task_root, SIGCHLD );
+    }
+    if( task->symbols.pip_fin != NULL ) {
+      task->symbols.pip_fin();
+      /* after this, pip_root and pip_task are unset and useless */
+    }
+  }
+ force_exit:
+  DBGF( "FORCE EXIT:%d", extval );
   /* here we have to call the exit() in the same context, if possible */
-  if( pip_is_threaded_() ) {	/* thread mode */
-    task->flag_sigchld = 1;
-    (void) pip_raise_signal( pip_root->task_root, SIGCHLD );
-
-    if( task->symbols.pthread_exit != NULL ) {
-      task->symbols.pthread_exit( NULL );
-    } else {
-      pthread_exit( NULL );
-    }
+  if( is_threaded ) {		/* thread mode */
+    pip_pthread_exit( NULL );
   } else {			/* process mode */
+    exit_t libc_exit;
   call_exit:
-    if( task->symbols.exit != NULL ) {
-      task->symbols.exit( extval );
-    } else {
-      exit( extval );
-    }
+    DBG;
+    libc_exit = pip_find_dso_symbol( loaded, "libc.so", "exit" );
+    DBG;
+    libc_exit( extval );
   }
   NEVER_REACH_HERE;
 }
 
 static void pip_sigquit_handler( int, void(*)(), struct sigaction* )
-  __attribute__((noreturn));
+  PIP_NORETURN;
 static void pip_sigquit_handler( int sig,
 				 void(*handler)(),
 				 struct sigaction *oldp ) {
@@ -1306,7 +1320,7 @@ static void *pip_do_spawn( void *thargs )  {
       }
     }
   }
-  pip_return_from_start_func( self, extval );
+  pip_do_exit( self, extval );
   NEVER_REACH_HERE;
   return NULL;			/* dummy */
 }
@@ -1621,6 +1635,8 @@ int pip_fin( void ) {
 
       pip_root = NULL;
       pip_task = NULL;
+      DBGF( "pip_root : %p (%p)  pip_task : %p (%p)", 
+	    pip_root, &pip_root, pip_task, &pip_task );
 
       memset( root, 0, sizeof(pip_root_t) );
       free( root );
@@ -1659,13 +1675,7 @@ int pip_get_system_id( int pipid, pip_id_t *idp ) {
 
 void pip_exit( int extval ) {
   DBGF( "extval:%d", extval );
-  if( !pip_is_initialized() ) {
-    exit( extval );
-  } else if( pip_isa_root() ) {
-    exit( extval );
-  } else {
-    pip_return_from_start_func( pip_task, extval );
-  }
+  pip_do_exit( pip_task, extval );
   NEVER_REACH_HERE;
 }
 

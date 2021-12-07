@@ -105,7 +105,6 @@ static void print_usage( char *argv0 ) {
     fprintf( stderr, "[--%s]", opttab[i].name );
   }
   fprintf( stderr, "\n" );
-  exit( 1 );
 }
 
 static int parse_cmdline( char ***argvp ) {
@@ -160,7 +159,7 @@ int pip_main( void ) {
   extern char *pip_prefix_dir(void);
   char **argv;
   char *argv0;
-  int argc;
+  int argc, extval = 0;
 
   if( ( argc = parse_cmdline( &argv ) ) > 0 ) {
     argv[0] = argv0 = basename( argv[0] );
@@ -169,12 +168,18 @@ int pip_main( void ) {
   if( argc > 1 ) {
     int v;
     while( ( v = getopt_long_only( argc, argv, "", opttab, NULL ) ) >= 0 ) {
-      if( v == USAGE || v == '?' || v ==':' ) print_usage( argv0 );
+      if( v == USAGE || v == '?' || v ==':' ) {
+	print_usage( argv0 );
+	extval = 1;
+	break;
+      }
       print_item( v );
     }
   } else {
     print_item( -1 );
   }
-  exit( 0 );
-  /* do not return */
+  fflush( NULL );
+  _exit( extval );
+  NEVER_REACH_HERE;
+  return 0;			/* dummy */
 }
