@@ -216,9 +216,8 @@ static void *pip_find_symbol( char *symname,
 			      ElfW(Sym) *symtab, 
 			      char *strtab ) {
   int i;
-
-  ENTER;
-  for( i=0;; i++ ) {
+  for( i=0; ; i++ ) {
+    /* FIXME: no way to limit this loop !! */
     char *name = strtab + symtab[i].st_name;
     if( name == NULL || *name == '\0' ) continue;
     if( strcmp( name, symname ) == 0  ) {
@@ -234,8 +233,9 @@ static void *pip_find_symtab( char *symname,
 			      ElfW(Dyn) *dyn ) {
   ElfW(Sym)	*symtab = NULL;
   char		*strtab = NULL;
+  void		*addr   = NULL;
   int 		i;
-  ENTER;
+
   for( i=0; dyn[i].d_tag!=0||dyn[i].d_un.d_val!=0; i++ ) {
     switch( (int) dyn[i].d_tag ) {
     case DT_SYMTAB: 
@@ -246,31 +246,31 @@ static void *pip_find_symtab( char *symname,
       break;
     }
     if( symtab != NULL && strtab != NULL ) {
-      return pip_find_symbol( symname, secbase, symtab, strtab );
+      addr = pip_find_symbol( symname, secbase, symtab, strtab );
+      break;
     }
   }
-  DBG;
-  return NULL;
+  return addr;
 }
 
 /* Do not try to find a symbol which may not exsi in the DSO file !! */
 void *pip_find_dso_symbol( void *loaded, char *dsoname, char *symname ) {
   struct link_map *lm;
   Dl_info info;
-  void	*glibc_func = malloc;
+  void	*any_func = pip_find_dso_symbol;
+  void  *addr = NULL;
 
   ENTERF( "%s:%s", dsoname, symname );
   if( loaded == NULL         || 
       loaded == RTLD_DEFAULT ||
       loaded == RTLD_NEXT ) {
     /* since we have dlopen wrapper, we cannot call dlopen to get link map */
-    ASSERT( dladdr1( glibc_func, &info, &loaded, RTLD_DL_LINKMAP ) > 0 );
+    ASSERT( dladdr1( any_func, &info, &loaded, RTLD_DL_LINKMAP ) > 0 );
   }
   lm = (struct link_map*) loaded;
   while( lm != NULL ) {
-    char *fname = (char*) lm->l_name;
-    char *bname;
-    DBGF( "fname:%s", fname );
+    char *bname, *fname = (char*) lm->l_name;
+
     if( fname != NULL && *fname != '\0' ) {
       if( ( bname = strrchr( fname, '/' ) ) != NULL ) {
 	bname ++;		/* skp '/' */
@@ -278,10 +278,11 @@ void *pip_find_dso_symbol( void *loaded, char *dsoname, char *symname ) {
 	bname = fname;
       }
       if( strncmp( dsoname, bname, strlen(dsoname) ) == 0 ) {
-	return pip_find_symtab( symname, (off_t) lm->l_addr, lm->l_ld );
+	addr = pip_find_symtab( symname, (off_t) lm->l_addr, lm->l_ld );
+	break;
       }
     }
     lm = lm->l_next;
   }
-  return NULL;
+  return addr;
 }
