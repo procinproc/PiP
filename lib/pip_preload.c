@@ -71,8 +71,7 @@ static pid_t pip_gettid_preloaded( void ) {
 }
 
 void pip_set_clone( void ) {
-  ASSERT( ( pip_clone_orig = 
-	    (clone_syscall_t) pip_dlsym( RTLD_NEXT, "__clone" ) ) != NULL );
+  pip_clone_orig = (clone_syscall_t) pip_dlsym( RTLD_NEXT, "__clone" );
 }
 
 int __clone( int(*fn)(void*), void *child_stack, int flags, void *args, ... ) {
