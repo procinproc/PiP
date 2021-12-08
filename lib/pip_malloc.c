@@ -25,7 +25,7 @@
  * $RIKEN_copyright: Riken Center for Computational Sceience (R-CCS),
  * System Software Development Team, 2016-2021
  * $
- * $PIP_VERSION: Version 2.1.0$
+ * $PIP_VERSION: Version 2.3.0$
  *
  * $Author: Atsushi Hori (R-CCS)
  * Query:   procinproc-info@googlegroups.com
@@ -50,9 +50,6 @@ void *__libc_calloc(size_t nmemb, size_t size);
 void *__libc_realloc(void *ptr, size_t size);
 
 #define PIP_MALLOC_MAGIC	(0xA5B6C7D8U)
-
-//#define WEAK_ATTR	__attribute__ ((weak))
-#define WEAK_ATTR
 
 static void *pip_malloc_dlsym_next( const char *symbol ) {
   pip_dont_wrap_malloc = 1;
@@ -112,7 +109,7 @@ size_t pip_malloc_usable_size( void *ptr ) {
   return sz;
 }
 
-size_t WEAK_ATTR malloc_usable_size( void *ptr ) {
+size_t malloc_usable_size( void *ptr ) {
   return pip_malloc_usable_size( ptr );
 }
 
@@ -194,7 +191,7 @@ void pip_free( void *addr ) {
   }
 }
 
-void WEAK_ATTR free( void *addr ) {
+void free( void *addr ) {
   pip_free( addr );
 }
 
@@ -224,7 +221,7 @@ void *pip_malloc( size_t size ) {
   return rv;
 }
 
-void * WEAK_ATTR malloc( size_t size ) {
+void *malloc( size_t size ) {
   return pip_malloc( size );
 }
 
@@ -235,7 +232,7 @@ void *pip_calloc( size_t nmemb, size_t size ) {
   return rv;
 }
 
-void * WEAK_ATTR calloc( size_t nmemb, size_t size ) {
+void *calloc( size_t nmemb, size_t size ) {
   return pip_calloc( nmemb, size );
 }
 
@@ -264,7 +261,7 @@ void *pip_realloc( void *ptr, size_t size ) {
   return rv;
 }
 
-void * WEAK_ATTR realloc( void *ptr, size_t size ) {
+void *realloc( void *ptr, size_t size ) {
   return pip_realloc( ptr, size );
 }
 
@@ -302,7 +299,7 @@ int pip_posix_memalign( void **memptr, size_t alignment, size_t size ) {
   return rv;
 }
 
-int WEAK_ATTR posix_memalign( void **memptr, size_t alignment, size_t size ) {
+int posix_memalign( void **memptr, size_t alignment, size_t size ) {
   return pip_posix_memalign( memptr, alignment, size );
 }
 
@@ -316,7 +313,7 @@ void *aligned_alloc( size_t alignment, size_t size ) {
   return p;
 }
 
-void * WEAK_ATTR memalign( size_t alignment, size_t size ) {
+void *memalign( size_t alignment, size_t size ) {
   return aligned_alloc( alignment, size );
 }
 
