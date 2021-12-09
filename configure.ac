@@ -27,6 +27,8 @@ case "$target" in
       *) AC_MSG_ERROR([Unsupported target CPU architecture]);;
 esac;
 
+AC_SUBST(PACKAGE_VERSION)
+
 # srcdir_top
 
 cwd=`dirname $0`;

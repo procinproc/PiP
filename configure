@@ -1980,6 +1980,8 @@ case "$target" in
       *) as_fn_error $? "Unsupported target CPU architecture" "$LINENO" 5;;
 esac;
 
+
+
 # srcdir_top
 
 cwd=`dirname $0`;
