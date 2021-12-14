@@ -129,7 +129,6 @@ static int parse_cmdline( char ***argvp ) {
     }
     szs *= 2;
     if( ( argstr = (char*) realloc( argstr, szs ) ) == NULL ) {
-      free( argstr );
       close( fd );
       return -1;
     }
@@ -161,25 +160,29 @@ int pip_main( void ) {
   char *argv0;
   int argc, extval = 0;
 
-  if( ( argc = parse_cmdline( &argv ) ) > 0 ) {
-    argv[0] = argv0 = basename( argv[0] );
-  }
-  valtab[5].value = pip_prefix_dir();
-  if( argc > 1 ) {
-    int v;
-    while( ( v = getopt_long_only( argc, argv, "", opttab, NULL ) ) >= 0 ) {
-      if( v == USAGE || v == '?' || v ==':' ) {
-	print_usage( argv0 );
-	extval = 1;
-	break;
-      }
-      print_item( v );
-    }
-  } else {
+  if( ( argc = parse_cmdline( &argv ) ) < 0 ) {
+    fprintf( stderr, "Error: Unable to get parameters\n" );
     print_item( -1 );
+  } else {
+    argv[0] = argv0 = basename( argv[0] );
+    valtab[5].value = pip_prefix_dir();
+    if( argc > 1 ) {
+      int v;
+      while( ( v = getopt_long_only( argc, argv, "", opttab, NULL ) ) >= 0 ) {
+	if( v == USAGE || v == '?' || v ==':' ) {
+	  print_usage( argv0 );
+	  extval = 1;
+	  break;
+	}
+	print_item( v );
+      }
+    } else {
+      print_item( -1 );
+    }
   }
   fflush( NULL );
-  _exit( extval );
+  exit( extval );
+  /* we cannot return from this */
   NEVER_REACH_HERE;
   return 0;			/* dummy */
 }

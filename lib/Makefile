@@ -58,7 +58,7 @@ CPPFLAGS += $(PIP_CPPFLAGS) \
 	$(CPPFLAGS_DEBUG)
 CFLAGS   += $(PIC_CFLAG) $(PTHREAD_FLAG)
 
-LIBMAIN = -Wl,-e,pip_main
+LIBMAIN = -Wl,-e,pip_main -ldl
 
 SRCS  = pip_init.c pip_main.c pip.c pip_2_backport.c pip_wait.c \
 	pip_namexp.c pip_clone.c pip_signal.c pip_util.c \
