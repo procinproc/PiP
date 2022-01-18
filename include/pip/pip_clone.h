@@ -55,29 +55,40 @@
 #ifndef DOXYGEN_INPROGRESS
 
 INLINE int pip_clone_flags( int flags ) {
-  flags &= ~(CLONE_FS);		/* 0x00200 */
-  flags &= ~(CLONE_FILES);	/* 0x00400 */
-  flags &= ~(CLONE_SIGHAND);	/* 0x08000 */
-  flags &= ~(CLONE_PARENT);	/* 0x10000 */
-  flags &= ~(CLONE_THREAD);	/* 0x10000 */
+  /* flags muxt be unset */
+  flags &= ~(CLONE_FS);
+  flags &= ~(CLONE_FILES);
+  flags &= ~(CLONE_SIGHAND);
+  flags &= ~(CLONE_PARENT);
+  flags &= ~(CLONE_THREAD);
+#ifdef CLONE_IO
+  flags &= ~(CLONE_IO);
+#endif
 #ifdef CLONE_NEWNET
-  flags &= ~(CLONE_NEWNET);	/* 0x10000 */
+  flags &= ~(CLONE_NEWNET);
 #endif
 #ifdef CLONE_NEWNS
-  flags &= ~(CLONE_NEWNS);	/* 0x10000 */
+  flags &= ~(CLONE_NEWNS);
 #endif
 #ifdef CLONE_NEWPID
-  flags &= ~(CLONE_NEWPID);	/* 0x10000 */
+  flags &= ~(CLONE_NEWPID);
 #endif
 #ifdef CLONE_NEWUTS
-  flags &= ~(CLONE_NEWUTS);	/* 0x10000 */
+  flags &= ~(CLONE_NEWUTS);
 #endif
-  flags |= CLONE_VM;		/* 0x00100 */
-  flags |= CLONE_PTRACE;        /* 0x02000 */
-  /* do not reset the CLONE_SETTLS flag */
-  flags |= CLONE_SETTLS; 	/* 0x80000 */
+
+  /* flags must be set */
+  flags |= CLONE_SETTLS;
+  flags |= CLONE_VM;
+
+  /* flags seem to be better to set */
+  flags |= CLONE_PTRACE;
+  flags |= CLONE_SYSVSEM;
+
+  /* raise SIGCHLD when terminated */
   flags &= ~0xff;
   flags |= SIGCHLD;
+
   return flags;
 }
 

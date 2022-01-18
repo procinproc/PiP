@@ -64,18 +64,12 @@ void pip_onstart( pip_task_t *task ) {
     if( WIFSTOPPED(  status ) ) break;
 
     if( WIFEXITED(   status ) ) {
-      pip_set_exit_status( task, status );
-      if( WIFSIGNALED( status ) ) {
-	pip_task_signaled( task, status );
-      }
+      pip_set_exit_status( task, status, 0 );
       pip_annul_task( task );
       RETURNV;
     }
     if( WIFSIGNALED( status ) ) {
-      pip_set_exit_status( task, status );
-      if( WIFSIGNALED( status ) ) {
-	pip_task_signaled( task, status );
-      }
+      pip_set_exit_status( task, status, 0 );
       pip_annul_task( task );
       RETURNV;
     }

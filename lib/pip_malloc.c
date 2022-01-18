@@ -36,6 +36,10 @@
 #include <pip/pip_internal.h>
 #include <malloc.h>
 
+#ifdef DEBUG
+#undef DEBUG
+#endif
+
 #define PIP_MALLOC
 #ifdef PIP_MALLOC
 
@@ -116,28 +120,30 @@ size_t malloc_usable_size( void *ptr ) {
 static int pip_get_pipid_curr( void ) {
   int pipid;
 
-  DBGF( "pip_root : %p (%p)  pip_task : %p (%p)", 
-	pip_root, &pip_root, pip_task, &pip_task );
-  ASSERT( pip_root != NULL && pip_task != NULL );
+  ASSERTD( pip_root != NULL && pip_task != NULL );
   pipid = pip_task->pipid;
   if( ( pipid < 0 || pipid > pip_root->ntasks ) &&
       pipid != PIP_PIPID_ROOT ) {
     /* this may happen when the task is terminating */
     pipid = ( (uintptr_t)pip_task - (uintptr_t)&pip_root->tasks ) /
       sizeof(pip_task_t);
-    DBGF( "PIPID: %d (ntasks:%d)", pipid, pip_root->ntasks );
-    ASSERT( pipid >= 0 && pipid < pip_root->ntasks );
+    ASSERTD( pipid >= 0 && pipid < pip_root->ntasks );
   }
-  DBGF( "PIPID: %d", pipid );
   return pipid;
 }
 
 void pip_free_all( void ) {
-  if( pip_task != NULL && pip_task->malloc_free_list != 0 ) {
+  pip_task_t	*task = NULL;
+
+  if( pip_task != NULL ) {
+    task = pip_task;
+  }
+
+  if( task != NULL && task->malloc_free_list != 0 ) {
     pip_atomic_t free_list, *free_listp;
 
     ENTER;
-    free_listp = &pip_task->malloc_free_list;
+    free_listp = &task->malloc_free_list;
     do {
       free_list = *free_listp;
     } while( pip_comp2_and_swap( free_listp, free_list, (pip_atomic_t) 0 ) == 0 );
@@ -158,35 +164,32 @@ void pip_free( void *addr ) {
   pip_task_t	*task;
   int 		pipid, self;
 
+  pip_free_all();
   if( addr == NULL ) return;
   if( pip_dont_wrap_malloc ||
       pip_root == NULL     ||
       pip_task == NULL ) {
     __libc_free( addr );
   } else {
-    DBGF( "addr: %p", addr );
-    pip_free_all();
     pipid = pip_is_pip_malloced( addr );
-    self  = pip_get_pipid_curr();
     if( pipid < 0 && pipid != PIP_PIPID_ROOT ) {
       __libc_free( addr );
-    } else if( pipid == self ) {
-      __libc_free( addr );
     } else {
-      DBGF( "PIPID:%d", pipid );
-      task = ( pipid == PIP_PIPID_ROOT ) ? 
-	pip_root->task_root :
-	&pip_root->tasks[pipid];
-      DBGF( "task: %p", task );
-      free_listp = (pip_atomic_t*) &task->malloc_free_list;
-      DBG;
-      do {
-	free_list = *free_listp;
-	*(pip_atomic_t*)addr = free_list;
-	DBG;
-      } while( pip_comp2_and_swap( free_listp, 
-				   free_list, 
-				   (pip_atomic_t) addr ) == 0 );
+      self = pip_get_pipid_curr();
+      if( pipid == self ) {
+	__libc_free( addr );
+      } else {
+	task = ( pipid == PIP_PIPID_ROOT ) ? 
+	  pip_root->task_root :
+	  &pip_root->tasks[pipid];
+	free_listp = (pip_atomic_t*) &task->malloc_free_list;
+	do {
+	  free_list = *free_listp;
+	  *(pip_atomic_t*)addr = free_list;
+	} while( pip_comp2_and_swap( free_listp, 
+				     free_list, 
+				     (pip_atomic_t) addr ) == 0 );
+      }
     }
   }
 }
@@ -201,7 +204,6 @@ void *pip_malloc( size_t size ) {
   if( pip_dont_wrap_malloc ) {
     rv = __libc_malloc( size );
   } else {
-    ENTER;
     pip_free_all();
     if( pip_root == NULL || pip_task == NULL ) {
       rv = __libc_malloc( size );
@@ -216,7 +218,6 @@ void *pip_malloc( size_t size ) {
 	memcpy( rv + sz - sizeof(info), &info, sizeof(info) );
       }
     }
-    LEAVEF( "rv: %p", rv );
   }
   return rv;
 }

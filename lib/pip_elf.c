@@ -284,5 +284,6 @@ void *pip_find_dso_symbol( void *loaded, char *dsoname, char *symname ) {
     }
     lm = lm->l_next;
   }
+  DBGF( "addr:%p", addr );
   return addr;
 }

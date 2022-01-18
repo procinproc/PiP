@@ -189,5 +189,4 @@ void pip_print_loaded_solibs( FILE *file ) {
       fprintf( file, "%s %s at %p\n", idstr, fname, (void*)map->l_addr );
     }
   }
-  if( pip_root_p_() && handle != NULL ) dlclose( handle );
 }

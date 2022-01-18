@@ -33,6 +33,7 @@
  * $
  */
 
+#include <pip/pip_internal.h>
 #include <pip/pip_gdbif.h>
 #include <stddef.h>
 #include <sys/wait.h>

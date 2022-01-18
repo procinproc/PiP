@@ -37,6 +37,7 @@
 #define _pip_gdbif_h_
 
 #include <pip/pip.h>
+#include <pip/pip_internal.h>
 #include <pip/pip_machdep.h> /* for pip_spinlock_t */
 #include <pip/pip_gdbif_queue.h>
 #include <pip/pip_gdbif_enums.h>

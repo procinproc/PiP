@@ -65,17 +65,19 @@ struct value_table {
   char *value;
 };
 
+#define VALTAB_PREFIX		(5)
+
 struct value_table valtab[] =
-  { { "Package",     PACKAGE_NAME },
-    { "Version",     PACKAGE_VERSION },
-    { "License",     "the 2-clause simplified BSD License" },
-    { "Build OS",    BUILD_OS },
-    { "Build CC",    BUILD_CC },
-    { "Prefix dir",  NULL },
-    { "PiP-glibc",   PIP_INSTALL_GLIBCDIR },
-    { "ld-linux",    LDLINUX },
-    { "Commit Hash", COMMIT_HASH },
-    { "Debug build",
+  { { "Package",     PACKAGE_NAME },			      /* 0 */
+    { "Version",     PACKAGE_VERSION },			      /* 1 */
+    { "License",     "the 2-clause simplified BSD License" }, /* 2 */
+    { "Build OS",    BUILD_OS },			      /* 3 */
+    { "Build CC",    BUILD_CC },			      /* 4 */
+    { "Prefix dir",  NULL },				      /* 5 */
+    { "PiP-glibc",   PIP_INSTALL_GLIBCDIR },		      /* 6 */
+    { "ld-linux",    LDLINUX },				      /* 7 */
+    { "Commit Hash", COMMIT_HASH },			      /* 8 */
+    { "Debug build",					      /* 9 */
 #ifdef DEBUG
       "yes"
 #else
@@ -86,7 +88,7 @@ struct value_table valtab[] =
   };
 
 static void print_item( int item ) {
-  if( item < 0 || item == ALL ) {
+  if( item == ALL ) {
     int i;
     for( i=0; valtab[i].name!=NULL; i++ ) {
       printf( "%s:\t%s\n", valtab[i].name, valtab[i].value );
@@ -110,40 +112,31 @@ static void print_usage( char *argv0 ) {
 static int parse_cmdline( char ***argvp ) {
 #define ARGSTR_SZ	(512)
   char *procfs = "/proc/self/cmdline";
-  char *argstr, **argvec;
+  char *argstr = NULL, **argvec = NULL;
   size_t szs = ARGSTR_SZ, sz;
-  int fd, argc, i, c;
+  int fd = -1, argc, i, c;
 
   if( ( argstr = (char*) malloc( szs ) ) == NULL ) return -1;
-  if( ( fd = open( procfs, O_RDONLY ) ) < 0 ) {
-    free( argstr );
-    return -1;
-  }
-  memset( argstr, 0, szs );
+  if( ( fd = open( procfs, O_RDONLY ) ) < 0 ) goto fail;
   while( 1 ) {
+    memset( argstr, 0, szs );
     if( ( sz = read( fd, argstr, szs ) ) < szs ) break;
-    if( lseek( fd, 0, SEEK_SET ) < 0 ) {
-      free( argstr );
-      close( fd );
-      return -1;
-    }
     szs *= 2;
     if( ( argstr = (char*) realloc( argstr, szs ) ) == NULL ) {
-      close( fd );
-      return -1;
+      goto fail;
     }
-    memset( argstr, 0, szs );
+    if( lseek( fd, 0, SEEK_SET ) < 0 ) goto fail;
   }
   close( fd );
+  fd = -1;
+
   argc = 0;
   for( i=0; i<sz; i++ ) {
     if( argstr[i] == '\0' ) argc++;
   }
   argvec = (char**) malloc( sizeof(char*) * ( argc + 1 ) );
-  if( argvec == NULL ) {
-    free( argstr );
-    return -1;
-  }
+  if( argvec == NULL ) goto fail;
+
   for( c=0, i=0; c<argc; c++ ) {
     argvec[c] = &argstr[i];
     for( ; argstr[i]!='\0'; i++ );
@@ -152,20 +145,25 @@ static int parse_cmdline( char ***argvp ) {
   argvec[c] = NULL;
   *argvp = argvec;
   return argc;
+
+ fail:
+  if( fd >= 0 ) close( fd );
+  free( argstr );
+  return -1;
 }
 
 int pip_main( void ) {
   extern char *pip_prefix_dir(void);
   char **argv;
   char *argv0;
-  int argc, extval = 0;
+  int   argc, extval = 0;
 
   if( ( argc = parse_cmdline( &argv ) ) < 0 ) {
     fprintf( stderr, "Error: Unable to get parameters\n" );
-    print_item( -1 );
+    print_item( ALL );
   } else {
     argv[0] = argv0 = basename( argv[0] );
-    valtab[5].value = pip_prefix_dir();
+    valtab[VALTAB_PREFIX].value = pip_prefix_dir();
     if( argc > 1 ) {
       int v;
       while( ( v = getopt_long_only( argc, argv, "", opttab, NULL ) ) >= 0 ) {
@@ -177,10 +175,10 @@ int pip_main( void ) {
 	print_item( v );
       }
     } else {
-      print_item( -1 );
+      print_item( ALL );
     }
+    free( argv );
   }
-  fflush( NULL );
   exit( extval );
   /* we cannot return from this */
   NEVER_REACH_HERE;

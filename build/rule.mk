@@ -1,6 +1,6 @@
 # default target is "all"
 
-all: subdir-all header-all lib-all prog-all post-all-hook
+all: pre-all-hook subdir-all header-all lib-all prog-all post-all-hook
 .PHONY: all
 
 install: all \
@@ -215,6 +215,7 @@ $(OBJS):
 
 ### hooks
 
+pre-all-hook:
 post-all-hook:
 pre-install-hook:
 post-install-hook:

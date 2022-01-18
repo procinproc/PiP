@@ -66,7 +66,6 @@ void pip_gdbif_load( pip_task_t *task ) {
     void *faddr = NULL;
 
     gdbif_task->handle = task->loaded;
-
     if( task->symbols.main != NULL ) {
       faddr = task->symbols.main;
     } else if( task->symbols.start != NULL ) {
@@ -185,16 +184,12 @@ void pip_gdbif_initialize_root( int ntasks ) {
   RETURNV;
 }
 
-static void pip_gdbif_finalize_tasks( void ) {
+static void pip_gdbif_finalize_tasks( pip_root_t *root ) {
   struct pip_gdbif_root *gdbif_root;
   struct pip_gdbif_task *gdbif_task, **prev, *next;
 
   ENTER;
-  if( pip_root == NULL ) {
-    DBGF( " pip_init() hasn't called?" );
-    return;
-  }
-  gdbif_root = pip_root->gdbif_root;
+  gdbif_root = root->gdbif_root;
   pip_spin_lock( &gdbif_root->lock_root );
   prev = &PIP_SLIST_FIRST(&gdbif_root->task_free);
   PIP_SLIST_FOREACH_SAFE(gdbif_task, &gdbif_root->task_free, free_list,
@@ -211,10 +206,11 @@ static void pip_gdbif_finalize_tasks( void ) {
 }
 
 void pip_gdbif_finalize_task( pip_task_t *task ) {
-  struct pip_gdbif_root *gdbif_root = pip_root->gdbif_root;
+  pip_root_t		*root = task->task_root;
+  struct pip_gdbif_root *gdbif_root = root->gdbif_root;
   struct pip_gdbif_task *gdbif_task = task->gdbif_task;
 
-  ENTER;
+  ENTERF( "root:%p  task:%p", root, task );
   if( gdbif_task != NULL ) {
     gdbif_task->status   = PIP_GDBIF_STATUS_TERMINATED;
     pip_memory_barrier();
@@ -224,12 +220,12 @@ void pip_gdbif_finalize_task( pip_task_t *task ) {
     gdbif_task->envv         = NULL;
     gdbif_task->realpathname = NULL;
 
-    pip_spin_lock( &gdbif_root->lock_free );
-    {
+    if( gdbif_root != NULL ) {
+      pip_spin_lock( &gdbif_root->lock_free );
       PIP_SLIST_INSERT_HEAD(&gdbif_root->task_free, gdbif_task, free_list);
-      pip_gdbif_finalize_tasks();
+      pip_gdbif_finalize_tasks( root );
+      pip_spin_unlock( &gdbif_root->lock_free );
     }
-    pip_spin_unlock( &gdbif_root->lock_free );
   }
   RETURNV;
 }
@@ -244,7 +240,8 @@ void pip_gdbif_hook_before( pip_task_t *taski ) {
 }
 
 void pip_gdbif_hook_after( pip_task_t *taski ) {
-  struct pip_gdbif_root *gdbif_root = pip_root->gdbif_root;
+  pip_root_t *root = taski->task_root;
+  struct pip_gdbif_root *gdbif_root = root->gdbif_root;
   struct pip_gdbif_task *gdbif_task = taski->gdbif_task;
 
   if( gdbif_root->hook_after_main != NULL ) {

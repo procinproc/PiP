@@ -70,11 +70,23 @@
 #include <fcntl.h>
 #include <link.h>
 
+#define PIP_PRIVATE		__attribute__((visibility ("hidden")))
+
+struct pip_root PIP_PRIVATE;
+struct pip_task PIP_PRIVATE;
+
+extern struct pip_root	*pip_root;
+extern struct pip_task	*pip_task;
+extern int		pip_initialized;
+extern int		pip_finalized;
+extern int 		pip_dont_wrap_malloc;
+
 #include <pip/pip_config.h>
 #include <pip/pip_dlfcn.h>
 #include <pip/pip_machdep.h>
 #include <pip/pip_clone.h>
 #include <pip/pip_debug.h>
+#include <pip/pip_gdbif_func.h>
 
 #define PIP_BASE_VERSION	(0x3200U)
 
@@ -89,10 +101,15 @@
 #define PIP_EXIT_WAITED		(2)
 #define PIP_ABORT		(9)
 
+#define PIP_EXIT_EXIT		(0)
+#define PIP_EXIT_PTHREAD	(1)
+
 #define PIP_STACK_SIZE		(8*1024*1024LU) /* 8 MiB */
 #define PIP_STACK_SIZE_MIN	(4*1024*1024LU) /* 1 MiB */
 #define PIP_STACK_SIZE_MAX	(16*1024*1024*1024LU) /* 16 GiB */
 #define PIP_STACK_ALIGN		(256)
+
+#define PIP_MINSIGSTKSZ 	(MINSIGSTKSZ*2)
 
 #define PIP_CLONE_LOCK_UNLOCKED		(0)
 #define PIP_CLONE_LOCK_OTHERWISE	(0xFFFFFFFF)
@@ -101,11 +118,7 @@
 
 #define PIP_MIDLEN		(64)
 
-#define PIP_PRIVATE		__attribute__((visibility ("hidden")))
 #define PIP_NORETURN		__attribute__((noreturn))
-
-struct pip_root PIP_PRIVATE;
-struct pip_task PIP_PRIVATE;
 
 typedef struct pip_got_patch_list {
   char	*name;
@@ -118,7 +131,7 @@ typedef void(*pthread_init_t)(int,char**,char**);
 typedef	void(*ctype_init_t)(void);
 typedef void(*add_stack_user_t)(void);
 typedef	void(*fflush_t)(FILE*);
-typedef void (*exit_t)(int);
+typedef void(*exit_t)(int);
 typedef void (*pthread_exit_t)(void*);
 typedef void*(*dlsym_t)(void*, const char*);
 typedef void(*pip_set_opts_t)(char*,char*);
@@ -147,21 +160,19 @@ typedef struct pip_symbol {
   /* GLIBC init funcs */
   ctype_init_t		ctype_init;   /* to call GLIBC __ctype_init() */
   /* GLIBC functions */
-  void			*unused_slot_0; /* not used */
-  void			*unused_slot_1;	/* not used */
+  void			*unused_slot0;	/* unused */
+  void			*unused_slot1;	/* unused */
   fflush_t		libc_fflush;  /* to call GLIBC fflush() at the end */
   exit_t		exit;
   pthread_exit_t	pthread_exit; /* (see above exit) */
   /* pip_patch_GOT */
   pip_patch_got_t	patch_got;
-  /* dlsym */
-  dlsym_t		dlsym;
   /* pip_fin_task_implicitly */
   pip_fin_t		pip_fin;
   /* PiP-glibc */
   pip_set_opts_t	pip_set_opts;
   /* reserved for future use */
-  void			*__reserved__[15]; /* reserved for future use */
+  void			*__reserved__[16]; /* reserved for future use */
 } pip_symbols_t;
 
 typedef struct pip_char_vec {
@@ -186,9 +197,9 @@ typedef struct pip_spawn_args {
 #define PIP_TYPE_ROOT	(1)
 #define PIP_TYPE_TASK	(2)
 
-#define PIP_ISA_ROOT(T)		( (T)->type & PIP_TYPE_ROOT )
-#define PIP_ISA_TASK(T)		\
-  ( (T)->type & ( PIP_TYPE_ROOT | PIP_TYPE_TASK ) )
+#define PIP_ISA_ROOT(T)		( (T)->type == PIP_TYPE_ROOT )
+#define PIP_IS_ALIVE(T)		( (T)->type != PIP_TYPE_NULL )
+#define PIP_ISNTA_TASK(T)	( pip_gettid() != (T)->tid )
 
 struct pip_gdbif_task;
 struct pip_root;
@@ -228,12 +239,10 @@ typedef struct pip_task {
   pip_atomic_t		malloc_free_list;
 
   cpu_set_t 		*cpuset;
+  sigset_t		*debug_signals;
   /* reserved for future use */
   void			*__reserved__[14];
 } pip_task_t;
-
-extern pip_task_t	*pip_task;
-extern int 		pip_dont_wrap_malloc;
 
 #define PIP_FILLER_SZ	(PIP_CACHE_SZ-sizeof(pip_spinlock_t))
 
@@ -269,13 +278,13 @@ INLINE void pip_sem_init( pip_sem_t *sem ) {
 INLINE void pip_sem_post( pip_sem_t *sem ) {
   errno = 0;
   (void) sem_post( sem );
-  ASSERT( errno == 0 );
+  ASSERTD( errno == 0 );
 }
 
 INLINE void pip_sem_wait( pip_sem_t *sem ) {
   errno = 0;
   (void) sem_wait( sem );
-  ASSERT( errno == 0 || errno == EINTR );
+  ASSERTD( errno == 0 || errno == EINTR );
 }
 
 INLINE void pip_sem_fin( pip_sem_t *sem ) {
@@ -301,7 +310,7 @@ INLINE void pip_recursive_lock_unlock( pip_recursive_lock_t *lock ) {
   pid_t 	tid = pip_gettid();
   int		nrec;
   pip_atomic_t 	count;
-  ASSERT( tid == lock->owner );
+  ASSERTD( tid == lock->owner );
   nrec = --lock->nrecursive;
   if( nrec == 0 ) lock->owner = 0;
   count = pip_atomic_sub_and_fetch( &lock->count, 1 );
@@ -353,7 +362,7 @@ typedef struct pip_root {
 
   char			*prefixdir;
 
-  int			flag_debug;
+  int			flag_debug; /* unused */
 
   pip_sem_t		universal_lock;
   pip_recursive_lock_t	glibc_lock; /* 5 64-bit words */
@@ -371,41 +380,17 @@ typedef struct pip_root {
 #endif
 #define PIP_W_EXITCODE(X,S)	__W_EXITCODE(X,S)
 
-extern pip_root_t	*pip_root;
+extern void pip_after_fork( void ) PIP_PRIVATE;
 
-INLINE int pip_check_pipid( int *pipidp ) {
-  int pipid;
-
-  if( !pip_is_initialized() ) RETURN( EPERM  );
-  if( pipidp == NULL        ) RETURN( EINVAL );
-  pipid = *pipidp;
-
-  switch( pipid ) {
-  case PIP_PIPID_ROOT:
-    break;
-  case PIP_PIPID_ANY:
-  case PIP_PIPID_NULL:
-    RETURN( EINVAL );
-    break;
-  case PIP_PIPID_MYSELF:
-    if( pip_isa_root() ) {
-      *pipidp = PIP_PIPID_ROOT;
-    } else if( pip_isa_task() ) {
-      *pipidp = pip_task->pipid;
-    } else {
-      RETURN( ENXIO );		/* ???? */
-    }
-    break;
-  default:
-    if( pipid <  0                ) RETURN( EINVAL );
-    if( pipid >= pip_root->ntasks ) RETURN( ERANGE );
-  }
-  return 0;
-}
-
+extern int  pip_is_effective( void ) PIP_PRIVATE;
+extern int  pip_is_finalized( void ) PIP_PRIVATE;
+extern int  pip_fin_task_implicitly( void );
 extern void pip_free_all( void ) PIP_PRIVATE;
 extern void *pip_dlopen_unsafe( const char*, int ) PIP_PRIVATE;
 extern void *pip_find_dso_symbol( void*, char*, char* ) PIP_PRIVATE;
+extern void *pip_dlsym_unsafe( void*, const char* ) PIP_PRIVATE;
+extern void pip_do_exit( pip_task_t*, int, uintptr_t ) PIP_PRIVATE;
+extern void pip_named_export_fin_all( pip_root_t* );
 
 extern void pip_reset_task_struct( pip_task_t* ) PIP_PRIVATE;
 extern int  pip_tkill( int, int );
@@ -418,17 +403,17 @@ extern int  pip_is_shared_fd( int *flagp );
 extern int  pip_is_shared_sighand( int *flagp );
 
 extern pip_task_t *pip_get_task_( int ) PIP_PRIVATE;
-extern int  pip_check_pipid( int* ) PIP_PRIVATE;
 
 extern void pip_set_signal_handler( int sig, void(*)(),
 				    struct sigaction* ) PIP_PRIVATE;
-extern void pip_set_sigmask( int ) PIP_PRIVATE;
-extern void pip_unset_sigmask( void ) PIP_PRIVATE;
 extern int  pip_signal_wait( int ) PIP_PRIVATE;
+extern void pip_raise_sigchld( pip_task_t* ) PIP_PRIVATE;
+extern void pip_set_signal_handlers( void ) PIP_PRIVATE;
+extern void pip_unset_signal_handlers( void ) PIP_PRIVATE;
+extern void pip_abort_handler( int ) PIP_PRIVATE;
 
 extern void pip_onstart( pip_task_t* ) PIP_PRIVATE;
-extern void pip_set_exit_status( pip_task_t*, int ) PIP_PRIVATE;
-extern void pip_task_signaled( pip_task_t*, int ) PIP_PRIVATE;
+extern void pip_set_exit_status( pip_task_t*, int, int ) PIP_PRIVATE;
 extern void pip_annul_task( pip_task_t* ) PIP_PRIVATE;
 extern void pip_pthread_exit( void* ) PIP_PRIVATE;
 
@@ -442,23 +427,46 @@ extern void pip_page_alloc( size_t, void** );
 extern int  pip_raise_signal( pip_task_t*, int );
 extern void pip_debug_on_exceptions( pip_root_t*, pip_task_t* );
 extern int  pip_patch_GOT( char*, char**, pip_got_patch_list_t* );
-
-extern struct pip_gdbif_root	*pip_gdbif_root PIP_PRIVATE;
-
-void pip_gdbif_load( pip_task_t* ) PIP_PRIVATE;
-void pip_gdbif_exit( pip_task_t*, int ) PIP_PRIVATE;
-void pip_gdbif_task_commit( pip_task_t* ) PIP_PRIVATE;
-void pip_gdbif_task_new( pip_task_t* ) PIP_PRIVATE;
-void pip_gdbif_initialize_root( int ) PIP_PRIVATE;
-void pip_gdbif_finalize_task( pip_task_t* ) PIP_PRIVATE;
-void pip_gdbif_hook_before( pip_task_t* ) PIP_PRIVATE;
-void pip_gdbif_hook_after( pip_task_t* ) PIP_PRIVATE;
+extern void pip_undo_patch_GOT( void );
 
 extern void *__libc_malloc( size_t size );
 extern void  __libc_free( void *ptr );
 extern void *__libc_calloc( size_t nmemb, size_t size );
 extern void *__libc_realloc( void *ptr, size_t size );
 extern int   __libc_mallopt( int param, int value );
+
+INLINE int pip_check_pipid( int *pipidp ) {
+  if( !pip_is_effective() ) RETURN( EPERM  );
+  if( pipidp   == NULL    ) RETURN( EINVAL );
+  if( pip_root == NULL    ) RETURN( EPERM  );
+  if( pip_task == NULL    ) RETURN( EPERM  );
+
+  int pipid = *pipidp;
+  switch( pipid ) {
+  case PIP_PIPID_ROOT:
+    if( !PIP_IS_ALIVE( pip_root->task_root ) ) {
+      return EACCES;
+    }
+    break;
+  case PIP_PIPID_ANY:
+  case PIP_PIPID_NULL:
+    return EINVAL;
+    break;
+  case PIP_PIPID_MYSELF:
+    if( PIP_ISA_ROOT( pip_task ) ) {
+      *pipidp = PIP_PIPID_ROOT;
+    } else if( PIP_IS_ALIVE( pip_task ) ) {
+      *pipidp = pip_task->pipid;
+    } else {
+      return ENXIO;		/* ???? */
+    }
+    break;
+  default:
+    if( pipid <  0                ) RETURN( ERANGE );
+    if( pipid >= pip_root->ntasks ) RETURN( ERANGE );
+  }
+  return 0;
+}
 
 #endif /* DOXYGEN_SHOULD_SKIP_THIS */
 

@@ -183,7 +183,7 @@ int pip_named_export( void *exp, const char *format, ... ) {
   int 		err = 0;
 
   ENTER;
-  if( !pip_is_initialized() ) RETURN( EPERM );
+  if( !pip_is_effective() ) RETURN( EPERM );
 
   va_start( ap, format );
   hash = pip_name_hash( &name, format, ap );
@@ -255,9 +255,10 @@ static int pip_do_named_import( int pipid,
   int 			err = 0;
 
   ENTER;
-  if( !pip_is_initialized() ) RETURN( EPERM );
   if( ( err = pip_check_pipid( &pipid ) ) != 0 ) RETURN( err );
   task = pip_get_task_( pipid );
+  if( !PIP_IS_ALIVE( task ) ) RETURN( ESRCH );
+
   namexp = (pip_named_exptab_t*) task->named_exptab;
 
   hash = pip_name_hash( &name, format, ap );
@@ -382,26 +383,23 @@ void pip_named_export_fin( pip_task_t *task ) {
   RETURNV;
 }
 
-void pip_named_export_fin_all( void ) {
-  pip_task_t 		*task, *root;
+void pip_named_export_fin_all( pip_root_t *root ) {
+  pip_task_t 		*task;
   pip_named_exptab_t  	*namexp;
   int i;
 
-  ENTERF( "pip_root->ntasks:%d", pip_root->ntasks );
-  ASSERTD( pip_task == pip_root->task_root );
+  ENTERF( "root->ntasks:%d", root->ntasks );
   for( i=0; i<pip_root->ntasks; i++ ) {
-    DBGF( "PiP task: %d", i );
-    task  = &pip_root->tasks[i];
+    task   = &root->tasks[i];
     namexp = task->named_exptab;
     free( namexp->hash_table );
     free( namexp );
     task->named_exptab = NULL;
   }
-  root = pip_root->task_root;
-  (void) pip_named_export_fin( root );
-  namexp = root->named_exptab;
+  (void) pip_named_export_fin( root->task_root );
+  namexp = root->task_root->named_exptab;
   free( namexp->hash_table );
   free( namexp );
-  root->named_exptab = NULL;
+  root->task_root->named_exptab = NULL;
   RETURNV;
 }

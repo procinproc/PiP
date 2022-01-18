@@ -1998,7 +1998,7 @@ if test "${with_glibc_libdir+set}" = set; then :
   withval=$with_glibc_libdir;
 fi
 
-case "$with_glibc_libdir" in
+case "${with_glibc_libdir}" in
 ""|yes|no) have_pipglibc=false; with_glibc_libdir="/usr/lib64";;
 *) have_pipglibc=true;;
 esac
@@ -2026,21 +2026,22 @@ if test "${with_malloc+set}" = set; then :
   withval=$with_malloc;
 fi
 
-case "$with_malloc" in
+case "${with_malloc}" in
 ""|yes|no) have_malloc=false;;
-*) if nm ${with_malloc} | grep "T malloc" > /dev/null 2>&1;
-    then have_malloc=true; else have_malloc=false; fi;;
+*) if test -x ${with_malloc}; then
+      real_malloc_so="`readlink -f ${with_malloc} 2> /dev/null`"
+      if nm ${real_malloc_so} | grep "T malloc" > /dev/null 2>&1;
+      then have_malloc=true; else have_malloc=false; fi;
+   else
+      as_fn_error $? "can't find ${with_malloc}" "$LINENO" 5
+   fi;;
 esac
 if ${have_malloc}; then
-  if test -x "${with_malloc}"; then
-    { $as_echo "$as_me:${as_lineno-$LINENO}: result: ${with_malloc}" >&5
+   { $as_echo "$as_me:${as_lineno-$LINENO}: result: ${with_malloc}" >&5
 $as_echo "${with_malloc}" >&6; }
-    malloc_libdir="`dirname ${with_malloc}`"
-    malloc_libname="`basename ${with_malloc} | sed 's/lib\(.*\)\.so/\1/'`"
-    malloc_ldflags="-Wl,-rpath=${malloc_libdir} -L${malloc_libdir} -l${malloc_libname}"
-  else
-    as_fn_error $? "can't find ${with_malloc}" "$LINENO" 5
-  fi
+   malloc_libdir="`dirname ${with_malloc}`"
+   malloc_libname="`basename ${with_malloc} | sed 's/lib\(.*\)\.so/\1/'`"
+   malloc_ldflags="-L${malloc_libdir} -Wl,-rpath=${malloc_libdir} -l${malloc_libname}"
 else
   malloc_ldflags=""
 fi

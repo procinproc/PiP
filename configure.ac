@@ -41,7 +41,7 @@ AC_MSG_CHECKING([for glibc libdir])
 AC_ARG_WITH([glibc-libdir],
   [AS_HELP_STRING([--with-glibc-libdir=DIR],
                   [glibc lib directory @<:@default=/usr/lib64@:>@])])
-case "$with_glibc_libdir" in
+case "${with_glibc_libdir}" in
 ""|yes|no) have_pipglibc=false; with_glibc_libdir="/usr/lib64";;
 *) have_pipglibc=true;;
 esac
@@ -63,20 +63,21 @@ AC_MSG_CHECKING([malloc library])
 AC_ARG_WITH([malloc],
   [AS_HELP_STRING([--with-malloc=PATH_TO_MALLOC.SO],
                   [malloc library path (optional)])])
-case "$with_malloc" in
+case "${with_malloc}" in
 ""|yes|no) have_malloc=false;;
-*) if nm ${with_malloc} | grep "T malloc" > /dev/null 2>&1;
-    then have_malloc=true; else have_malloc=false; fi;;
+*) if test -x ${with_malloc}; then
+      real_malloc_so="`readlink -f ${with_malloc} 2> /dev/null`"
+      if nm ${real_malloc_so} | grep "T malloc" > /dev/null 2>&1;
+      then have_malloc=true; else have_malloc=false; fi;
+   else
+      AC_MSG_ERROR([can't find ${with_malloc}])
+   fi;;
 esac
 if ${have_malloc}; then
-  if test -x "${with_malloc}"; then
-    AC_MSG_RESULT([${with_malloc}])
-    malloc_libdir="`dirname ${with_malloc}`"
-    malloc_libname="`basename ${with_malloc} | sed 's/lib\(.*\)\.so/\1/'`"
-    malloc_ldflags="-Wl,-rpath=${malloc_libdir} -L${malloc_libdir} -l${malloc_libname}"
-  else
-    AC_MSG_ERROR([can't find ${with_malloc}])
-  fi
+   AC_MSG_RESULT([${with_malloc}])
+   malloc_libdir="`dirname ${with_malloc}`"
+   malloc_libname="`basename ${with_malloc} | sed 's/lib\(.*\)\.so/\1/'`"
+   malloc_ldflags="-L${malloc_libdir} -Wl,-rpath=${malloc_libdir} -l${malloc_libname}"
 else
   malloc_ldflags=""
 fi

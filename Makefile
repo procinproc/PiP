@@ -41,6 +41,12 @@ SUBDIRS = include/pip lib gdbif bin
 
 include $(top_srcdir)/build/rule.mk
 
+configure: configure.ac
+	@echo "configure.ac is newer than configure. Run autoconf and configure"
+	@exit 1;
+
+pre-all-hook: configure
+
 debug:
 	CPPFLAGS+="-DDEBUG" $(MAKE) clean all;
 

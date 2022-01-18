@@ -36,13 +36,15 @@
 #ifndef _pip_gdbif_func_h_
 #define _pip_gdbif_func_h_
 
-void pip_gdbif_load( pip_task_internal_t* ) PIP_PRIVATE;
-void pip_gdbif_exit( pip_task_internal_t*, int ) PIP_PRIVATE;
-void pip_gdbif_task_commit( pip_task_internal_t* ) PIP_PRIVATE;
-void pip_gdbif_task_new( pip_task_internal_t* ) PIP_PRIVATE;
+extern struct pip_gdbif_root	*pip_gdbif_root PIP_PRIVATE;
+
+void pip_gdbif_load( struct pip_task* ) PIP_PRIVATE;
+void pip_gdbif_exit( struct pip_task*, int ) PIP_PRIVATE;
+void pip_gdbif_task_commit( struct pip_task* ) PIP_PRIVATE;
+void pip_gdbif_task_new( struct pip_task* ) PIP_PRIVATE;
 void pip_gdbif_initialize_root( int ) PIP_PRIVATE;
-void pip_gdbif_finalize_task( pip_task_internal_t* ) PIP_PRIVATE;
-void pip_gdbif_hook_before( pip_task_internal_t* ) PIP_PRIVATE;
-void pip_gdbif_hook_after( pip_task_internal_t* ) PIP_PRIVATE;
+void pip_gdbif_finalize_task( struct pip_task* ) PIP_PRIVATE;
+void pip_gdbif_hook_before( struct pip_task* ) PIP_PRIVATE;
+void pip_gdbif_hook_after( struct pip_task* ) PIP_PRIVATE;
 
 #endif /* _pip_gdbif_func_h_ */

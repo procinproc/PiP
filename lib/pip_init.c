@@ -36,25 +36,34 @@
 #include <pip/pip_internal.h>
 #include <pip/pip_gdbif.h>
 
-pip_sem_t		*pip_universal_lockp;
+int 			pip_initialized      PIP_PRIVATE = 0;
+int 			pip_finalized        PIP_PRIVATE = 1;
+pip_sem_t		*pip_universal_lockp PIP_PRIVATE;
+pip_root_t		*pip_root            PIP_PRIVATE;
+pip_task_t		*pip_task            PIP_PRIVATE;
+struct pip_gdbif_root	*pip_gdbif_root      PIP_PRIVATE;
 
-pip_root_t		*pip_root;
-pip_task_t		*pip_task;
-struct pip_gdbif_root	*pip_gdbif_root;
-
-static char *pip_path_gdb;
-static char *pip_command_gdb;
+static char 		*pip_path_gdb;
+static char 		*pip_command_gdb;
 
 int pip_is_initialized( void ) {
-  return pip_root != NULL;
+  return pip_initialized;
+}
+
+int pip_is_finalized( void ) {
+  return pip_finalized;
+}
+
+int pip_is_effective( void ) {
+  return pip_initialized && !pip_finalized;
 }
 
 int pip_isa_root( void ) {
-  return pip_is_initialized() && PIP_ISA_ROOT( pip_task );
+  return pip_is_effective() && pip_task != NULL && PIP_ISA_ROOT( pip_task );
 }
 
 int pip_is_threaded_( void ) {
-  return pip_root->opts & PIP_MODE_PTHREAD;
+  return pip_initialized & PIP_MODE_PTHREAD;
 }
 
 static int tgkill( int tgid, int tid, int sig ) {
@@ -66,31 +75,43 @@ int pip_raise_signal( pip_task_t *task, int sig ) {
 
   ENTERF( "raise signal (%d:%s) to PIPID:%d PID:%d TID:%d",
 	  sig, strsignal(sig), task->pipid, task->pid, task->tid );
-  if( task->flag_exit == 0 ) {
-    /* not yet terminated */
-    if( pip_is_threaded_() ) {
+
+  if( !PIP_IS_ALIVE( task ) ) {
+    err = ESRCH;
+  } else if( pip_is_threaded_() ) {
 #ifndef USE_TGKILL
-      if( task->thread != 0 ) {
-	err = pthread_kill( task->thread, sig );
-      }
-#else
-      if( task->pid != 0 && task->tid != 0 ) {
-	err = tgkill( task->pid, task->tid, sig );
-      }
-#endif
+    if( task->thread == 0 ) {
+      err = ESRCH;
     } else {
-      err = 0;
-      if( task->tid != 0 && kill( task->tid, sig ) != 0 ) {
-	err = errno;
-      }
+      DBGF( "thread:%p", (void*) task->thread );
+      err = pthread_kill( task->thread, sig );
     }
+#else
+    err = tgkill( task->pid, task->tid, sig );
+#endif
+  } else {			/* process mode */
+    DBGF( "kill(%d,%d)", task->pid, sig );;
+    if( kill( task->pid, sig ) != 0 ) err = errno;
   }
   RETURN( err );
 }
 
 void pip_abort( void ) PIP_NORETURN;
 void pip_abort( void ) {
-  /* thin function may be called either root or tasks */
+    ENTER;
+  if( pip_is_threaded_() ) {
+    abort();
+  } else {
+    void pip_abort_handler( int );
+    pip_abort_handler( 0 );
+  }
+  NEVER_REACH_HERE;
+}
+
+#ifdef AHAHAHA
+void pip_abort( void ) PIP_NORETURN;
+void pip_abort( void ) {
+  /* this function may be called either root or tasks */
   ENTER;
   if( pip_root != NULL ) {
     int i, j, flag;
@@ -107,21 +128,22 @@ void pip_abort( void ) {
 	  flag = 1;
 	}
       }
-      if( !flag ) goto kill_root;
+      if( !flag ) goto kill_root_and_myself;
     }
     for( i=0; i<pip_root->ntasks; i++ ) {
       if( &pip_root->tasks[i] == pip_task ) continue;
       (void) pip_raise_signal( &pip_root->tasks[i], SIGKILL );
     }
-  kill_root:
+  kill_root_and_myself:
     (void) pip_raise_signal( pip_root->task_root, SIGABRT );
     (void) pip_raise_signal( pip_task, SIGABRT );
   } else {
-    tgkill( getpid(), pip_gettid(), SIGABRT );
+    (void) tgkill( getpid(), pip_gettid(), SIGABRT );
   }
   while( 1 ) sleep( 1 );	/* wait for being killed */
   NEVER_REACH_HERE;
 }
+#endif
 
 pid_t pip_gettid( void ) {
   return (pid_t) syscall( (long int) SYS_gettid );
@@ -143,7 +165,7 @@ int pip_are_sizes_ok( pip_root_t *root ) {
 }
 
 int pip_check_root_and_task( pip_root_t *root, pip_task_t *task ) {
-  int pipid, err = EPERM;
+  int err = EPERM;
 
   if( root == NULL ) {
     pip_err_mesg( "Invalid PiP root" );
@@ -152,20 +174,10 @@ int pip_check_root_and_task( pip_root_t *root, pip_task_t *task ) {
     pip_err_mesg( "Magic number error" );
     return err;
   } else if( !pip_is_version_ok( root ) ) {
-    pip_err_mesg( "Version miss-match between PiP root and task" );
+    pip_err_mesg( "API version miss-match between PiP root and task" );
     return err;
   } else if( !pip_are_sizes_ok( root ) ) {
     pip_err_mesg( "Size miss-match between PiP root and task" );
-    return err;
-  }
-  
-  if( task == NULL ) {
-    pip_err_mesg( "Invalid PiP task" );
-    return err;
-  }
-  pipid = task->pipid;
-  if( &root->tasks[pipid] != task ) {
-    pip_err_mesg( "Invalid PiP root and task" );
     return err;
   }
   return 0;
@@ -237,25 +249,22 @@ static pip_task_t *pip_current_task( int tid ) {
   pip_root_t	*root = pip_root;
   pip_task_t 	*task;
   static int	curr = 0;
-  int 			i;
+  int 		i;
 
   if( root != NULL ) {
     for( i=curr; i<root->ntasks+1; i++ ) {
       task = &root->tasks[i];
-      if( tid == task->tid ) {
-	curr = i;
-	return task;
-      }
+      if( tid == task->tid ) goto found;
     }
     for( i=0; i<curr; i++ ) {
       task = &root->tasks[i];
-      if( tid == task->tid ) {
-	curr = i;
-	return task;
-      }
+      if( tid == task->tid ) goto found;
     }
   }
   return NULL;
+ found:
+  curr = i;
+  return task;
 }
 
 static int
@@ -300,10 +309,10 @@ static int pip_task_str( char *p, size_t sz, pip_task_t *task ) {
     n = snprintf( p, sz, "-" );
   } else if( task->type == PIP_TYPE_NULL ) {
     n = snprintf( p, sz, "*" );
-  } else if( PIP_ISA_TASK( task ) ) {
+  } else if( PIP_IS_ALIVE( task ) ) {
     n = pip_pipid_str( p, sz, task->pipid, 1 );
   } else {
-    n = snprintf( p, sz, "!" );
+    n = snprintf( p, sz, "x" );
   }
   return n;
 }
@@ -459,23 +468,6 @@ void pip_debug_info( void ) {
   RETURNV;
 }
 
-static void pip_exception_handler( int sig, siginfo_t *info, void *extra ) {
-  ENTER;
-
-  pip_err_mesg( "*** Exception signal: %s (%d) !!", strsignal(sig), sig );
-
-  if( pip_root != NULL ) {
-    if( pip_root->flag_debug ) return;
-    pip_spin_lock( &pip_root->lock_bt );
-    pip_root->flag_debug = 1;
-  }
-  pip_debug_info();
-  if( pip_root != NULL ) {
-    pip_spin_unlock( &pip_root->lock_bt );
-  }
-  RETURNV;
-}
-
 static int
 pip_strncasecmp( const char *str0, const char *str1, const int len1 ) {
   int len0 = strlen( str0 );
@@ -507,7 +499,6 @@ static void pip_set_gdb_signal( sigset_t *sigs,
 				int len,
 				int(*sigman)(sigset_t*,int) ) {
   int i;
-
   if( pip_strncasecmp( "ALL", token, len ) == 0 ) {
     for( i=0; sigtab[i].name!=NULL; i++ ) {
       ASSERT( sigman( sigs, sigtab[i].signum ) == 0 );
@@ -584,104 +575,83 @@ void pip_page_alloc( size_t sz, void **allocp ) {
 	  *allocp != NULL );
 }
 
-#define PIP_MINSIGSTKSZ 	(MINSIGSTKSZ*2)
-
 void pip_debug_on_exceptions( pip_root_t *root, pip_task_t *task ) {
-  char			*path, *command, *signals;
-  sigset_t 		sigs, sigempty;
-  struct sigaction	sigact;
+  char			*path, *signals;
+  sigset_t 		*sigsetp, sigempty;
   static int		done = 0;
-  int			i;
 
   /* this function may be called twice (implicitly and explicitly) */
   if( done ) return;
   done = 1;
 
   if( ( path = pip_root->envs.gdb_path ) != NULL ) {
-    ASSERT( sigemptyset( &sigs     ) == 0 );
-    ASSERT( sigemptyset( &sigempty ) == 0 );
+    pip_path_gdb = path;
+    pip_command_gdb = root->envs.gdb_command;
 
-    if( !pip_is_threaded_() ) {
-      pip_path_gdb = path;
-      if( ( command = root->envs.gdb_command ) != NULL ) {
-	pip_command_gdb = command;
-      }
-      if( ( signals = root->envs.gdb_signals ) != NULL ) {
-	pip_set_gdb_sigset( signals, &sigs );
-      } else {
-	ASSERT( sigaddset( &sigs, SIGHUP  ) == 0 );
-	ASSERT( sigaddset( &sigs, SIGSEGV ) == 0 );
-      }
-      if( memcmp( &sigs, &sigempty, sizeof(sigs) ) != 0 ) {
-	/* FIXME: since the sigaltstack is allocated  */
-	/* by a PiP task, there is no chance to free  */
-	void		*altstack;
-	stack_t	sigstack;
-
-	pip_page_alloc( PIP_MINSIGSTKSZ, &altstack );
-	task->sigalt_stack = altstack;
-	memset( &sigstack, 0, sizeof( sigstack ) );
-	sigstack.ss_sp   = altstack;
-	sigstack.ss_size = PIP_MINSIGSTKSZ;
-	ASSERT( sigaltstack( &sigstack, NULL ) == 0 );
-
-	memset( &sigact, 0, sizeof( sigact ) );
-	sigact.sa_sigaction = pip_exception_handler;
-	sigact.sa_mask      = sigs;
-	sigact.sa_flags     = SA_RESETHAND | SA_ONSTACK;
-
-	for( i=0; sigtab[i].name!=NULL; i++ ) {
-	  int signum = sigtab[i].signum;
-	  if( sigismember( &sigs, signum ) ) {
-	    DBGF( "PiP-gdb on signal: %s ", sigtab[i].name );
-	    ASSERT( sigaction( signum, &sigact, NULL ) == 0 );
-	  }
-	}
-      }
+    ASSERTD( ( sigsetp = malloc( sizeof(sigset_t) ) ) != NULL );
+    ASSERTD( sigemptyset( sigsetp   ) == 0 );
+    ASSERTD( sigemptyset( &sigempty ) == 0 );
+    if( ( signals = root->envs.gdb_signals ) != NULL ) {
+      pip_set_gdb_sigset( signals, sigsetp );
     } else {
-      /* exception signals must be blocked in thread mode */
-      /* so that root hanlder can catch them */
-      if( ( signals = root->envs.gdb_signals ) != NULL ) {
-	pip_set_gdb_sigset( signals, &sigs );
-	if( memcmp( &sigs, &sigempty, sizeof(sigs) ) ) {
-	  ASSERT( pthread_sigmask( SIG_BLOCK, &sigs, NULL ) == 0 );
-	}
-      } else {			/* default signals */
-	ASSERT( sigaddset( &sigs, SIGHUP  ) == 0 );
-	ASSERT( sigaddset( &sigs, SIGSEGV ) == 0 );
-	ASSERT( pthread_sigmask( SIG_BLOCK, &sigs, NULL ) == 0 );
-      }
+      ASSERTD( sigaddset( sigsetp, SIGHUP  ) == 0 );
+      ASSERTD( sigaddset( sigsetp, SIGSEGV ) == 0 );
     }
+    pip_task->debug_signals = sigsetp;
   }
+}
+
+void pip_after_fork( void ) {
+  DBG;
+  pip_unset_signal_handlers();
+  pip_root = NULL;
+  pip_task = NULL;
+  pip_initialized = 0;
+  pip_finalized   = 1;
+  DBG;
 }
 
 /* the following function will be called implicitly */
 /* this function is called only by PiP root         */
 int pip_init_task_implicitly( pip_root_t *root, pip_task_t *task, char **envv ) {
-  int i, err;
+  int pipid, i, err = EPERM;
 
   ENTERF( "root: %p  task : %p", root, task );
-  if( ( err = pip_check_root_and_task( root, task ) ) == 0 ) {
-    extern void *_dl_sym(void *, const char *, void *);
-    task->symbols.dlsym = _dl_sym( RTLD_NEXT, "dlsym", pip_init_task_implicitly );
-    pip_root            = root;
-    pip_task            = task;
-    pip_gdbif_root      = root->gdbif_root;
-    pip_universal_lockp = &root->universal_lock;
-    if( !pip_is_threaded_() ) {
-      pip_debug_on_exceptions( root, task );
+  
+  if( task == NULL ) {
+    pip_err_mesg( "Invalid PiP task" );
+  } else {
+    pipid = task->pipid;
+    if( &root->tasks[pipid] != task ) {
+      pip_err_mesg( "Invalid PiP root and task" );
+
+    } else if( ( err = pip_check_root_and_task( root, task ) ) == 0 ) {
+      pip_root            = root;
+      pip_task            = task;
+      pip_universal_lockp = &root->universal_lock;
+
+      environ = NULL;
+      for( i=0; envv[i]!=NULL; i++ ) putenv( envv[i] );
+
+      if( root->opts & PIP_MODE_PTHREAD ) {
+	pip_initialized = PIP_MODE_PTHREAD;
+      } else {
+	pip_debug_on_exceptions( root, task );
+	pip_initialized = PIP_MODE_PROCESS;
+      }
+      pip_finalized = 0;
+
+      pip_set_signal_handlers();
+      ASSERT( pthread_atfork( NULL, NULL, pip_after_fork ) == 0 );
+
+      DBGF( "pip_root: %p @ %p  piptask : %p @ %p", 
+	    pip_root, &pip_root, pip_task, &pip_task );
     }
-    //clearenv();
-    environ = NULL;
-    for( i=0; envv[i]!=NULL; i++ ) putenv( envv[i] );
   }
-  DBGF( "pip_root: %p @ %p  piptask : %p @ %p", 
-	pip_root, &pip_root, pip_task, &pip_task );
-  return err;
+  RETURN( err );
 }
 
 int pip_fin_task_implicitly( void ) {
-  DBG;
   pip_root = NULL;
   pip_task = NULL;
   return 0;

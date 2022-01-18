@@ -37,8 +37,6 @@
 #include <pip/pip_internal.h>
 #include <pip/pip.h>
 
-extern int pip_root_p_( void );
-
 int pip_is_debug_build() {
 #ifdef DEBUG
   return 1;
@@ -48,31 +46,38 @@ int pip_is_debug_build() {
 }
 
 int pip_isa_task( void ) {
-  return pip_root != NULL && pip_task != NULL &&
+  return pip_is_effective() && 
+    pip_root != NULL && 
+    pip_task != NULL &&
     pip_root->task_root != pip_task;
 }
 
 int pip_is_threaded( int *flagp ) {
-  if( pip_is_threaded_() ) {
-    *flagp = 1;
-  } else {
-    *flagp = 0;
+  int err = 0;
+  if( !pip_is_effective() ) {
+    err = EPERM;
+  } else if( flagp != NULL ) {
+    if( pip_is_threaded_() ) {
+      *flagp = 1;
+    } else {
+      *flagp = 0;
+    }
   }
-  return 0;
+  return err;
 }
 
 int pip_kill_all_tasks( void ) {
   int pipid, i, err;
 
   err = 0;
-  if( pip_is_initialized() ) {
-    if( !pip_isa_root() ) {
-      err = EPERM;
-    } else {
-      for( i=0; i<pip_root->ntasks; i++ ) {
-	pipid = i;
-	if( pip_check_pipid( &pipid ) == 0 ) {
-	  pip_task_t *task = &pip_root->tasks[pipid];
+  if( !pip_is_effective() || !pip_isa_root() ) {
+    err = EPERM;
+  } else {
+    for( i=0; i<pip_root->ntasks; i++ ) {
+      pipid = i;
+      if( pip_check_pipid( &pipid ) == 0 ) {
+	pip_task_t *task = pip_get_task_( pipid );
+	if( PIP_IS_ALIVE( task ) ) {
 	  if( pip_is_threaded_() ) {
 	    task->status = PIP_W_EXITCODE( 0, SIGTERM );
 	    (void) pip_raise_signal( task, SIGQUIT );

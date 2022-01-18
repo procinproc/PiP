@@ -37,35 +37,27 @@
 
 #include <pip/pip_internal.h>
 
-void pip_set_exit_status( pip_task_t *task, int status ) {
-  ENTER;
+void
+pip_set_exit_status( pip_task_t *task, int exitno, int termsig ) {
+  ENTERF( "PIPID:%d (exst:%d,termsig:%d)", task->pipid, exitno, termsig );
   if( !task->flag_exit ) {
+    task->status    = PIP_W_EXITCODE( exitno, termsig );
     task->flag_exit = PIP_EXITED;
-    /* mark myself as exited */
-    DBGF( "PIPID:%d status:0x%x", task->pipid, status );
-    if( task->status == 0 ) task->status = status;
   }
-  DBGF( "status: 0x%x(0x%x)", status, task->status );
+  DBGF( "status: 0x%x", task->status );
   RETURNV;
 }
 
-void pip_task_signaled( pip_task_t *task, int status ) {
-  int sig = WTERMSIG( status );
-  pip_warn_mesg( "PiP Task [%d] terminated by '%s' (%d) signal",
-		       task->pipid, strsignal(sig), sig );
-}
-
 void pip_annul_task( pip_task_t *task ) {
-  task->type      = PIP_TYPE_NULL;
-  task->thread    = 0;
-  task->tid       = 0;
+  task->type   = PIP_TYPE_NULL;
+  task->thread = 0;
+  task->pid    = 0;
+  task->tid    = 0;
 }
 
-void pip_finalize_task( pip_task_t *task ) {
+static void pip_finalize_task( pip_task_t *task ) {
   ENTERF( "pipid=%d  status=0x%x", task->pipid, task->status );
-
   pip_gdbif_finalize_task( task );
-
   /* dlclose() and free() must be called only from the root process since */
   /* corresponding dlmopen() and malloc() is called by the root process   */
   if( task->loaded != NULL ) {
@@ -76,8 +68,8 @@ void pip_finalize_task( pip_task_t *task ) {
   //pip_reset_task_struct( task );
 }
 
-static int
-pip_wait_thread( pip_task_t *task, int flag_blk ) {
+static int pip_wait_thread( pip_task_t *task, int flag_blk ) {
+  void *retval = NULL;
   int err = 0;
 
   ENTERF( "PIPID:%d", task->pipid );
@@ -85,25 +77,30 @@ pip_wait_thread( pip_task_t *task, int flag_blk ) {
     DBG;
     err = ECHILD;
   } else if( flag_blk ) {
-    err = pthread_join( task->thread, NULL );
+    err = pthread_join( task->thread, &retval );
     if( err ) {
       DBGF( "pthread_timedjoin_np(): %s", strerror(err) );
     }
   } else {
-    err = pthread_tryjoin_np( task->thread, NULL );
+    err = pthread_tryjoin_np( task->thread, &retval );
     DBGF( "pthread_tryjoin_np(): %s", strerror(err) );
   }
-  if( err ) err = ECHILD;
-
+  if( err ) {
+    err = ECHILD;
+  } else if( retval == PTHREAD_CANCELED ) {
+    pip_warn_mesg( "PiP Task [%d] is canceled", task->pipid );
+    pip_set_exit_status( task, ECANCELED, 0 );
+  } else {
+    pip_set_exit_status( task, 0, 0 );
+  }
   /* workaround (make sure) */
   if( err != 0 && task->flag_sigchld ) {
     struct timespec ts;
     char path[128];
     struct stat stbuf;
 
-    DBG;
-    snprintf( path, 128, "/proc/%d/task/%d",
-	      getpid(), task->tid );
+    snprintf( path, 128, "/proc/%d/task/%d", getpid(), task->tid );
+    DBGF( "path:%s", path );
     while( 1 ) {
       errno = 0;
       (void) stat( path, &stbuf );
@@ -122,7 +119,47 @@ pip_wait_thread( pip_task_t *task, int flag_blk ) {
   RETURN( err );
 }
 
-static int pip_wait_syscall( pip_task_t *task, int flag_blk ) {
+static int pip_wait_proc( pip_task_t *task, int flag_blk ) {
+  pid_t tid;
+  int   status  = 0;
+  int   options = 0;
+  int   err     = 0;
+
+  ENTER;
+#ifdef __WALL
+  /* __WALL: Wait for all children, regardless of type */
+  /* ("clone" or "non-clone") [from the man page]      */
+  options |= __WALL;
+#endif
+#ifdef __WCLONE
+  /* __WALL: Wait for any processes/threads */
+  options |= __WCLONE;
+#endif
+  if( !flag_blk ) options |= WNOHANG;
+
+  DBGF( "calling waitpid()  task:%p  tid:%d  pipid:%d",
+	task, task->tid, task->pipid );
+  while( 1 ) {
+    tid = waitpid( task->tid, &status, options );
+    err = errno;
+
+    DBGF( "waitpid(tid=%d,status=0x%x)=%d (err=%d)",
+	  task->tid, status, tid, err );
+
+    if( tid == -1 ) {
+      if( err == EINTR ) continue;
+    } else if( tid == 0 ) {
+      err = ECHILD;
+    }
+    break;
+  }
+  if( !err ) {
+    pip_set_exit_status( task, status, 0 );
+  }
+  RETURN( err );
+}
+
+static int pip_do_wait( pip_task_t *task, int flag_blk ) {
   int err = 0;
 
   ENTERF( "PIPID:%d", task->pipid );
@@ -133,65 +170,18 @@ static int pip_wait_syscall( pip_task_t *task, int flag_blk ) {
   }
   if( pip_is_threaded_() ) {	/* thread mode */
     err = pip_wait_thread( task, flag_blk );
-    if( !err ) pip_set_exit_status( task, 0 );
-
   } else {			/* process mode */
-    pid_t tid;
-    int   status  = 0;
-    int   options = 0;
-
-#ifdef __WALL
-    /* __WALL: Wait for all children, regardless of type */
-    /* ("clone" or "non-clone") [from the man page]      */
-    options |= __WALL;
-#endif
-#ifdef __WCLONE
-    /* __WCLONE: Wait for all clone()ed processes */
-    options |= __WCLONE;
-#endif
-    if( !flag_blk ) options |= WNOHANG;
-
-    DBGF( "calling waitpid()  task:%p  tid:%d  pipid:%d",
-	  task, task->tid, task->pipid );
-    while( 1 ) {
-      errno = 0;
-      tid = waitpid( task->tid, &status, options );
-      err = errno;
-      if( err == EINTR ) continue;
-      if( err == ESRCH ) {
-	err = ECHILD;
-	break;
-      }
-      if( err ) break;
-      if( tid != task->tid ) {
-	err = ECHILD;
-      } else if( tid > 0 ) {
-	if( WIFSTOPPED( status ) || WIFCONTINUED( status ) ) {
-	  if( flag_blk ) continue;
-	  err = ECHILD;
-	}
-      }
-      break;
-    }
-    DBGF( "waitpid(tid=%d,status=0x%x)=%d (err=%d)",
-	  task->tid, status, tid, err );
-
-    if( !err ) {
-      pip_set_exit_status( task, status );
-      if( WIFSIGNALED( status ) ) {
-	pip_task_signaled( task, status );
-      }
-    }
+    err = pip_wait_proc( task, flag_blk );
   }
   if( !err ) {
     DBGF( "PIPID:%d terminated", task->pipid );
-    free( task->onstart_script );
-    task->onstart_script = NULL;
     if( task->pid_onstart > 0 ) {
       do {
 	errno = 0;
 	(void) waitpid( task->pid_onstart, NULL, 0 );
       } while( errno == EINTR );
+      free( task->onstart_script );
+      task->onstart_script = NULL;
       DBGF( "PIPID:%d on_start (%d) terminates", task->pipid, task->pid_onstart );
     }
     pip_annul_task( task );
@@ -208,21 +198,15 @@ static int pip_wait_task( pip_task_t *task ) {
       if( task->flag_sigchld ) {
 	/* if sigchld is really raised, then blocking wait */
 	task->flag_sigchld = 0;
-	if( pip_wait_syscall( task, 1 ) == 0 ) {
-	  goto found;
-	}
-      } else if( pip_wait_syscall( task, 0 ) == 0 ) {
-	goto found;
-      }
+	if( pip_do_wait( task, 1 ) == 0 ) goto found;
+      } else if( pip_do_wait( task, 0 ) == 0 ) goto found;
     } else {			/* process mode */
-      if( pip_wait_syscall( task, 0 ) == 0 ) {
-	goto found;
-      }
+      if( pip_do_wait( task, 0 ) == 0 ) goto found;
     }
   }
   RETURN_NE( 0 );		/* not yet */
  found:
-  RETURN_NE( 1 );
+  RETURN_NE( 1 );		/* terminated */
 }
 
 static int pip_nonblocking_waitany( void ) {
@@ -230,47 +214,51 @@ static int pip_nonblocking_waitany( void ) {
   static int	start = 0;
   int		id, pipid = PIP_PIPID_NULL;
 
-  pip_spin_lock( &pip_root->lock_tasks );
-  /*** start lock region ***/
+  ENTER;
   for( id=start; id<pip_root->ntasks; id++ ) {
     task = &pip_root->tasks[id];
-    if( pip_wait_task( task ) ) goto found;
+    DBG;
+    if( PIP_IS_ALIVE( task ) && pip_wait_task( task ) ) {
+      goto found;
+    }
   }
   for( id=0; id<start; id++ ) {
     task = &pip_root->tasks[id];
-    if( pip_wait_task( task ) ) goto found;
+    if( PIP_IS_ALIVE( task ) && pip_wait_task( task ) ) {
+      goto found;
+    }
   }
-  goto unlock;
+  goto not_found;
+
  found:
   pipid = id ++;
   start = ( id < pip_root->ntasks ) ? id : 0;
- unlock:
-  /*** end lock region ***/
-  pip_spin_unlock( &pip_root->lock_tasks );
 
-  /* chekc if there is a live task or not */
+ not_found:
+  /* chekc again if there is a live task or not */
   if( pipid == PIP_PIPID_NULL ) {
     for( id=0; id<pip_root->ntasks; id++ ) {
       task = &pip_root->tasks[id];
-      if( task->type != PIP_TYPE_NULL ) goto success;
+      if( PIP_IS_ALIVE( task ) ) goto live_task;
     }
     /* no live tasks */
     pipid = PIP_PIPID_ANY;
   }
- success:
-  return( pipid );
+ live_task:
+  RETURN_NE( pipid );
 }
 
 static int pip_blocking_waitany( void ) {
   int	pipid;
 
+  ENTER;
   while( 1 ) {
     pipid = pip_nonblocking_waitany();
     DBGF( "pip_nonblocking_waitany() = %d", pipid );
     if( pipid != PIP_PIPID_NULL ) break;
     ASSERT( pip_signal_wait( SIGCHLD ) == 0 );
   }
-  return( pipid );
+  RETURN( pipid );
 }
 
 int pip_wait( int pipid, int *statusp ) {
@@ -278,22 +266,20 @@ int pip_wait( int pipid, int *statusp ) {
   int 		err = 0;
 
   ENTER;
-  if( !pip_is_initialized() )                    RETURN( EPERM   );
-  if( !pip_isa_root() )                          RETURN( EPERM   );
+  if( !pip_is_effective() || pip_root == NULL  ) RETURN( EPERM   );
+  if( !pip_isa_root()                          ) RETURN( EPERM   );
   if( ( err = pip_check_pipid( &pipid ) ) != 0 ) RETURN( err     );
-  if( pipid == PIP_PIPID_ROOT )                  RETURN( EDEADLK );
+  if( pipid == PIP_PIPID_ROOT                  ) RETURN( EDEADLK );
   DBGF( "PIPID:%d", pipid );
 
   task = pip_get_task_( pipid );
   if( task->type == PIP_TYPE_NULL ) {
-    /* already waited */
+    /* already waited or already gone */
     err = ECHILD;
   } else {
     while( 1 ) {
       if( pip_wait_task( task ) ) {
-	if( statusp != NULL ) {
-	  *statusp = task->status;
-	}
+	if( statusp != NULL ) *statusp = task->status;
 	pip_finalize_task( task );
 	break;
       }
@@ -308,17 +294,15 @@ int pip_trywait( int pipid, int *statusp ) {
   int 		err;
 
   ENTER;
-  if( !pip_is_initialized() )                    RETURN( EPERM   );
+  if( !pip_is_effective() || pip_root == NULL  ) RETURN( EPERM   );
   if( !pip_isa_root() )                          RETURN( EPERM   );
   if( ( err = pip_check_pipid( &pipid ) ) != 0 ) RETURN( err     );
   if( pipid == PIP_PIPID_ROOT )                  RETURN( EDEADLK );
   DBGF( "PIPID:%d", pipid );
 
   task = pip_get_task_( pipid );
-  if( ( err = pip_wait_syscall( task, 0 ) ) == 0 ) {
-    if( statusp != NULL ) {
-      *statusp = task->status;
-    }
+  if( ( err = pip_do_wait( task, 0 ) ) == 0 ) {
+    if( statusp != NULL ) *statusp = task->status;
     pip_finalize_task( task );
   }
   RETURN( err );
@@ -328,21 +312,15 @@ int pip_wait_any( int *pipidp, int *statusp ) {
   int pipid, err = 0;
 
   ENTER;
-  if( !pip_is_initialized() ) RETURN( EPERM  );
-  if( !pip_isa_root() )       RETURN( EPERM  );
-  //if( pip_is_threaded_() )    RETURN( ENOSYS );
+  if( !pip_is_effective() || !pip_isa_root() ) RETURN( EPERM );
 
   pipid = pip_blocking_waitany();
   if( pipid == PIP_PIPID_ANY ) {
     err = ECHILD;
   } else {
     pip_task_t *task = pip_get_task_( pipid );
-    if( pipidp != NULL ) {
-      *pipidp = pipid;
-    }
-    if( statusp != NULL ) {
-      *statusp = task->status;
-    }
+    if( pipidp  != NULL ) *pipidp  = pipid;
+    if( statusp != NULL ) *statusp = task->status;
     pip_finalize_task( task );
   }
   RETURN( err );
@@ -352,8 +330,9 @@ int pip_trywait_any( int *pipidp, int *statusp ) {
   int pipid, err = 0;
 
   ENTER;
-  if( !pip_is_initialized() ) RETURN( EPERM );
-  if( !pip_isa_root() )       RETURN( EPERM );
+  if( !pip_is_effective() || 
+      pip_root == NULL    ||
+      !pip_isa_root() ) RETURN( EPERM   );
 
   pipid = pip_nonblocking_waitany();
   if( pipid == PIP_PIPID_NULL ) {
@@ -362,12 +341,8 @@ int pip_trywait_any( int *pipidp, int *statusp ) {
     err = ECHILD;
   } else {
     pip_task_t *task = pip_get_task_( pipid );
-    if( pipidp != NULL ) {
-      *pipidp = pipid;
-    }
-    if( statusp != NULL ) {
-      *statusp = task->status;
-    }
+    if( pipidp  != NULL ) *pipidp  = pipid;
+    if( statusp != NULL ) *statusp = task->status;
     pip_finalize_task( task );
   }
   RETURN( err );
