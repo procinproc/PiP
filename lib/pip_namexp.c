@@ -257,7 +257,8 @@ static int pip_do_named_import( int pipid,
   ENTER;
   if( ( err = pip_check_pipid( &pipid ) ) != 0 ) RETURN( err );
   task = pip_get_task_( pipid );
-  if( !PIP_IS_ALIVE( task ) ) RETURN( ESRCH );
+  /* thre can be the case where target task is already terminated */
+  if( task == NULL ) RETURN( ESRCH );
 
   namexp = (pip_named_exptab_t*) task->named_exptab;
 

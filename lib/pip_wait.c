@@ -39,13 +39,16 @@
 
 void
 pip_set_exit_status( pip_task_t *task, int exitno, int termsig ) {
-  ENTERF( "PIPID:%d (exst:%d,termsig:%d)", task->pipid, exitno, termsig );
-  if( !task->flag_exit ) {
-    task->status    = PIP_W_EXITCODE( exitno, termsig );
-    task->flag_exit = PIP_EXITED;
+  if( task != NULL ) {
+    ENTERF( "PIPID:%d (exst:%d,termsig:%d)", 
+	    task->pipid, exitno, termsig );
+    if( !task->flag_exit ) {
+      task->status    = PIP_W_EXITCODE( exitno, termsig );
+      task->flag_exit = PIP_EXITED;
+    }
+    DBGF( "status: 0x%x", task->status );
+    RETURNV;
   }
-  DBGF( "status: 0x%x", task->status );
-  RETURNV;
 }
 
 void pip_annul_task( pip_task_t *task ) {
@@ -74,17 +77,17 @@ static int pip_wait_thread( pip_task_t *task, int flag_blk ) {
 
   ENTERF( "PIPID:%d", task->pipid );
   if( !task->thread ) {
-    DBG;
     err = ECHILD;
   } else if( flag_blk ) {
+    DBG;
     err = pthread_join( task->thread, &retval );
-    if( err ) {
-      DBGF( "pthread_timedjoin_np(): %s", strerror(err) );
-    }
+    DBGF( "pthread_timedjoin_np(): %s", strerror(err) );
   } else {
+    DBG;
     err = pthread_tryjoin_np( task->thread, &retval );
     DBGF( "pthread_tryjoin_np(): %s", strerror(err) );
   }
+    DBG;
   if( err ) {
     err = ECHILD;
   } else if( retval == PTHREAD_CANCELED ) {
@@ -93,6 +96,7 @@ static int pip_wait_thread( pip_task_t *task, int flag_blk ) {
   } else {
     pip_set_exit_status( task, 0, 0 );
   }
+    DBG;
   /* workaround (make sure) */
   if( err != 0 && task->flag_sigchld ) {
     struct timespec ts;
@@ -171,7 +175,7 @@ static int pip_do_wait( pip_task_t *task, int flag_blk ) {
   if( pip_is_threaded_() ) {	/* thread mode */
     err = pip_wait_thread( task, flag_blk );
   } else {			/* process mode */
-    err = pip_wait_proc( task, flag_blk );
+    err = pip_wait_proc(   task, flag_blk );
   }
   if( !err ) {
     DBGF( "PIPID:%d terminated", task->pipid );
@@ -295,12 +299,16 @@ int pip_trywait( int pipid, int *statusp ) {
 
   ENTER;
   if( !pip_is_effective() || pip_root == NULL  ) RETURN( EPERM   );
+  DBG;
   if( !pip_isa_root() )                          RETURN( EPERM   );
+  DBG;
   if( ( err = pip_check_pipid( &pipid ) ) != 0 ) RETURN( err     );
+  DBG;
   if( pipid == PIP_PIPID_ROOT )                  RETURN( EDEADLK );
   DBGF( "PIPID:%d", pipid );
 
   task = pip_get_task_( pipid );
+  DBG;
   if( ( err = pip_do_wait( task, 0 ) ) == 0 ) {
     if( statusp != NULL ) *statusp = task->status;
     pip_finalize_task( task );

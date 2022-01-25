@@ -36,6 +36,8 @@
 #include <pip/pip_internal.h>
 #include <pip/pip_gdbif.h>
 
+#include <execinfo.h>
+
 int 			pip_initialized      PIP_PRIVATE = 0;
 int 			pip_finalized        PIP_PRIVATE = 1;
 pip_sem_t		*pip_universal_lockp PIP_PRIVATE;
@@ -66,9 +68,11 @@ int pip_is_threaded_( void ) {
   return pip_initialized & PIP_MODE_PTHREAD;
 }
 
+#ifdef USE_TGKILL
 static int tgkill( int tgid, int tid, int sig ) {
   return (int) syscall( (long int) SYS_tgkill, tgid, tid, sig );
 }
+#endif
 
 int pip_raise_signal( pip_task_t *task, int sig ) {
   int err = 0;
@@ -107,43 +111,6 @@ void pip_abort( void ) {
   }
   NEVER_REACH_HERE;
 }
-
-#ifdef AHAHAHA
-void pip_abort( void ) PIP_NORETURN;
-void pip_abort( void ) {
-  /* this function may be called either root or tasks */
-  ENTER;
-  if( pip_root != NULL ) {
-    int i, j, flag;
-
-    for( i=0; i<pip_root->ntasks; i++ ) {
-      if( &pip_root->tasks[i] == pip_task ) continue;
-      (void) pip_raise_signal( &pip_root->tasks[i], SIGABRT );
-    }
-    for( i=0; i<10; i++ ) {
-      flag = 0;
-      for( j=0; j<pip_root->ntasks; j++ ) {
-	if( &pip_root->tasks[j] == pip_task ) continue;
-	if( pip_raise_signal( &pip_root->tasks[j], 0 ) != 0 ) {
-	  flag = 1;
-	}
-      }
-      if( !flag ) goto kill_root_and_myself;
-    }
-    for( i=0; i<pip_root->ntasks; i++ ) {
-      if( &pip_root->tasks[i] == pip_task ) continue;
-      (void) pip_raise_signal( &pip_root->tasks[i], SIGKILL );
-    }
-  kill_root_and_myself:
-    (void) pip_raise_signal( pip_root->task_root, SIGABRT );
-    (void) pip_raise_signal( pip_task, SIGABRT );
-  } else {
-    (void) tgkill( getpid(), pip_gettid(), SIGABRT );
-  }
-  while( 1 ) sleep( 1 );	/* wait for being killed */
-  NEVER_REACH_HERE;
-}
-#endif
 
 pid_t pip_gettid( void ) {
   return (pid_t) syscall( (long int) SYS_gettid );
@@ -244,8 +211,9 @@ void pip_err_mesg( const char *format, ... ) {
   va_end( ap );
 }
 
-static pip_task_t *pip_current_task( int tid ) {
+static pip_task_t *pip_current_task( void ) {
   /* do not put any DBG macors in this function */
+  pid_t		tid   = pip_gettid();
   pip_root_t	*root = pip_root;
   pip_task_t 	*task;
   static int	curr = 0;
@@ -320,7 +288,7 @@ static int pip_task_str( char *p, size_t sz, pip_task_t *task ) {
 size_t pip_idstr( char *p, size_t s ) {
   pid_t		tid  = pip_gettid();
   pip_task_t	*ctx = pip_task;
-  pip_task_t	*kc  = pip_current_task( tid );
+  pip_task_t	*kc  = pip_current_task();
   char 		*opn = "[", *cls = "]", *delim = ":";
   int		n;
 
@@ -390,6 +358,24 @@ static void pip_attach_gdb( void ) {
       pip_err_mesg( "Failed to fork PiP-gdb (%s)", pip_path_gdb );
     } else {
       waitpid( pid, NULL, 0 );
+    }
+  } else {			/* show backtrace instead */
+#define BTBUF_SZ	(128)
+    void *btbuf[BTBUF_SZ];
+    int nbt;
+    char **bt_str;
+
+    if( ( nbt = backtrace( btbuf, BTBUF_SZ ) ) == 0 ) {
+      pip_info_mesg( "No backtrace available (1)" );
+    } else if( ( bt_str = backtrace_symbols( btbuf, nbt ) ) == 
+	       NULL ) {
+      pip_info_mesg( "No backtrace available (2)" );
+    } else {
+      int i;
+      for( i=0; i<nbt; i++ ) {
+	pip_info_mesg( "backtrace: %s", bt_str[i] );
+      }
+      free( bt_str );
     }
   }
   RETURNV;
@@ -584,20 +570,20 @@ void pip_debug_on_exceptions( pip_root_t *root, pip_task_t *task ) {
   if( done ) return;
   done = 1;
 
+  ASSERTD( ( sigsetp = malloc( sizeof(sigset_t) ) ) != NULL );
+  ASSERTD( sigemptyset( sigsetp   ) == 0 );
+  ASSERTD( sigemptyset( &sigempty ) == 0 );
+  if( ( signals = root->envs.gdb_signals ) != NULL ) {
+    pip_set_gdb_sigset( signals, sigsetp );
+  } else {
+    ASSERTD( sigaddset( sigsetp, SIGHUP  ) == 0 );
+    ASSERTD( sigaddset( sigsetp, SIGSEGV ) == 0 );
+  }
+  pip_task->debug_signals = sigsetp;
+
   if( ( path = pip_root->envs.gdb_path ) != NULL ) {
     pip_path_gdb = path;
     pip_command_gdb = root->envs.gdb_command;
-
-    ASSERTD( ( sigsetp = malloc( sizeof(sigset_t) ) ) != NULL );
-    ASSERTD( sigemptyset( sigsetp   ) == 0 );
-    ASSERTD( sigemptyset( &sigempty ) == 0 );
-    if( ( signals = root->envs.gdb_signals ) != NULL ) {
-      pip_set_gdb_sigset( signals, sigsetp );
-    } else {
-      ASSERTD( sigaddset( sigsetp, SIGHUP  ) == 0 );
-      ASSERTD( sigaddset( sigsetp, SIGSEGV ) == 0 );
-    }
-    pip_task->debug_signals = sigsetp;
   }
 }
 
@@ -642,7 +628,7 @@ int pip_init_task_implicitly( pip_root_t *root, pip_task_t *task, char **envv ) 
       pip_finalized = 0;
 
       pip_set_signal_handlers();
-      ASSERT( pthread_atfork( NULL, NULL, pip_after_fork ) == 0 );
+      ASSERTD( pthread_atfork( NULL, NULL, pip_after_fork ) == 0 );
 
       DBGF( "pip_root: %p @ %p  piptask : %p @ %p", 
 	    pip_root, &pip_root, pip_task, &pip_task );

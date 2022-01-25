@@ -464,8 +464,6 @@ pip_find_glibc_symbols( void *handle, pip_task_t *task ) {
     /* dlmopen()ed name space does not setup VDSO properly */
     symp->ctype_init     = pip_dlsym_unsafe( handle, "__ctype_init"    );
     symp->libc_fflush    = pip_dlsym_unsafe( handle, "fflush"          );
-    symp->exit	         = pip_dlsym_unsafe( handle, "exit"            );
-    symp->pthread_exit   = pip_dlsym_unsafe( handle, "pthread_exit"    );
     /* GLIBC variables */
     symp->environ        = pip_dlsym_unsafe( handle, "environ"         );
     /* GLIBC misc. variables */
@@ -475,9 +473,6 @@ pip_find_glibc_symbols( void *handle, pip_task_t *task ) {
     symp->pip_set_opts   = pip_dlsym_unsafe( handle, "pip_set_opts"    );
   }
   pip_glibc_unlock();
-
-  ASSERT( symp->exit         != NULL );
-  ASSERT( symp->pthread_exit != NULL );
 }
 
 int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
@@ -573,7 +568,7 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     pip_finalized = 0;
     
     pip_set_signal_handlers();
-    ASSERT( pthread_atfork( NULL, NULL, pip_after_fork ) == 0 );
+    ASSERTD( pthread_atfork( NULL, NULL, pip_after_fork ) == 0 );
 
     DBGF( "PiP Execution Mode: %s", pip_get_mode_str() );
 
@@ -636,7 +631,7 @@ int pip_get_dlmopen_info( int pipid, void **handle, long *lmidp ) {
 
   if( ( err = pip_check_pipid( &pipid ) ) != 0 ) RETURN( err );
   task = pip_get_task_( pipid );
-  if( !PIP_IS_ALIVE( task ) ) RETURN( ESRCH );
+  if( task == NULL || !PIP_IS_ALIVE( task ) ) RETURN( ESRCH );
   if( handle != NULL ) *handle = task->loaded;
   if( lmidp  != NULL ) *lmidp  = task->lmid;
   RETURN( 0 );
@@ -689,7 +684,7 @@ int pip_import( int pipid, void **exportp ) {
   ENTER;
   if( ( err = pip_check_pipid( &pipid ) ) == 0 ) {
     task = pip_get_task_( pipid );
-    if( !PIP_IS_ALIVE( task ) ) RETURN( ESRCH );
+    if( task == NULL || !PIP_IS_ALIVE( task ) ) RETURN( ESRCH );
     if( exportp != NULL ) *exportp = (void*) task->export;
     pip_memory_barrier();
   }
@@ -706,7 +701,7 @@ int pip_get_addr( int pipid, const char *name, void **addrp ) {
   if( name == NULL ) return EINVAL;
   if( ( err = pip_check_pipid( &pipid ) ) != 0 ) return err;
   task = pip_get_task_( pipid );
-  if( !PIP_IS_ALIVE( task ) ) return ESRCH;
+  if( task == NULL || !PIP_IS_ALIVE( task ) ) return ESRCH;
   addr = pip_dlsym( task->loaded, name );
   if( err == 0 && addrp != NULL ) *addrp = addr;
   return err;
@@ -1087,10 +1082,10 @@ void pip_do_exit( pip_task_t *task, int flag, uintptr_t extval ) {
   void *loaded = NULL;
   void(*pthrd_exit)(void*);
   exit_t libc_exit;
-  int mode, is_threaded;
+  int mode, is_threaded, flag_pip = 1;
   int i, err = 0;
 
-  pip_free_all();
+  //pip_free_all();
 
   if( task != NULL ) {
     ENTERF( "PIPID:%d  extval:%lu", task->pipid, extval );
@@ -1131,6 +1126,7 @@ void pip_do_exit( pip_task_t *task, int flag, uintptr_t extval ) {
     DBGF( "returned from a fork()ed process or "
 	  "pthread_create()ed thread? (%d/%d)", 
 	  task->tid, pip_gettid() );
+    flag_pip = 0;
     goto force_exit;
   }
 
@@ -1143,7 +1139,7 @@ void pip_do_exit( pip_task_t *task, int flag, uintptr_t extval ) {
 	/* sending signal 0 to check if the task 
 	   is really alive or not */
 	if( pip_raise_signal( t, 0 ) == 0 ) {
-	  pip_warn_mesg( "PiP task %d is still alive and killed", 
+	  pip_info_mesg( "PiP task %d is still running and killed", 
 			 t->pipid );
 	  /* if so, kill the task */
 	  (void) pip_raise_signal( t, SIGKILL );
@@ -1160,7 +1156,7 @@ void pip_do_exit( pip_task_t *task, int flag, uintptr_t extval ) {
   /* here we have to call (pthread_)exit() 
      in the same context, if possible */
 
-  if( is_threaded ) {	/* thread mode */
+  if( flag_pip && is_threaded ) {	/* thread mode */
     if( task != NULL && root != NULL     && 
 	!PIP_ISA_ROOT( task )            &&
 	PIP_IS_ALIVE( root->task_root )  &&
@@ -1278,15 +1274,6 @@ static void *pip_do_spawn( void *thargs )  {
   /* reset signal mask */
   ASSERTD( sigfillset( &sigset ) == 0 );
   ASSERTD( pthread_sigmask( SIG_UNBLOCK, &sigset, NULL ) == 0 );
-#ifdef AHAHAH
-  if( !pip_is_threaded_() ) {
-    pip_reset_signal_handler( SIGCHLD );
-    (void) setpgid( 0, (pid_t) pip_root->task_root->tid );
-
-  } else {
-    pip_set_signal_handler( SIGQUIT, pip_sigquit_handler, NULL );
-  }
-#endif
 #ifdef DEBUG
   if( pip_is_threaded_() ) {
     pthread_attr_t attr;
@@ -1667,7 +1654,7 @@ int pip_get_system_id( int pipid, pip_id_t *idp ) {
 
   if( ( err = pip_check_pipid( &pipid ) ) != 0 ) RETURN( err );
   task = pip_get_task_( pipid );
-  if( !PIP_IS_ALIVE( task ) ) RETURN( ESRCH );
+  if( task == NULL || !PIP_IS_ALIVE( task ) ) RETURN( ESRCH );
   if( pip_is_threaded_() ) {
     /* Do not use gettid(). This is a very Linux-specific function */
     /* The reason of supporintg the thread PiP execution mode is   */
@@ -1697,7 +1684,12 @@ int pip_get_pid_( int pipid, pid_t *pidp ) {
 	err = EPERM;
       } else {
 	task = pip_get_task_( pipid );
-	pid  = task->tid;
+	if( task == NULL || 
+	    !PIP_IS_ALIVE( task ) ) {
+	  err = ESRCH;
+	} else {
+	  pid = task->tid;
+	}
       }
     }
   } else {

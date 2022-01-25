@@ -109,7 +109,7 @@ extern int 		pip_dont_wrap_malloc;
 #define PIP_STACK_SIZE_MAX	(16*1024*1024*1024LU) /* 16 GiB */
 #define PIP_STACK_ALIGN		(256)
 
-#define PIP_MINSIGSTKSZ 	(MINSIGSTKSZ*2)
+#define PIP_MINSIGSTKSZ 	(MINSIGSTKSZ*16)
 
 #define PIP_CLONE_LOCK_UNLOCKED		(0)
 #define PIP_CLONE_LOCK_OTHERWISE	(0xFFFFFFFF)
@@ -163,8 +163,8 @@ typedef struct pip_symbol {
   void			*unused_slot0;	/* unused */
   void			*unused_slot1;	/* unused */
   fflush_t		libc_fflush;  /* to call GLIBC fflush() at the end */
-  exit_t		exit;
-  pthread_exit_t	pthread_exit; /* (see above exit) */
+  void			*unused_slot2;
+  void			*unused_slot3;
   /* pip_patch_GOT */
   pip_patch_got_t	patch_got;
   /* pip_fin_task_implicitly */
@@ -346,7 +346,7 @@ typedef struct pip_root {
   pip_sem_t		sync_spawn;   /* Spawn synch */
 
   /* signal related members */
-  sigset_t		old_sigmask;
+  sigset_t		_unused_mask;
   /* for chaining signal handlers */
   struct sigaction	old_sigterm;
   struct sigaction	old_sigchld;
@@ -411,6 +411,7 @@ extern void pip_raise_sigchld( pip_task_t* ) PIP_PRIVATE;
 extern void pip_set_signal_handlers( void ) PIP_PRIVATE;
 extern void pip_unset_signal_handlers( void ) PIP_PRIVATE;
 extern void pip_abort_handler( int ) PIP_PRIVATE;
+extern void pip_kill_all_tasks_( int ) PIP_PRIVATE;
 
 extern void pip_onstart( pip_task_t* ) PIP_PRIVATE;
 extern void pip_set_exit_status( pip_task_t*, int, int ) PIP_PRIVATE;

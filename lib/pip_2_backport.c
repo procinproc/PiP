@@ -67,26 +67,11 @@ int pip_is_threaded( int *flagp ) {
 }
 
 int pip_kill_all_tasks( void ) {
-  int pipid, i, err;
-
-  err = 0;
+  int err = 0;
   if( !pip_is_effective() || !pip_isa_root() ) {
     err = EPERM;
   } else {
-    for( i=0; i<pip_root->ntasks; i++ ) {
-      pipid = i;
-      if( pip_check_pipid( &pipid ) == 0 ) {
-	pip_task_t *task = pip_get_task_( pipid );
-	if( PIP_IS_ALIVE( task ) ) {
-	  if( pip_is_threaded_() ) {
-	    task->status = PIP_W_EXITCODE( 0, SIGTERM );
-	    (void) pip_raise_signal( task, SIGQUIT );
-	  } else {
-	    (void) pip_raise_signal( task, SIGKILL );
-	  }
-	}
-      }
-    }
+    pip_kill_all_tasks_( 0 );
   }
   return err;
 }

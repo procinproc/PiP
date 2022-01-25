@@ -54,24 +54,15 @@ int pip_kill( int pipid, int signo ) {
 }
 
 int pip_sigmask( int how, const sigset_t *sigmask, sigset_t *oldmask ) {
-  sigset_t sigset;
   int err = 0;
 
   if( !pip_is_effective() || pip_root == NULL ) {
     err = EPERM;
   } else {
-    if( pip_root->task_root == pip_task &&
-	sigismember( sigmask, SIGCHLD ) ) {
-      /* do not block SIGCHLD in root */
-      memcpy( &sigset, sigmask, sizeof(sigset) );
-      sigdelset( &sigset, SIGCHLD );
-      sigmask = &sigset;
-    }
     if( pip_is_threaded_() ) {
       err = pthread_sigmask( how, sigmask, oldmask );
     } else {
-      errno = 0;
-      if( sigprocmask(  how, sigmask, oldmask ) != 0 ) {
+      if( sigprocmask( how, sigmask, oldmask ) != 0 ) {
 	err = errno;
       }
     }
@@ -86,7 +77,7 @@ int pip_signal_wait( int signo ) {
   if( !pip_is_effective() || pip_root == NULL ) {
     err = EPERM;
   } else {
-    ASSERTD( sigemptyset( &sigset )      == 0 );
+    ASSERTD( sigemptyset( &sigset      ) == 0 );
     ASSERTD( sigaddset( &sigset, signo ) == 0 );
     err = sigwait( &sigset, &sig );
 #ifdef AH
@@ -104,6 +95,25 @@ int pip_signal_wait( int signo ) {
 
 /* signal handlers */
 
+static void pip_block_signal( int sig ) {
+  sigset_t sigmask;
+  if( sig > 0 ) {
+    ASSERTD( sigemptyset( &sigmask )                == 0 );
+    ASSERTD( sigaddset(   &sigmask, sig )           == 0 );
+  } else {
+    ASSERTD( sigemptyset( &sigmask )                == 0 );
+    ASSERTD( sigfillset(  &sigmask )                == 0 );
+  }
+  ASSERTD( pthread_sigmask( SIG_BLOCK, &sigmask, NULL ) == 0 );
+}
+
+static void pip_unblock_signal( int sig ) {
+  sigset_t sigmask;
+  ASSERTD( sigemptyset( &sigmask )                    == 0 );
+  ASSERTD( sigaddset(   &sigmask, sig )               == 0 );
+  ASSERTD( pthread_sigmask( SIG_UNBLOCK, &sigmask, NULL ) == 0 );
+}
+
 void pip_set_signal_handler( int sig,
 			     void(*handler)(),
 			     struct sigaction *oldp ) {
@@ -111,19 +121,48 @@ void pip_set_signal_handler( int sig,
 
   memset( &sigact, 0, sizeof( sigact ) );
   sigact.sa_sigaction = handler;
+  sigact.sa_flags     = SA_RESTART;
   ASSERTD( sigaddset( &sigact.sa_mask, sig ) == 0 );
   ASSERTD( sigaction( sig, &sigact, oldp   ) == 0 );
 }
 
-static void pip_sigchld_handler( int sig ) {
+void pip_unset_signal_handler( int sig, void *handler ) {
+  struct sigaction oldact;
+
+  if( handler == NULL ) {
+    pip_set_signal_handler( sig, SIG_DFL, NULL );
+  } else {
+    ASSERTD( sigaction( SIGABRT, NULL, &oldact ) == 0 );
+    if( oldact.sa_handler == handler ) {
+      pip_set_signal_handler( sig, SIG_DFL, NULL );
+    }
+  }
+}
+
+static void pip_sigchld_handler( int sig ) {  
   DBG;
 }
 
 static void pip_exception_handler( int sig ) {
-  pip_task_t *task = pip_task;
+  pip_task_t *task = NULL;
 
+  ENTER;
   pip_err_mesg( "Exception signal: %s (%d) !!", strsignal(sig), sig );
-  if( task->debug_signals != NULL &&
+  if( pip_is_threaded_() && pip_root != NULL ) {
+    pid_t tid = pip_gettid();
+    int i;
+    for( i=0; i<pip_root->ntasks+1; i++ ) {
+      if( pip_root->tasks[i].tid == tid ) {
+	task = &pip_root->tasks[i];
+	break;
+      }
+    }
+  } else {
+    task = pip_task;
+  }
+  DBG;
+  if( task != NULL                &&
+      task->debug_signals != NULL &&
       sigismember( task->debug_signals, sig ) ) {
     if( pip_root != NULL ) {
       pip_spin_lock( &pip_root->lock_bt );
@@ -139,74 +178,27 @@ static void pip_exception_handler( int sig ) {
 }
 
 static void pip_set_exception_handler( int sig ) {
-  /* FIXME: since the sigaltstack is allocated  */
-  /* by a PiP task, there is no chance to free  */
-  struct sigaction	sigact;
+  struct sigaction	oldact, sigact;
 
-  memset( &sigact, 0, sizeof( sigact ) );
-#ifdef AH
-  /* FIXME: if threaded, pthread_exit() */
-  /*        on an altstack causes SEGV */
-  if( pip_task->sigalt_stack == NULL ) {
-    void	*altstack;
-    stack_t	sigstack;
-
-    pip_page_alloc( PIP_MINSIGSTKSZ, &altstack );
-    ASSERTD( altstack != NULL );
-    memset( &sigstack, 0, sizeof(sigstack) );
-    sigstack.ss_sp   = altstack;
-    sigstack.ss_size = PIP_MINSIGSTKSZ;
-    ASSERTD( sigaltstack( &sigstack, NULL ) == 0 );
-    pip_task->sigalt_stack = altstack;
-    sigact.sa_flags  = SA_ONSTACK;
-  }
-#endif
-  sigfillset( &sigact.sa_mask );
-  sigact.sa_handler = pip_exception_handler;
-  ASSERTD( sigaction( sig, &sigact, NULL ) == 0 );
-}
-
-void pip_abort_handler( int unused ) {
-  void pip_unset_abort_handler( void );
-  static int pip_aborted = 0;
-  pip_task_t 	*task;
-  int 		i;
-
-  ENTERF( "sig:%d", unused );;
-
-  if( pip_root != NULL && pip_task != NULL ) {
-    if( PIP_ISA_ROOT( pip_task ) ) {
-      if( pip_aborted ) return;
-      pip_aborted = 1;
-      for( i=0; i<pip_root->ntasks; i++ ) {
-	task = &pip_root->tasks[i];
-	if( PIP_IS_ALIVE( task ) ) {
-	  pip_set_exit_status( task, 0, SIGABRT );
-	  pip_raise_sigchld( task );
-	  (void) pip_raise_signal( task, SIGKILL );
-	}
-      }
-      pip_unset_abort_handler();
-      abort();
-    } else {			/* PiP task (not root) */
-      pip_set_exit_status( pip_task, 0, SIGABRT );
-      (void) pip_raise_signal( pip_root->task_root, SIGABRT );
-      /* wait to be aborted by root */
-      while( 1 ) sleep( 1 );
-    }
-  }
-  RETURNV;
-}
-
-void pip_unset_abort_handler( void ) {
-  struct sigaction	sigact, oldact;
-
-  ASSERTD( sigaction( SIGABRT, NULL, &oldact ) == 0 );
-  if( oldact.sa_handler == pip_abort_handler ) {
+  ASSERTD( sigaction( sig, NULL, &oldact ) == 0 );
+  if( oldact.sa_handler != pip_exception_handler ) {
+    DBGF( "sig:%d handler is set", sig );
     memset( &sigact, 0, sizeof( sigact ) );
-    sigact.sa_handler = SIG_DFL;
-    ASSERTD( sigaction( SIGABRT, &sigact, NULL ) == 0 );
+    sigact.sa_handler = pip_exception_handler;
+    sigact.sa_flags   = SA_RESTART;
+    ASSERTD( sigaddset( &sigact.sa_mask, sig ) == 0 );
+    ASSERTD( sigaction( sig, &sigact, NULL   ) == 0 );
+    if( pip_is_threaded_() ) {
+      pip_unblock_signal( sig );
+    }
+  } else if( pip_is_threaded_() ) {
+    DBGF( "sig:%d is blocked", sig );
+    pip_block_signal( sig );
   }
+}
+
+static void pip_unset_abort_handler( void ) {
+  pip_unset_signal_handler( SIGABRT, pip_abort_handler );
 }
 
 void pip_raise_sigchld( pip_task_t *task ) {
@@ -216,28 +208,48 @@ void pip_raise_sigchld( pip_task_t *task ) {
   }
 }
 
-#ifdef AH
-static void pip_set_abort_handler( void ) {
-  struct sigaction	sigact;
+void pip_kill_all_tasks_( int killsig ) {
+  if( pip_root != NULL && pip_task != NULL ) {
+    if( PIP_ISA_ROOT( pip_task ) ) {
+      static int 	pip_aborted = 0;
+      int 		i;
 
-  memset( &sigact, 0, sizeof( sigact ) );
-  sigfillset( &sigact.sa_mask );
-  if( !pip_is_threaded_() || PIP_ISA_ROOT( pip_task ) ) {
-    sigdelset(  &sigact.sa_mask, SIGABRT );
+      if( pip_aborted ) return;
+      pip_aborted = 1;
+
+      if( killsig == 0 ) killsig = SIGKILL;
+      for( i=0; i<pip_root->ntasks; i++ ) {
+	pip_task_t *task = &pip_root->tasks[i];
+	if( PIP_IS_ALIVE( task ) ) {
+	  pip_set_exit_status( task, 0, killsig );
+	  pip_raise_sigchld( task );
+	  (void) pip_raise_signal( task, SIGKILL );
+	}
+      }
+    } else {			/* PiP task (not root) */
+      pip_set_exit_status( pip_task, 0, killsig );
+      (void) pip_raise_signal( pip_root->task_root, killsig );
+      /* wait to be killed by root */
+      while( 1 ) sleep( 1 );
+    }
   }
-  sigact.sa_handler = pip_abort_handler;
-  ASSERTD( sigaction( SIGABRT, &sigact, NULL ) == 0 );
 }
-#endif
+
+void pip_abort_handler( int unused ) {
+
+  ENTERF( "sig:%d", unused );
+  pip_kill_all_tasks_( SIGABRT );
+  pip_unset_abort_handler();
+  abort();
+  RETURNV;
+}
+
 static void pip_set_abort_handler( void ) {
   struct sigaction	sigact;
 
   memset( &sigact, 0, sizeof( sigact ) );
-  sigfillset( &sigact.sa_mask );
-  if( pip_task != NULL && PIP_ISA_ROOT( pip_task ) ) {
-    sigdelset(  &sigact.sa_mask, SIGABRT );
-  }
   sigact.sa_handler = pip_abort_handler;
+  sigact.sa_flags   = SA_RESTART;
   ASSERTD( sigaction( SIGABRT, &sigact, NULL ) == 0 );
 }
 
@@ -285,26 +297,18 @@ static int pip_exception_signals[] = {
   0
 };
 
-static void pip_block_signal( int sig ) {
-  sigset_t sigmask;
-
-  ASSERTD( sigemptyset( &sigmask )                                    == 0 );
-  ASSERTD( sigaddset(   &sigmask, sig )                               == 0 );
-  ASSERTD( sigprocmask( SIG_BLOCK, &sigmask, &pip_root->old_sigmask ) == 0 );
-}
-
 void pip_set_signal_handlers( void ) {
   /* setting PiP exceptional signal handler for    */
   /* the signals terminating PiP task (by default) */
   int sig, i;
-
+  
   for( i=0; (sig=pip_exception_signals[i])>0; i++ ) {
     pip_set_exception_handler( sig );
   }
   if( pip_is_threaded_() ) {
     if( !PIP_ISA_ROOT( pip_task ) ) {
-      /* so that SIGABRT is forwarded to the root */
-      pip_block_signal( SIGABRT );
+      /* so that SIGABRT is delivered to the root */
+      pip_block_signal( SIGABRT );	/* block any signal */
     }
   } else {
     pip_set_abort_handler();
@@ -314,60 +318,25 @@ void pip_set_signal_handlers( void ) {
     pip_set_signal_handler( SIGCHLD,
 			    pip_sigchld_handler,
 			    NULL );
-  } else {
-    pip_set_signal_handler( SIGCHLD, SIG_DFL, NULL );
   }
 }
 
 static void pip_unset_exception_handler( int sig ) {
-  struct sigaction	oldact, sigact;
-
-  ASSERTD( sigaction( sig, NULL, &oldact ) == 0 );
-  if( oldact.sa_handler == pip_exception_handler ) {
-    memset( &sigact, 0, sizeof( sigact ) );
-    sigact.sa_handler = SIG_DFL;
-    ASSERTD( sigaction( sig, &sigact, NULL ) == 0 );
-  }
+  pip_unset_signal_handler( SIGABRT, pip_exception_handler );
 }
 
 void pip_unset_signal_handlers( void ) {
-  /* setting PiP exceptional signal handler for    */
-  /* the signals terminating PiP task (by default) */
   int sig, i;
-  for( i=0; ; i++ ) {
-    sig = pip_exception_signals[i];
-    if( sig == 0 ) break;
+
+  for( i=0; (sig=pip_exception_signals[i])>0; i++ ) {
     pip_unset_exception_handler( sig );
   }
   pip_unset_abort_handler();
-  pip_set_signal_handler( SIGCHLD, SIG_DFL, NULL );
-}
+  pip_unset_signal_handler( SIGCHLD, NULL );
 
-static void pip_unblock_signal( void ) {
-  ASSERTD( sigprocmask( SIG_UNBLOCK, &pip_root->old_sigmask, NULL ) == 0 );
-}
-
-
-static void pip_sigquit_handler( int, void(*)(), struct sigaction* )
-  PIP_NORETURN;
-static void pip_sigquit_handler( int sig,
-				 void(*handler)(),
-				 struct sigaction *oldp ) {
-  ENTER;
-  pthread_exit( NULL );
-  NEVER_REACH_HERE;
-}
-
-static void pip_reset_signal_handler( int sig ) {
-  if( !pip_is_threaded_() ) {
-    struct sigaction	sigact;
-    memset( &sigact, 0, sizeof( sigact ) );
-    sigact.sa_sigaction = (void(*)(int,siginfo_t*,void*)) SIG_DFL;
-    ASSERTD( sigaction( sig, &sigact, NULL ) == 0 );
-  } else {
-    sigset_t sigmask;
-    (void) sigemptyset( &sigmask );
-    (void) sigaddset( &sigmask, sig );
-    ASSERTD( pthread_sigmask( SIG_BLOCK, &sigmask, NULL ) == 0 );
+  if( pip_is_threaded_() ) {
+    if( !PIP_ISA_ROOT( pip_task ) ) {
+      pip_unblock_signal( SIGABRT );
+    }
   }
 }
