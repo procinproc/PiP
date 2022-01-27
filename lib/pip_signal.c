@@ -98,19 +98,22 @@ int pip_signal_wait( int signo ) {
 static void pip_block_signal( int sig ) {
   sigset_t sigmask;
   if( sig > 0 ) {
-    ASSERTD( sigemptyset( &sigmask )                == 0 );
-    ASSERTD( sigaddset(   &sigmask, sig )           == 0 );
+    ASSERTD( sigemptyset( &sigmask )      == 0 );
+    ASSERTD( sigaddset(   &sigmask, sig ) == 0 );
   } else {
-    ASSERTD( sigemptyset( &sigmask )                == 0 );
-    ASSERTD( sigfillset(  &sigmask )                == 0 );
+    ASSERTD( sigfillset(  &sigmask )      == 0 );
   }
   ASSERTD( pthread_sigmask( SIG_BLOCK, &sigmask, NULL ) == 0 );
 }
 
 static void pip_unblock_signal( int sig ) {
   sigset_t sigmask;
-  ASSERTD( sigemptyset( &sigmask )                    == 0 );
-  ASSERTD( sigaddset(   &sigmask, sig )               == 0 );
+  if( sig > 0 ) {
+    ASSERTD( sigemptyset( &sigmask )      == 0 );
+    ASSERTD( sigaddset(   &sigmask, sig ) == 0 );
+  } else {
+    ASSERTD( sigfillset(  &sigmask )      == 0 );
+  }
   ASSERTD( pthread_sigmask( SIG_UNBLOCK, &sigmask, NULL ) == 0 );
 }
 
@@ -147,20 +150,15 @@ static void pip_exception_handler( int sig ) {
   pip_task_t *task = NULL;
 
   ENTER;
-  pip_err_mesg( "Exception signal: %s (%d) !!", strsignal(sig), sig );
+  pip_err_mesg( "Exception signal: %s (%d) !!", 
+		strsignal(sig), sig );
   if( pip_is_threaded_() && pip_root != NULL ) {
-    pid_t tid = pip_gettid();
-    int i;
-    for( i=0; i<pip_root->ntasks+1; i++ ) {
-      if( pip_root->tasks[i].tid == tid ) {
-	task = &pip_root->tasks[i];
-	break;
-      }
-    }
+    /* we cannot rely on the pip_task variable 
+       since this handler code is shared among PiP tasks */
+    task = pip_current_task();
   } else {
     task = pip_task;
   }
-  DBG;
   if( task != NULL                &&
       task->debug_signals != NULL &&
       sigismember( task->debug_signals, sig ) ) {
@@ -188,12 +186,6 @@ static void pip_set_exception_handler( int sig ) {
     sigact.sa_flags   = SA_RESTART;
     ASSERTD( sigaddset( &sigact.sa_mask, sig ) == 0 );
     ASSERTD( sigaction( sig, &sigact, NULL   ) == 0 );
-    if( pip_is_threaded_() ) {
-      pip_unblock_signal( sig );
-    }
-  } else if( pip_is_threaded_() ) {
-    DBGF( "sig:%d is blocked", sig );
-    pip_block_signal( sig );
   }
 }
 
@@ -294,25 +286,38 @@ static int pip_exception_signals[] = {
 #ifdef SIGLOST
   SIGLOST,
 #endif
-  0
+  0				/* end of list */
 };
 
 void pip_set_signal_handlers( void ) {
   /* setting PiP exceptional signal handler for    */
   /* the signals terminating PiP task (by default) */
   int sig, i;
-  
-  for( i=0; (sig=pip_exception_signals[i])>0; i++ ) {
-    pip_set_exception_handler( sig );
-  }
-  if( pip_is_threaded_() ) {
-    if( !PIP_ISA_ROOT( pip_task ) ) {
-      /* so that SIGABRT is delivered to the root */
-      pip_block_signal( SIGABRT );	/* block any signal */
+
+  if( PIP_ISA_ROOT( pip_task ) ) {
+    for( i=0; (sig=pip_exception_signals[i])>0; i++ ) {
+      pip_set_exception_handler( sig );
     }
-  } else {
+  } else if( !pip_is_threaded_() ) {
+    for( i=0; (sig=pip_exception_signals[i])>0; i++ ) {
+      pip_set_exception_handler( sig );
+    }
+  } else if( pip_root->flag_exhandler == 0 ) {
+    pip_root->flag_exhandler = 1;
+    for( i=0; (sig=pip_exception_signals[i])>0; i++ ) {
+      pip_set_exception_handler( sig );
+    }
+  }
+  /* SIGABRT */
+  if( pip_is_threaded_() ) {	/* thread mode */
+    if( PIP_ISA_ROOT( pip_task ) ) {
+      /* so that SIGABRT is delivered to the root */
+      pip_block_signal( SIGABRT );
+    }
+  } else {			/* process mode */
     pip_set_abort_handler();
   }
+  /* SIGCHLD */
   if( PIP_ISA_ROOT( pip_task ) ) {
     pip_block_signal( SIGCHLD ); /* for sigwait(SIGCHLD) */
     pip_set_signal_handler( SIGCHLD,

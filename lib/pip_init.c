@@ -211,7 +211,7 @@ void pip_err_mesg( const char *format, ... ) {
   va_end( ap );
 }
 
-static pip_task_t *pip_current_task( void ) {
+pip_task_t *pip_current_task( void ) {
   /* do not put any DBG macors in this function */
   pid_t		tid   = pip_gettid();
   pip_root_t	*root = pip_root;
@@ -428,13 +428,12 @@ static void pip_show_pips( void ) {
     char *pips_opts = " x";
     char *pips_exec;
     char *p;
-    DBG;
+
     sleep(1);
     ASSERT( ( pips_exec = alloca( strlen( prefix    ) +
 				  strlen( pips_comm ) + 
 				  strlen( pips_opts ) + 1 ) ) 
 	    != NULL );
-    DBG;
     p = pips_exec;
     p = stpcpy( p, prefix    );
     p = stpcpy( p, pips_comm );
@@ -588,13 +587,13 @@ void pip_debug_on_exceptions( pip_root_t *root, pip_task_t *task ) {
 }
 
 void pip_after_fork( void ) {
-  DBG;
+  ENTER;
   pip_unset_signal_handlers();
   pip_root = NULL;
   pip_task = NULL;
   pip_initialized = 0;
   pip_finalized   = 1;
-  DBG;
+  RETURNV;
 }
 
 /* the following function will be called implicitly */

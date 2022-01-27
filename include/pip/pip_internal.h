@@ -362,7 +362,7 @@ typedef struct pip_root {
 
   char			*prefixdir;
 
-  int			flag_debug; /* unused */
+  int			flag_exhandler;
 
   pip_sem_t		universal_lock;
   pip_recursive_lock_t	glibc_lock; /* 5 64-bit words */
@@ -404,6 +404,7 @@ extern int  pip_is_shared_sighand( int *flagp );
 
 extern pip_task_t *pip_get_task_( int ) PIP_PRIVATE;
 
+extern pip_task_t *pip_current_task( void ) PIP_PRIVATE;
 extern void pip_set_signal_handler( int sig, void(*)(),
 				    struct sigaction* ) PIP_PRIVATE;
 extern int  pip_signal_wait( int ) PIP_PRIVATE;
