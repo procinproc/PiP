@@ -348,8 +348,8 @@ typedef struct pip_root {
   /* signal related members */
   sigset_t		_unused_mask;
   /* for chaining signal handlers */
-  struct sigaction	old_sigterm;
-  struct sigaction	old_sigchld;
+  struct sigaction	_unused_sigact0;
+  struct sigaction	_unused_sigact1;
   /* environments */
   pip_env_t		envs;
   /* GDB Interface */
@@ -362,7 +362,7 @@ typedef struct pip_root {
 
   char			*prefixdir;
 
-  int			flag_exhandler;
+  int			_unused_int;
 
   pip_sem_t		universal_lock;
   pip_recursive_lock_t	glibc_lock; /* 5 64-bit words */

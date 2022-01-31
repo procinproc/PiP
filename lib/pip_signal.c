@@ -298,31 +298,28 @@ void pip_set_signal_handlers( void ) {
     for( i=0; (sig=pip_exception_signals[i])>0; i++ ) {
       pip_set_exception_handler( sig );
     }
-  } else if( !pip_is_threaded_() ) {
-    for( i=0; (sig=pip_exception_signals[i])>0; i++ ) {
-      pip_set_exception_handler( sig );
+    if( !pip_is_threaded_() ) {
+      /* in process mode, all tasks must be aborted explicitly */
+      pip_set_abort_handler();
+    } else {
+      /* in thread mode, no handler is required to kill tasks */
     }
-  } else if( pip_root->flag_exhandler == 0 ) {
-    pip_root->flag_exhandler = 1;
-    for( i=0; (sig=pip_exception_signals[i])>0; i++ ) {
-      pip_set_exception_handler( sig );
-    }
-  }
-  /* SIGABRT */
-  if( pip_is_threaded_() ) {	/* thread mode */
-    if( PIP_ISA_ROOT( pip_task ) ) {
-      /* so that SIGABRT is delivered to the root */
-      pip_block_signal( SIGABRT );
-    }
-  } else {			/* process mode */
-    pip_set_abort_handler();
-  }
-  /* SIGCHLD */
-  if( PIP_ISA_ROOT( pip_task ) ) {
     pip_block_signal( SIGCHLD ); /* for sigwait(SIGCHLD) */
+#ifdef DEBUG
     pip_set_signal_handler( SIGCHLD,
 			    pip_sigchld_handler,
 			    NULL );
+#endif
+  } else if( !pip_is_threaded_() ) { 
+    /* tasks in process mode */
+    for( i=0; (sig=pip_exception_signals[i])>0; i++ ) {
+      pip_set_exception_handler( sig );
+    }
+    pip_set_abort_handler();
+  } else {		
+    /* tasks in thread mode  */
+    pip_block_signal( SIGABRT );
+    /* so that SIGABRT is forwarded to the root */
   }
 }
 
