@@ -142,9 +142,11 @@ void pip_unset_signal_handler( int sig, void *handler ) {
   }
 }
 
+#ifdef DEBUG
 static void pip_sigchld_handler( int sig ) {  
   DBG;
 }
+#endif
 
 static void pip_exception_handler( int sig ) {
   pip_task_t *task = NULL;
