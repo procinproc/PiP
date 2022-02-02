@@ -1,4 +1,3 @@
-
 /*
  * $PIP_license: <Simplified BSD License>
  * Redistribution and use in source and binary forms, with or without
@@ -37,41 +36,37 @@
 #include <pip/pip_internal.h>
 #include <pip/pip.h>
 
-int pip_is_debug_build() {
-#ifdef DEBUG
-  return 1;
-#else
-  return 0;
-#endif
-}
+typedef int(*main_t)(int,char**,char**);
 
-int pip_isa_task( void ) {
-  return pip_is_effective() && 
-    pip_root != NULL && 
-    pip_task != NULL &&
-    pip_root->task_root != pip_task;
-}
+int main( int argc, char **argv, char **env ) {
+  char *prel = argv[1];
+  char *func = argv[2];
+  char *arg2 = argv[3];
+  char *prog = argv[4];
+  char **new_argv = &argv[4];
 
-int pip_is_threaded( int *flagp ) {
-  int err = 0;
-  if( !pip_is_effective() ) {
-    err = EPERM;
-  } else if( flagp != NULL ) {
-    if( pip_is_threaded_() ) {
-      *flagp = 1;
-    } else {
-      *flagp = 0;
-    }
+  void *loaded;
+  void *start, *argp;
+  int  extval;
+
+  if( *prel != '\0' ) {
+    load_preload( prel );
   }
-  return err;
-}
-
-int pip_kill_all_tasks( void ) {
-  int err = 0;
-  if( !pip_is_effective() || !pip_isa_root() ) {
-    err = EPERM;
+  loaded = dlopen( prog, RTLD_NOW );
+  if( loaded == NULL ) {
+    printf( "dlopen(%s): %s\n", prog, dlerror() );
+    return( 1 );
+  }
+  start = dlsym( loaded, func );
+  if( start == NULL ) {
+    printf( "dlsym(%s): %s\n", prog, dlerror() );
+    return( 1 );
+  }
+  if( strcmp( func, "main" ) == 0 ) {
+    extval = start( argc - 4, new_argv, env );
   } else {
-    pip_kill_all_tasks_( 0 );
+    argp = (void*) strtol( args, NULL, 16 );
+    extval = start( argp );
   }
-  return err;
+  return( extval );
 }
