@@ -35,7 +35,6 @@
 
 #include <pip/pip_internal.h>
 #include <pip/build.h>
-#include <getopt.h>
 
 const char interp[] __attribute__((section(".interp"))) = LDLINUX;
 
@@ -180,8 +179,8 @@ int pip_main( void ) {
     free( argv );
   }
   fflush( NULL );
-  _exit( extval );
   /* we cannot return from this */
+  _exit( extval );
   NEVER_REACH_HERE;
   return 0;			/* dummy */
 }

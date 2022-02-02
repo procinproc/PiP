@@ -35,9 +35,6 @@
 
 #include <pip/pip_internal.h>
 
-#include <sys/mman.h>
-#include <link.h>
-
 typedef struct {
   char			*dsoname;
   char			**exclude;

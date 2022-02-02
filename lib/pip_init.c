@@ -36,8 +36,6 @@
 #include <pip/pip_internal.h>
 #include <pip/pip_gdbif.h>
 
-#include <execinfo.h>
-
 int 			pip_initialized      PIP_PRIVATE = 0;
 int 			pip_finalized        PIP_PRIVATE = 1;
 pip_sem_t		*pip_universal_lockp PIP_PRIVATE;

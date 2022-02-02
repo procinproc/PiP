@@ -35,6 +35,5 @@
 
 #include <pip/pip_internal.h>
 #include <pip/pip_gdbif.h>
-#include <sys/wait.h>
 
 struct pip_gdbif_root	*pip_gdbif_root = NULL;

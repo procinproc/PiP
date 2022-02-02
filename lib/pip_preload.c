@@ -35,9 +35,6 @@
 
 #include <pip/pip_internal.h>
 
-#include <sys/syscall.h>
-#include <dlfcn.h>
-
 //#define DEBUG
 
 pip_clone_t pip_clone_info = { 0 }; /* refered by piplib */

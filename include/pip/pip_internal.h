@@ -56,9 +56,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/mman.h>
 #include <sys/resource.h>
+#include <sys/prctl.h>
+#include <sys/syscall.h>
+#include <sched.h>
 #include <semaphore.h>
-#include <ucontext.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -69,6 +72,10 @@
 #include <libgen.h>
 #include <fcntl.h>
 #include <link.h>
+#include <execinfo.h>
+#include <getopt.h>
+#include <dlfcn.h>
+#include <elf.h>
 
 #define PIP_PRIVATE		__attribute__((visibility ("hidden")))
 

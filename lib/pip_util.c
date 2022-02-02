@@ -36,9 +36,6 @@
 #include <pip/pip_internal.h>
 #include <pip/pip_util.h>
 
-#include <dlfcn.h>
-#include <elf.h>
-
 extern int pip_is_coefd( int );
 extern int pip_get_dso( int, void** );
 extern int pip_root_p_( void );

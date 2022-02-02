@@ -36,11 +36,6 @@
 #include <pip/pip_internal.h>
 #include <pip/pip.h>
 
-#include <sys/mman.h>
-#include <sys/wait.h>
-#include <sched.h>
-#include <sys/prctl.h>
-
 //#define DEBUG
 
 /* the EVAL env. is to measure the time for calling dlmopen() */

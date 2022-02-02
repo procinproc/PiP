@@ -207,7 +207,6 @@ void *sbrk( intptr_t inc ) {
   return pip_sbrk( inc );
 }
 
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 
