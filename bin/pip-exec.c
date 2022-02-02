@@ -306,7 +306,7 @@ int main( int argc, char **argv ) {
 	if( spawn->args == NULL ) print_usage();
 	break;
       } else if( *argv[i] != '-' ) {
-	if( ( err = pip_check_pie( argv[i], 1 ) ) != 0 ) goto error;
+	if( ( err = pip_check_pie( argv[i] ) ) != 0 ) goto error;
 	if( access( argv[i], X_OK ) ) {
 	  err = errno;
 	  fprintf( stderr, "%s: '%s' is not executable\n", program, argv[i] );

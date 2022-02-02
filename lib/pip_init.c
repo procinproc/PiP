@@ -157,22 +157,24 @@ pip_message( FILE *fp, char *tag, int dnl, const char *format, va_list ap ) {
   char idstr[PIP_MIDLEN];
   int len, fd;
 
-  pip_idstr( idstr, PIP_MIDLEN );
-  len = 0;
-  if( dnl ) {
-    len += snprintf(  &mesg[len], PIP_MESGLEN-len, "\n" );
+  if( pip_root == NULL || !pip_root->flag_quiet ) {
+    pip_idstr( idstr, PIP_MIDLEN );
+    len = 0;
+    if( dnl ) {
+      len += snprintf(  &mesg[len], PIP_MESGLEN-len, "\n" );
+    }
+    len += snprintf(    &mesg[len], PIP_MESGLEN-len, "%s%s ", tag, idstr );
+    len += vsnprintf(   &mesg[len], PIP_MESGLEN-len, format, ap );
+    if( dnl ) {
+      len += snprintf(  &mesg[len], PIP_MESGLEN-len, "\n\n" );
+    } else {
+      len += snprintf(  &mesg[len], PIP_MESGLEN-len, "\n" );
+    }
+    fflush( fp );
+    /* !!!! DON'T USE FPRINTF HERE !!!! */
+    fd = fileno( fp );
+    (void) write( fd, mesg, len );
   }
-  len += snprintf(    &mesg[len], PIP_MESGLEN-len, "%s%s ", tag, idstr );
-  len += vsnprintf(   &mesg[len], PIP_MESGLEN-len, format, ap );
-  if( dnl ) {
-    len += snprintf(  &mesg[len], PIP_MESGLEN-len, "\n\n" );
-  } else {
-    len += snprintf(  &mesg[len], PIP_MESGLEN-len, "\n" );
-  }
-  fflush( fp );
-  /* !!!! DON'T USE FPRINTF HERE !!!! */
-  fd = fileno( fp );
-  (void) write( fd, mesg, len );
 }
 
 void pip_info_fmesg( FILE *fp, const char *format, ... ) {

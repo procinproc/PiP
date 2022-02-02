@@ -146,50 +146,36 @@ void pip_reset_task_struct( pip_task_t *task ) {
 
 #include <elf.h>
 
-int pip_check_pie( const char *path, int flag_verbose ) {
+int pip_check_pie( const char *path ) {
   struct stat stbuf;
   Elf64_Ehdr elfh;
   int fd;
   int err = 0;
 
   if( strchr( path, '/' ) == NULL ) {
-    if( flag_verbose ) {
-      pip_err_mesg( "'%s' is not a path (no slash '/')", path );
-    }
+    pip_err_mesg( "'%s' is not a path (no slash '/')", path );
     err = ENOENT;
   } else if( ( fd = open( path, O_RDONLY ) ) < 0 ) {
     err = errno;
-    if( flag_verbose ) {
-      pip_err_mesg( "'%s': open() fails (%s)", path, strerror( errno ) );
-    }
+    pip_err_mesg( "'%s': open() fails (%s)", path, strerror( errno ) );
   } else {
     if( fstat( fd, &stbuf ) < 0 ) {
       err = errno;
-      if( flag_verbose ) {
-	pip_err_mesg( "'%s': stat() fails (%s)", path, strerror( errno ) );
-      }
+      pip_err_mesg( "'%s': stat() fails (%s)", path, strerror( errno ) );
     } else if( ( stbuf.st_mode & (S_IXUSR|S_IXGRP|S_IXOTH) ) == 0 ) {
-      if( flag_verbose ) {
-	pip_err_mesg( "'%s' is not executable", path );
-      }
+      pip_err_mesg( "'%s' is not executable", path );
       err = EACCES;
     } else if( read( fd, &elfh, sizeof( elfh ) ) != sizeof( elfh ) ) {
-      if( flag_verbose ) {
-	pip_err_mesg( "Unable to read '%s'", path );
-      }
+      pip_err_mesg( "Unable to read '%s'", path );
       err = EUNATCH;
     } else if( elfh.e_ident[EI_MAG0] != ELFMAG0 ||
 	       elfh.e_ident[EI_MAG1] != ELFMAG1 ||
 	       elfh.e_ident[EI_MAG2] != ELFMAG2 ||
 	       elfh.e_ident[EI_MAG3] != ELFMAG3 ) {
-      if( flag_verbose ) {
-	pip_err_mesg( "'%s' is not ELF", path );
-      }
+      pip_err_mesg( "'%s' is not ELF", path );
       err = ELIBBAD;
     } else if( elfh.e_type != ET_DYN ) {
-      if( flag_verbose ) {
-	pip_err_mesg( "'%s' is not PIE", path );
-      }
+      pip_err_mesg( "'%s' is not PIE", path );
       err = ELIBEXEC;
     }
     (void) close( fd );
@@ -454,10 +440,12 @@ char *pip_prefix_dir( void ) {
   return NULL;			/* dummy */
 }
 
-static void
-pip_find_glibc_symbols( void *handle, pip_task_t *task ) {
+static int
+pip_find_glibc_symbols( void *handle, pip_task_t *task, const char *path ) {
   pip_symbols_t *symp = &task->symbols;
+  int err = 0;
 
+  ENTER;
   pip_glibc_lock();		/* to protect dlsym */
   {
     /* the GLIBC _init() seems not callable. It seems that */
@@ -471,8 +459,21 @@ pip_find_glibc_symbols( void *handle, pip_task_t *task ) {
     symp->prog_full      = pip_dlsym_unsafe( handle, "__progname_full" );
     /* PiP-glibc */
     symp->pip_set_opts   = pip_dlsym_unsafe( handle, "pip_set_opts"    );
+    symp->pthread_exit   = pip_dlsym_unsafe( handle, "pthread_exit"    );
   }
   pip_glibc_unlock();
+
+  DBGF( "pthread_exit:%p", symp->pthread_exit );
+  if( pip_is_threaded_() && symp->pthread_exit == NULL ) {
+    DBG;
+    err = ELIBBAD;
+    if( path ) {
+      pip_err_mesg( "'%s': Unable to find pthread_exit() "
+		    "(possibly not linked with '-pthread' option).",
+		    path );
+    }
+  }
+  RETURN( err );
 }
 
 int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
@@ -517,6 +518,7 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
 
     root->prefixdir = pip_prefix_dir();
     pip_set_magic( root );
+    root->flag_quiet   = ( getenv( PIP_ENV_QUIET ) != NULL );
     root->version      = PIP_API_VERSION;
     root->ntasks       = ntasks;
     root->ntasks_count = 1; /* root is also a PiP task */
@@ -534,7 +536,6 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
       pip_reset_task_struct( &root->tasks[i] );
       pip_named_export_init( &root->tasks[i] );
     }
-
     if( rt_expp != NULL ) {
       root->export_root = *rt_expp;
     }
@@ -548,17 +549,10 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     root->task_root->task_root = root;
     pip_task = root->task_root;
     pip_root = root;
-    pip_find_glibc_symbols( RTLD_NEXT, pip_task );
     {
       char sym[] = "R*";
       sym[1] = pip_cmd_name_symbol( root->opts );
       pip_set_name( sym, NULL );
-    }
-    pip_gdbif_initialize_root( ntasks );
-    pip_gdbif_task_commit( pip_task );
-    if( !pip_is_threaded_() ) {
-      pip_save_debug_envs( root );
-      pip_debug_on_exceptions( root, pip_task );
     }
     if( opts & PIP_MODE_PTHREAD ) {
       pip_initialized = PIP_MODE_PTHREAD;
@@ -566,6 +560,16 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
       pip_initialized = PIP_MODE_PROCESS;
     }
     pip_finalized = 0;
+
+    pip_gdbif_initialize_root( ntasks );
+    pip_gdbif_task_commit( pip_task );
+
+    /* must be called after setting pip_initialized */
+    if( !pip_is_threaded_() ) {
+      pip_save_debug_envs( root );
+      pip_debug_on_exceptions( root, pip_task );
+    }
+    (void) pip_find_glibc_symbols( RTLD_NEXT, pip_task, NULL );
     
     pip_set_signal_handlers();
     ASSERTD( pthread_atfork( NULL, NULL, pip_after_fork ) == 0 );
@@ -863,13 +867,14 @@ static int pip_find_user_symbols( pip_spawn_program_t *progp,
   /* check start function */
   if( progp->funcname == NULL ) {
     if( symp->main == NULL ) {
-      pip_err_mesg( "Unable to find main "
-		    "(possibly not linked with '-rdynamic' option)" );
+      pip_err_mesg( "'%s': Unable to find main "
+		    "(possibly not linked with '-rdynamic' option)",
+		    progp->prog );
       err = ENOEXEC;
     }
   } else if( symp->start == NULL ) {
-    pip_err_mesg( "Unable to find start function (%s)",
-		  progp->funcname );
+    pip_err_mesg( "'%s': Unable to find start function (%s)",
+		  progp->prog, progp->funcname );
     err = ENOEXEC;
   }
   RETURN( err );
@@ -894,13 +899,13 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
 
   loaded = pip_dlmopen( LM_ID_NEWLM, path, DLMOPEN_FLAGS );
   if( loaded == NULL ) {
-    if( ( err = pip_check_pie( path, 1 ) ) != 0 ) goto error;
+    if( ( err = pip_check_pie( path ) ) != 0 ) goto error;
     pip_err_mesg( "dlmopen(%s): %s", path, pip_dlerror() );
     err = ENOEXEC;
     goto error;
   }
 
-  pip_find_glibc_symbols( loaded, task );
+  if( ( err = pip_find_glibc_symbols( loaded, task, path ) ) ) goto error;
   if( ( err = pip_find_user_symbols( progp, loaded, task ) ) ) goto error;
   if( pip_dlinfo( loaded, RTLD_DI_LMID, &lmid ) != 0 ) {
     pip_err_mesg( "Unable to obtain Lmid - %s", pip_dlerror() );
@@ -910,17 +915,8 @@ pip_load_dsos( pip_spawn_program_t *progp, pip_task_t *task) {
   DBGF( "lmid:%d", (int) lmid );
 
   impinit = (pip_init_t) pip_dlsym( loaded, "pip_init_task_implicitly" );
-  if( impinit == NULL ) {
-    DBGF( "dlsym: %s", pip_dlerror() );
-    err = ELIBBAD;
-    goto error;
-  }
-  impfin = (pip_fin_t) pip_dlsym( loaded, "pip_fin_task_implicitly" );
-  if( impfin == NULL ) {
-    DBGF( "dlsym: %s", pip_dlerror() );
-    err = ELIBBAD;
-    goto error;
-  }
+  impfin  = (pip_fin_t)  pip_dlsym( loaded, "pip_fin_task_implicitly"  );
+
   task->lmid             = lmid;
   task->loaded           = loaded;
   task->symbols.pip_init = impinit;
@@ -1104,30 +1100,27 @@ void pip_do_exit( pip_task_t *task, int flag, uintptr_t extval ) {
   }
   if( task != NULL && root == NULL ) root = task->task_root;
 
-  if( !PIP_ISNTA_TASK( task ) ) {
-    if( task->hook_after != NULL ) {
-      if( ( err = task->hook_after( task->hook_arg ) ) != 0 ) {
-	pip_err_mesg( "PIPID:%d after-hook returns %d", 
-		      task->pipid, err );
-      }
-      if( flag == PIP_EXIT_EXIT && extval == 0 ) extval = err;
-    }
-    if( flag == PIP_EXIT_EXIT ) {
-      pip_gdbif_exit( task, WEXITSTATUS(extval) );
-      pip_gdbif_hook_after( task );
-    }
-    pip_glibc_fin( &task->symbols );
-    if( task->symbols.named_export_fin != NULL ) {
-      task->symbols.named_export_fin( task );
-    }
-  } else {
-    /* when a PiP task fork()s and returns */
-    /* from main this case happens         */
+  if( PIP_ISNTA_TASK( task ) ) {
+    /* when a PiP task fork()s and the forked process exits */
     DBGF( "returned from a fork()ed process or "
 	  "pthread_create()ed thread? (%d/%d)", 
 	  task->tid, pip_gettid() );
     flag_pip = 0;
     goto force_exit;
+  } else {
+    if( task->hook_after != NULL ) {
+      if( ( err = task->hook_after( task->hook_arg ) ) != 0 ) {
+	pip_err_mesg( "PIPID:%d after-hook returns %d", 
+		      task->pipid, err );
+      }
+      if( flag != PIP_EXIT_PTHREAD && extval == 0 ) extval = err;
+    }
+    pip_gdbif_exit( task, WEXITSTATUS(extval) );
+    pip_gdbif_hook_after( task );
+    pip_glibc_fin( &task->symbols );
+    if( task->symbols.named_export_fin != NULL ) {
+      task->symbols.named_export_fin( task );
+    }
   }
 
   if( root != NULL && 
@@ -1147,32 +1140,39 @@ void pip_do_exit( pip_task_t *task, int flag, uintptr_t extval ) {
       }
     }
   }
+
  force_exit:
   DBGF( "FORCE EXIT:%lu", extval );
 
   if( task != NULL ) {
     loaded = task->loaded;
+    pip_set_exit_status( task, extval, 0 );
   }
-  /* here we have to call (pthread_)exit() 
-     in the same context, if possible */
 
   if( flag_pip && is_threaded ) {	/* thread mode */
     if( task != NULL && root != NULL     && 
 	!PIP_ISA_ROOT( task )            &&
 	PIP_IS_ALIVE( root->task_root )  &&
 	!PIP_ISNTA_TASK( task ) ) {
-      if( flag == PIP_EXIT_EXIT ) {
-	pip_set_exit_status( task, extval, 0 );
-      }
       pip_raise_sigchld( task );
     }
     if( task != NULL && PIP_ISA_ROOT(task) ) {
       pip_finalize_root( task->task_root );
       /* after calling above func., pip_root and pip_task are NOT accessible */
     }
+    /* here we have to call (pthread_)exit() 
+       in the same context, if possible */
     pthrd_exit = pip_find_dso_symbol( loaded, 
 				      "libpthread.so", 
 				      "pthread_exit" );
+    if( pthrd_exit == NULL ) {
+      if( flag == PIP_EXIT_RETURN ) {
+	/* returned from main or start func */
+	RETURNV;
+      }
+      /* here we have nothing to do but calling exit() */
+      goto call_exit;
+    }
     if( flag == PIP_EXIT_PTHREAD ) {
       pthrd_exit( (void*) extval );
     } else {
@@ -1298,7 +1298,8 @@ static void *pip_do_spawn( void *thargs )  {
 
   pip_glibc_init( &self->symbols, args );
   DBGF( "pip_init:%p", self->symbols.pip_init );
-  if( ( err = self->symbols.pip_init( pip_root, self, envv ) ) != 0 ) {
+  if( self->symbols.pip_init != NULL &&
+      ( err = self->symbols.pip_init( pip_root, self, envv ) ) != 0 ) {
     extval = err;
   } else {
     /* calling the before hook, if any */
@@ -1329,9 +1330,9 @@ static void *pip_do_spawn( void *thargs )  {
       }
     }
   }
-  pip_do_exit( self, PIP_EXIT_EXIT, extval );
-  NEVER_REACH_HERE;
-  return NULL;			/* dummy */
+  pip_do_exit( self, PIP_EXIT_RETURN, extval );
+  /* there is a cse to reach here */
+  return NULL;
 }
 
 static int pip_find_a_free_task( int *pipidp ) {

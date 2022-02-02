@@ -179,7 +179,8 @@ int pip_main( void ) {
     }
     free( argv );
   }
-  exit( extval );
+  fflush( NULL );
+  _exit( extval );
   /* we cannot return from this */
   NEVER_REACH_HERE;
   return 0;			/* dummy */

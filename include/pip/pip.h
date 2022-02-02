@@ -71,6 +71,8 @@
 #define PIP_ENV_SHOW_MAPS		"PIP_SHOW_MAPS"
 #define PIP_ENV_SHOW_PIPS		"PIP_SHOW_PIPS"
 
+#define PIP_ENV_QUIET			"PIP_QUIET"
+
 #define PIP_VALID_OPTS	\
   ( PIP_MODE_PTHREAD | PIP_MODE_PROCESS_PRELOAD | \
     PIP_MODE_PROCESS_PIPCLONE | PIP_MODE_PROCESS_GOT )
@@ -1509,7 +1511,7 @@ void pip_spawn_hook( pip_spawn_hook_t *hook,
   void   pip_universal_unlock( void );
   void   pip_debug_info( void );
   size_t pip_idstr( char*, size_t );
-  int    pip_check_pie( const char*, int );
+  int    pip_check_pie( const char* );
 
   void pip_info_fmesg( FILE *fp, const char *format, ... )
     __attribute__((format (printf, 2, 3)));

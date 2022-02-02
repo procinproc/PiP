@@ -101,8 +101,9 @@ extern int 		pip_dont_wrap_malloc;
 #define PIP_EXIT_WAITED		(2)
 #define PIP_ABORT		(9)
 
-#define PIP_EXIT_EXIT		(0)
-#define PIP_EXIT_PTHREAD	(1)
+#define PIP_EXIT_RETURN		(0)
+#define PIP_EXIT_EXIT		(1)
+#define PIP_EXIT_PTHREAD	(2)
 
 #define PIP_STACK_SIZE		(8*1024*1024LU) /* 8 MiB */
 #define PIP_STACK_SIZE_MIN	(4*1024*1024LU) /* 1 MiB */
@@ -163,8 +164,8 @@ typedef struct pip_symbol {
   void			*unused_slot0;	/* unused */
   void			*unused_slot1;	/* unused */
   fflush_t		libc_fflush;  /* to call GLIBC fflush() at the end */
+  pthread_exit_t	pthread_exit; /* to terminate task in thread mode */
   void			*unused_slot2;
-  void			*unused_slot3;
   /* pip_patch_GOT */
   pip_patch_got_t	patch_got;
   /* pip_fin_task_implicitly */
@@ -362,7 +363,7 @@ typedef struct pip_root {
 
   char			*prefixdir;
 
-  int			_unused_int;
+  int			flag_quiet;
 
   pip_sem_t		universal_lock;
   pip_recursive_lock_t	glibc_lock; /* 5 64-bit words */
