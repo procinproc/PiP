@@ -207,30 +207,54 @@ void pip_undo_patch_GOT( void ) {
   RETURNV;
 }
 
+/* ---------------------------------------------------- */
 
-static void *pip_find_symbol( char *symname,
-			      off_t base, 
-			      ElfW(Sym) *symtab, 
-			      char *strtab ) {
-  int i;
-  for( i=0; ; i++ ) {
-    /* FIXME: no way to limit this loop !! */
+typedef struct pip_libc_func {
+  char 		*name;
+  size_t	offset;
+} pip_libc_func_t;
+
+#define LIBC_FUNC(N)	{ #N, offsetof(pip_libc_ftab_t,N) }
+#define LIBC_FUNC_NULL	{ NULL, 0 }
+  
+typedef struct pip_libc_dso_syms {
+  char 			*dso;
+  pip_libc_func_t	funcs[];
+} pip_libc_dso_syms_t;
+
+static void pip_find_faddr( pip_libc_func_t *funcs, 
+			    off_t base, 
+			    ElfW(Sym) *symtab, 
+			    char *strtab,
+			    void *libc_ftabp ) {
+  pip_libc_func_t *func;
+  int 	c, i;
+
+  c = 0;
+  for( func=funcs; func->name!=NULL; func++ ) c++;
+
+  for( i=0; c>0; i++ ) {
+    /* FIXME: no way to stop this loop !! */
     char *name = strtab + symtab[i].st_name;
     if( name == NULL || *name == '\0' ) continue;
-    if( strcmp( name, symname ) == 0  ) {
-      return (void*) symtab[i].st_value + base;
+    for( func=funcs; func->name!=NULL; func++ ) {
+      if( strcmp( func->name, name ) == 0  ) {
+	void *faddr = ((void*)symtab[i].st_value) + base;
+	DBGF( "%s : %p", name, faddr );
+	c --;
+	*((void**)(libc_ftabp + func->offset)) = faddr;
+	break;
+      }
     }
   }
-  NEVER_REACH_HERE;
-  return NULL;
 }
 
-static void *pip_find_symtab( char *symname, 
+static void pip_search_funcs( pip_libc_func_t *funcs, 
 			      off_t secbase, 
-			      ElfW(Dyn) *dyn ) {
+			      ElfW(Dyn) *dyn,
+			      pip_libc_ftab_t *libc_ftab ) {
   ElfW(Sym)	*symtab = NULL;
   char		*strtab = NULL;
-  void		*addr   = NULL;
   int 		i;
 
   for( i=0; dyn[i].d_tag!=0||dyn[i].d_un.d_val!=0; i++ ) {
@@ -243,27 +267,23 @@ static void *pip_find_symtab( char *symname,
       break;
     }
     if( symtab != NULL && strtab != NULL ) {
-      addr = pip_find_symbol( symname, secbase, symtab, strtab );
+      pip_find_faddr( funcs, secbase, symtab, strtab, libc_ftab );
       break;
     }
   }
-  return addr;
 }
 
 /* Do not try to find a symbol which may not exsi in the DSO file !! */
-void *pip_find_dso_symbol( void *loaded, char *dsoname, char *symname ) {
-  struct link_map *lm;
-  Dl_info info;
-  void	*any_func = pip_find_dso_symbol;
-  void  *addr = NULL;
+static void pip_find_dso_symbols( pip_libc_dso_syms_t *dsos[], 
+				  pip_libc_ftab_t *libc_ftab ) {
+  pip_libc_dso_syms_t	*dso;
+  Dl_info 		info;
+  struct link_map 	*lm;
+  void	*loaded;
+  void	*any_func = pip_find_dso_symbols;
+  int   i;
 
-  ENTERF( "%s:%s", dsoname, symname );
-  if( loaded == NULL         || 
-      loaded == RTLD_DEFAULT ||
-      loaded == RTLD_NEXT ) {
-    /* since we have dlopen wrapper, we cannot call dlopen to get link map */
-    ASSERT( dladdr1( any_func, &info, &loaded, RTLD_DL_LINKMAP ) > 0 );
-  }
+  ASSERT( dladdr1( any_func, &info, &loaded, RTLD_DL_LINKMAP ) > 0 );
   lm = (struct link_map*) loaded;
   while( lm != NULL ) {
     char *bname, *fname = (char*) lm->l_name;
@@ -274,13 +294,66 @@ void *pip_find_dso_symbol( void *loaded, char *dsoname, char *symname ) {
       } else {
 	bname = fname;
       }
-      if( strncmp( dsoname, bname, strlen(dsoname) ) == 0 ) {
-	addr = pip_find_symtab( symname, (off_t) lm->l_addr, lm->l_ld );
-	break;
+      for( i=0; dsos[i]!=NULL; i++ ) {
+	dso = dsos[i];
+	if( strncmp( dso->dso, bname, strlen(dso->dso) ) == 0 ) {
+	  pip_search_funcs( dso->funcs, 
+			    (off_t) lm->l_addr, 
+			    lm->l_ld, 
+			    libc_ftab );
+	  break;
+	}
       }
     }
     lm = lm->l_next;
   }
-  DBGF( "%s:%s@%p", dsoname, symname, addr );
-  return addr;
+}
+
+static pip_libc_dso_syms_t pip_dso_libc =
+  { "libc.so", 
+    {
+      LIBC_FUNC( fflush ),
+      LIBC_FUNC( exit ),
+      LIBC_FUNC( sbrk ),
+      LIBC_FUNC( malloc_usable_size ),
+      LIBC_FUNC( posix_memalign ),
+      LIBC_FUNC( getaddrinfo ),
+      LIBC_FUNC( freeaddrinfo ),
+      LIBC_FUNC( gai_strerror ),
+      LIBC_FUNC_NULL
+    }
+  };
+
+static pip_libc_dso_syms_t pip_dso_libpthread =
+  { "pthread.so", 
+    {
+      LIBC_FUNC( pthread_exit ),
+      LIBC_FUNC_NULL
+    }
+  };
+
+static pip_libc_dso_syms_t pip_dso_libdl =
+  { "libdl.so", 
+    {
+      LIBC_FUNC( dlsym ),
+      LIBC_FUNC( dlopen ),
+      LIBC_FUNC( dlinfo ),
+      LIBC_FUNC( dladdr ),
+      LIBC_FUNC( dlvsym ),
+      LIBC_FUNC_NULL
+    }
+  };
+
+void pip_setup_libc_ftab( pip_libc_ftab_t *libc_ftab ) {
+  static int done = 0;
+  pip_libc_dso_syms_t *pip_libc_dsos[] = {
+    &pip_dso_libc,
+    &pip_dso_libpthread,
+    &pip_dso_libdl,
+    NULL
+  };
+  if( !done ) {
+    done = 1;
+    pip_find_dso_symbols( pip_libc_dsos, libc_ftab );
+  }
 }

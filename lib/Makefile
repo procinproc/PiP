@@ -41,6 +41,9 @@ include $(top_srcdir)/build/var.mk
 SO_MAJOR = 0
 LIBNAME  = libpip.so
 LIBRARY  = $(LIBNAME).$(SO_MAJOR)
+
+LDPIP    = ldpip.so
+
 LDFLAGS_PIP = -shared -Wl,-soname -Wl,$(LIBRARY) $(PTHREAD_FLAG)
 
 LIBRARY_PRELOAD = pip_preload.so
@@ -50,9 +53,11 @@ SO_MAJOR_XPMEM = 0
 LIBNAME_XPMEM = libxpmem.so
 LIBRARY_XPMEM = $(LIBNAME_XPMEM).$(SO_MAJOR_XPMEM)
 
-LIBRARIES = $(LIBRARY) $(LIBRARY_PRELOAD) $(LIBRARY_XPMEM)
+LIBRARIES = $(LIBRARY) $(LIBRARY_PRELOAD) $(LDPIP) $(LIBRARY_XPMEM)
 
 CPPFLAGS += $(PIP_CPPFLAGS) \
+	-DLDPIP_NAME=\"$(LDPIP)\" \
+	-DPIPLIB_NAME=\"$(LIBNAME)\" \
 	-DPIP_INSTALL_GLIBCDIR=\"$(glibc_libdir)\" \
 	-DLDLINUX=\"$(dynamic_linker)\" \
 	$(CPPFLAGS_DEBUG)
@@ -60,14 +65,15 @@ CFLAGS   += $(PIC_CFLAG) $(PTHREAD_FLAG)
 
 LIBMAIN = -Wl,-e,pip_main -ldl
 
-SRCS  = pip_init.c pip_main.c pip.c pip_2_backport.c pip_wait.c \
-	pip_namexp.c pip_clone.c pip_signal.c pip_util.c \
-	pip_preload.c pip_elf.c pip_wrapper.c pip_malloc.c \
-	pip_onstart.c pip_gdbif.c \
-	xpmem.c
+SRCS  = pip.c pip_task.c pip_main.c pip_2_backport.c pip_wait.c \
+	pip_namexp.c pip_clone.c pip_signal.c pip_util.c pip_mesg.c \
+	pip_elf.c pip_onstart.c pip_gdbif.c pip_wrapper.c pip_malloc.c \
+	pip_preload.c xpmem.c
 
-OBJS  = pip_init.o pip_main.o pip.o pip_2_backport.o pip_wait.o \
-	pip_namexp.o pip_clone.o pip_signal.o pip_util.o \
+SRC_LDPIP = ldpip.c
+
+OBJS  = pip.o pip_task.o pip_main.o pip_2_backport.o pip_wait.o \
+	pip_namexp.o pip_clone.o pip_signal.o pip_util.o pip_mesg.o \
 	pip_elf.o pip_onstart.o pip_gdbif.o pip_wrapper.o pip_malloc.o
 
 OBJS_PRELOAD = pip_preload.o
@@ -87,6 +93,9 @@ $(LIBRARY): $(OBJS) Makefile
 	$(RM) $(LIBNAME)
 	ln -s $(LIBRARY) $(LIBNAME)
 
+$(LDPIP): $(SRC_LDPIP) $(DEPINCS) Makefile
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(SRC_LDPIP) -ldl -shared -o $@
+
 $(LIBRARY_PRELOAD): $(OBJS_PRELOAD) $(DEPINCS) Makefile
 	$(CC) $(LDFLAGS_PRELOAD) $(OBJS_PRELOAD) -o $@
 
@@ -99,6 +108,7 @@ $(LIBRARY_XPMEM): $(OBJS_XPMEM) $(DEPINCS) Makefile
 install:
 	chmod 0755 $(DESTDIR)$(libdir)/$(LIBRARY) \
 		$(DESTDIR)$(libdir)/$(LIBRARY_PRELOAD) \
+		$(DESTDIR)$(libdir)/$(LDPIP) \
 		$(DESTDIR)$(libdir)/$(LIBRARY_XPMEM)
 	$(RM) $(DESTDIR)$(libdir)/$(LIBNAME) \
 		$(DESTDIR)$(libdir)/$(LIBNAME_XPMEM)
@@ -108,8 +118,7 @@ install:
 debug:
 	CPPFLAGS="-DDEBUG" $(MAKE) all;
 
-cdebug: clean
-	CPPFLAGS="-DDEBUG" $(MAKE) all;
+cdebug: clean debug
 
 TAGS:
 	ctags -Re

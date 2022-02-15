@@ -60,6 +60,7 @@
 #include <sys/resource.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
+#include <sys/socket.h>
 #include <sched.h>
 #include <semaphore.h>
 #include <pthread.h>
@@ -79,21 +80,25 @@
 
 #define PIP_PRIVATE		__attribute__((visibility ("hidden")))
 
-struct pip_root PIP_PRIVATE;
-struct pip_task PIP_PRIVATE;
-
-extern struct pip_root	*pip_root;
-extern struct pip_task	*pip_task;
-extern int		pip_initialized;
-extern int		pip_finalized;
-extern int 		pip_dont_wrap_malloc;
+struct pip_root;
+struct pip_task;
 
 #include <pip/pip_config.h>
-#include <pip/pip_dlfcn.h>
+#include <pip/pip.h>
+#include <pip/pip_libc_tab.h>
 #include <pip/pip_machdep.h>
 #include <pip/pip_clone.h>
 #include <pip/pip_debug.h>
+#include <pip/pip_dlfcn.h>
 #include <pip/pip_gdbif_func.h>
+
+extern struct pip_root	*pip_root       PIP_PRIVATE;
+extern struct pip_task	*pip_task       PIP_PRIVATE;
+extern int		pip_initialized PIP_PRIVATE;
+extern int		pip_finalized   PIP_PRIVATE;
+#ifndef LDPIP
+extern int 		pip_dont_wrap_malloc PIP_PRIVATE;
+#endif
 
 #define PIP_BASE_VERSION	(0x3200U)
 
@@ -106,7 +111,6 @@ extern int 		pip_dont_wrap_malloc;
 
 #define PIP_EXITED		(1)
 #define PIP_EXIT_WAITED		(2)
-#define PIP_ABORT		(9)
 
 #define PIP_EXIT_RETURN		(0)
 #define PIP_EXIT_EXIT		(1)
@@ -128,6 +132,12 @@ extern int 		pip_dont_wrap_malloc;
 
 #define PIP_NORETURN		__attribute__((noreturn))
 
+#ifdef RTLD_DEEPBIND
+#define DLMOPEN_FLAGS	  (RTLD_NOW | RTLD_DEEPBIND)
+#else
+#define DLMOPEN_FLAGS	  (RTLD_NOW)
+#endif
+
 typedef struct pip_got_patch_list {
   char	*name;
   void	*addr;
@@ -135,14 +145,6 @@ typedef struct pip_got_patch_list {
 
 typedef	int(*main_func_t)(int,char**,char**);
 typedef	int(*start_func_t)(void*);
-typedef void(*pthread_init_t)(int,char**,char**);
-typedef	void(*ctype_init_t)(void);
-typedef void(*add_stack_user_t)(void);
-typedef	void(*fflush_t)(FILE*);
-typedef void(*exit_t)(int);
-typedef void (*pthread_exit_t)(void*);
-typedef void*(*dlsym_t)(void*, const char*);
-typedef void(*pip_set_opts_t)(char*,char*);
 
 typedef int(*named_export_fin_t)(struct pip_task*);
 typedef int(*pip_init_t)(struct pip_root*,struct pip_task*,char**);
@@ -153,32 +155,19 @@ typedef int(*pip_patch_got_t)(char*, char**, pip_got_patch_list_t*);
 typedef
 int(*clone_syscall_t)(int(*)(void*), void*, int, void*, pid_t*, void*, pid_t*);
 
-typedef struct pip_symbol {
+typedef int (*pip_clone_mostly_pthread_t) 
+(pthread_t*, int, int, size_t, void*(*)(void *), void*, pid_t*);
+
+typedef struct pip_symbols {
   main_func_t		main;	      /* main function address */
   start_func_t		start;	      /* strat function instead of main */
   /* PiP init functions */
   pip_init_t		pip_init;     /* implicit initialization */
   named_export_fin_t	named_export_fin; /* for free()ing hash entries */
-  /* glibc variables */
-  char			***libc_argvp; /* to set __libc_argv */
-  int			*libc_argcp;   /* to set __libc_argc */
-  char			**prog;	       /* to set __progname */
-  char			**prog_full;   /* to set __progname_full */
-  char			***environ;    /* to set the environ variable */
-  /* GLIBC init funcs */
-  ctype_init_t		ctype_init;   /* to call GLIBC __ctype_init() */
-  /* GLIBC functions */
-  void			*unused_slot0;	/* unused */
-  void			*unused_slot1;	/* unused */
-  fflush_t		libc_fflush;  /* to call GLIBC fflush() at the end */
-  pthread_exit_t	pthread_exit; /* to terminate task in thread mode */
-  void			*unused_slot2;
-  /* pip_patch_GOT */
-  pip_patch_got_t	patch_got;
   /* pip_fin_task_implicitly */
   pip_fin_t		pip_fin;
   /* PiP-glibc */
-  pip_set_opts_t	pip_set_opts;
+  void			*pip_set_opts;
   /* reserved for future use */
   void			*__reserved__[16]; /* reserved for future use */
 } pip_symbols_t;
@@ -201,6 +190,20 @@ typedef struct pip_spawn_args {
   void			*__reserved__[16]; /* reserved for future use */
 } pip_spawn_args_t;
 
+/* The following env vars must be copied */
+/* if a PiP may have different env set.  */
+typedef struct pip_env {
+  char	*stop_on_start;
+  char	*gdb_path;
+  char	*gdb_command;
+  char	*gdb_signals;
+  char	*show_maps;
+  char	*show_pips;
+  char	*paths;
+  char	*preloads;
+  char	*__reserved__[14];
+} pip_env_t;
+
 #define PIP_TYPE_NULL	(0)
 #define PIP_TYPE_ROOT	(1)
 #define PIP_TYPE_TASK	(2)
@@ -215,16 +218,24 @@ struct pip_root;
 typedef struct pip_task {
   int			pipid;	 /* PiP ID */
   int			type;	 /* PIP_TYPE_TASK or PIP_TYPE_ULP */
+  pid_t			pid;	/* PID in process mode */
+  pid_t			tid;	/* TID in process mode */
+  pthread_t		thread;	/* thread */
+
+  struct pip_root	*task_root;
 
   void			*export;
   void			*import_root;
   void			*named_exptab;
   void			*aux;
 
+  Lmid_t		lmid;
   void			*loaded;
   pip_symbols_t		symbols;
   pip_spawn_args_t	args;	/* arguments for a PiP task */
-  struct pip_root	*task_root;
+
+  pip_libc_ftab_t	*libc_ftabp;
+
   int			flag_exit;
   volatile int		flag_sigchld; /* termination in thread mode */
   volatile int32_t	status;	   /* exit value */
@@ -232,9 +243,6 @@ typedef struct pip_task {
 
   struct pip_gdbif_task	*gdbif_task;
 
-  pid_t			pid;	/* PID in process mode */
-  pid_t			tid;	/* TID in process mode */
-  pthread_t		thread;	/* thread */
   pip_spawnhook_t	hook_before;
   pip_spawnhook_t	hook_after;
   void			*hook_arg;
@@ -242,7 +250,6 @@ typedef struct pip_task {
   /* stop_on_start fomr PiP 2.1 */
   pid_t			pid_onstart;
   char			*onstart_script;
-  Lmid_t		lmid;
   /* malloc free list */
   pip_atomic_t		malloc_free_list;
 
@@ -255,18 +262,6 @@ typedef struct pip_task {
 #define PIP_FILLER_SZ	(PIP_CACHE_SZ-sizeof(pip_spinlock_t))
 
 typedef sem_t		pip_sem_t;
-
-/* The following env vars must be copied */
-/* if a PiP may have different env set.  */
-typedef struct pip_env {
-  char	*stop_on_start;
-  char	*gdb_path;
-  char	*gdb_command;
-  char	*gdb_signals;
-  char	*show_maps;
-  char	*show_pips;
-  char	*__reserved__[16];
-} pip_env_t;
 
 typedef struct pip_clone {
   pip_spinlock_t lock;	     /* lock */
@@ -339,7 +334,6 @@ typedef struct pip_root {
   size_t		size_root;
   size_t		size_task;
   void *volatile	export_root;
-  pip_spinlock_t	_unused_lock_ldlinux;
   size_t		page_size;
   unsigned int		opts;
   unsigned int		actual_mode;
@@ -353,13 +347,8 @@ typedef struct pip_root {
   pip_sem_t		lock_clone;   /* lock for clone */
   pip_sem_t		sync_spawn;   /* Spawn synch */
 
-  /* signal related members */
-  sigset_t		_unused_mask;
-  /* for chaining signal handlers */
-  struct sigaction	_unused_sigact0;
-  struct sigaction	_unused_sigact1;
   /* environments */
-  pip_env_t		envs;
+  //pip_env_t		envs;
   /* GDB Interface */
   struct pip_gdbif_root	*gdbif_root;
 
@@ -377,16 +366,32 @@ typedef struct pip_root {
 
   cpu_set_t 		*cpuset;
 
+  pip_clone_mostly_pthread_t pip_pthread_create;
+
+  /* glibc functions */
+  pip_libc_ftab_t	libc_ftab;
+
   /* reserved for future use */
-  void			*__reserved__[10];
+  void			*__reserved__[9];
   /* tasks */
   pip_task_t		tasks[];
 } pip_root_t;
+
+typedef void*(*pip_start_task_t)( pip_root_t*, 
+				  pip_task_t*, 
+				  pip_spawn_args_t*, 
+				  int,
+				  char*,
+				  char* );
 
 #ifndef __W_EXITCODE
 #define __W_EXITCODE(retval,signal)	( (retval) << 8 | (signal) )
 #endif
 #define PIP_W_EXITCODE(X,S)	__W_EXITCODE(X,S)
+
+
+extern void pip_setup_libc_ftab( pip_libc_ftab_t* ) PIP_PRIVATE;
+extern pip_libc_ftab_t *pip_libc_ftab( pip_task_t* ) PIP_PRIVATE;
 
 extern void pip_after_fork( void ) PIP_PRIVATE;
 
@@ -395,10 +400,9 @@ extern int  pip_is_finalized( void ) PIP_PRIVATE;
 extern int  pip_fin_task_implicitly( void );
 extern void pip_free_all( void ) PIP_PRIVATE;
 extern void *pip_dlopen_unsafe( const char*, int ) PIP_PRIVATE;
-extern void *pip_find_dso_symbol( void*, char*, char* ) PIP_PRIVATE;
 extern void *pip_dlsym_unsafe( void*, const char* ) PIP_PRIVATE;
 extern void pip_do_exit( pip_task_t*, int, uintptr_t ) PIP_PRIVATE;
-extern void pip_named_export_fin_all( pip_root_t* );
+extern void pip_named_export_fin_all( pip_root_t* ) PIP_PRIVATE;
 
 extern void pip_reset_task_struct( pip_task_t* ) PIP_PRIVATE;
 extern int  pip_tkill( int, int );
@@ -427,10 +431,9 @@ extern void pip_set_exit_status( pip_task_t*, int, int ) PIP_PRIVATE;
 extern void pip_annul_task( pip_task_t* ) PIP_PRIVATE;
 extern void pip_pthread_exit( void* ) PIP_PRIVATE;
 
-extern int pip_debug_env( void );
+extern int pip_debug_env( void ) PIP_PRIVATE;
 
 /* defined in libpip_init.so */
-extern int  pip_check_root_and_task( pip_root_t*, pip_task_t* );
 extern pid_t pip_gettid( void );
 extern int  pip_is_threaded_( void );
 extern void pip_page_alloc( size_t, void** );
@@ -439,11 +442,6 @@ extern void pip_debug_on_exceptions( pip_root_t*, pip_task_t* );
 extern int  pip_patch_GOT( char*, char**, pip_got_patch_list_t* );
 extern void pip_undo_patch_GOT( void );
 
-extern void *__libc_malloc( size_t size );
-extern void  __libc_free( void *ptr );
-extern void *__libc_calloc( size_t nmemb, size_t size );
-extern void *__libc_realloc( void *ptr, size_t size );
-extern int   __libc_mallopt( int param, int value );
 
 INLINE int pip_check_pipid( int *pipidp ) {
   if( !pip_is_effective() ) RETURN( EPERM  );

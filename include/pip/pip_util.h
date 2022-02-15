@@ -46,15 +46,6 @@
 
 #define PIPIDLEN	(64)
 
-#ifdef PIP_EVAL
-#define PIP_ACCUM(V,F)		\
-  do { double __st=pip_gettime(); if(F) (V) += pip_gettime() - __st; } while(0)
-#define PIP_REPORT(V)	 	printf( "%s: %g\n", #V, V );
-#else
-#define PIP_ACCUM(V,F)		if(F)
-#define PIP_REPORT(V)
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif

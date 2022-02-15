@@ -36,7 +36,6 @@
 #include <pip/pip_internal.h>
 #include <pip/pip_util.h>
 
-extern int pip_is_coefd( int );
 extern int pip_get_dso( int, void** );
 extern int pip_root_p_( void );
 
@@ -70,6 +69,11 @@ void pip_print_maps( void ) {
 #define FDPATH_LEN	(512)
 #define RDLINK_BUF	(256)
 #define RDLINK_BUF_SP	(RDLINK_BUF+8)
+
+static int pip_is_coefd( int fd ) {
+  int flags = fcntl( fd, F_GETFD );
+  return( flags > 0 && ( flags & FD_CLOEXEC ) );
+}
 
 void pip_print_fd( FILE *fp, int fd ) {
   char fdpath[FDPATH_LEN];

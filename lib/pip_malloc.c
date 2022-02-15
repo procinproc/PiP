@@ -55,22 +55,8 @@ void *__libc_realloc(void *ptr, size_t size);
 
 #define PIP_MALLOC_MAGIC	(0xA5B6C7D8U)
 
-static void *pip_malloc_dlsym_next( const char *symbol ) {
-  pip_dont_wrap_malloc = 1;
-  void *addr = pip_dlsym( RTLD_NEXT, symbol );
-  pip_dont_wrap_malloc = 0;
-  return addr;
-}
-
 static size_t pip_malloc_usable_size_orig( void *ptr ) {
-  static size_t(*pip_libc_malloc_usable_size)(void*) = NULL;
-
-  if( ptr == NULL ) return 0;
-  if( pip_libc_malloc_usable_size == NULL ) {
-    pip_libc_malloc_usable_size = pip_malloc_dlsym_next( "malloc_usable_size" );
-  }
-  ASSERTD( pip_libc_malloc_usable_size != NULL );
-  return pip_libc_malloc_usable_size( ptr );
+  return pip_libc_ftab(NULL)->malloc_usable_size( ptr );
 }
 
 static int pip_is_pip_malloced( void *addr ) {
@@ -267,30 +253,23 @@ void *realloc( void *ptr, size_t size ) {
 }
 
 int pip_posix_memalign( void **memptr, size_t alignment, size_t size ) {
-  static int(*pip_libc_posix_memalign)(void**,size_t,size_t);
   int rv = 0;
 
   if( size == 0 ) {
     *memptr = NULL;
     return 0;
   }
-  if( pip_libc_posix_memalign == NULL ) {
-    pip_libc_posix_memalign = pip_malloc_dlsym_next( "posix_memalign" );
-    if( pip_libc_posix_memalign == NULL ) {
-      return ENOSYS;
-    }
-  }
-  if( pip_root == NULL || pip_task == NULL ) {
-    rv = pip_libc_posix_memalign( memptr, alignment, size );
+  if( !pip_initialized ) {
+    rv = pip_libc_ftab(NULL)->posix_memalign( memptr, alignment, size );
   } else {
     pip_malloc_info_t 	info;
     size_t		sz;
 
     pip_free_all();
-    if( ( rv = pip_libc_posix_memalign( memptr,
-					alignment,
-					size + sizeof(info) ) ) == 0 &&
-	*memptr != NULL ) {
+    rv = pip_libc_ftab(NULL)->posix_memalign( memptr, 
+					      alignment, 
+					      size + sizeof(info) );
+    if( rv == 0 && *memptr != NULL ) {
       info.magic = PIP_MALLOC_MAGIC;
       info.pipid = pip_get_pipid_curr();
       sz = pip_malloc_usable_size_orig( *memptr );

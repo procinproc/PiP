@@ -55,6 +55,7 @@
 #define PIP_MODE_PROCESS_GOT		(0x2400U)
 #define PIP_MODE_MASK			(0xFF00U)
 
+#define PIP_ENV_PRELOAD			"PIP_PRELOAD"
 #define PIP_ENV_MODE			"PIP_MODE"
 #define PIP_ENV_MODE_THREAD		"thread"
 #define PIP_ENV_MODE_PTHREAD		"pthread"

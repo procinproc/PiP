@@ -59,10 +59,30 @@
 #include <string.h>
 #include <stdio.h>
 
-extern int pip_debug_env( void );
-extern size_t pip_idstr( char *buf, size_t sz );
-
+INLINE int pip_debug_env( void ) {
+  static int flag = 0;
+  if( !flag ) {
+    if( getenv( "PIP_NODEBUG" ) ) {
+      flag = -1;
+    } else {
+      flag = 1;
+    }
+  }
+  return flag > 0;
+}
 #define DBGSW		pip_debug_env()
+
+#ifndef LDPIP
+extern size_t pip_idstr( char *buf, size_t sz );
+#define IDSTR(BUF,SZ)	pip_idstr((BUF),(SZ))
+#define PIP_DEBUG_INFO	pip_debug_info()
+#define PIP_ABORT	pip_abort()
+#else
+static size_t ldpip_idstr(char*,size_t);
+#define IDSTR(BUF,SZ)	ldpip_idstr((BUF),(SZ))
+#define PIP_DEBUG_INFO	
+#define PIP_ABORT	abort()
+#endif
 
 #define DBGBUFLEN	(512)
 #define DBGTAGLEN	(128)
@@ -92,7 +112,7 @@ extern size_t pip_idstr( char *buf, size_t sz );
 
 #define DBG_TAG							   \
   do { char *__tag=alloca(DBGTAGLEN);  memset(__tag,0,DBGTAGLEN);  \
-    pip_idstr(__tag,DBGTAGLEN);					   \
+    IDSTR(__tag,DBGTAGLEN);					   \
     DBG_PRNT("%s %s:%d %s()",__tag,				   \
 	     basename(__FILE__), __LINE__, __func__ );	} while(0)
 
@@ -108,92 +128,100 @@ extern size_t pip_idstr( char *buf, size_t sz );
   do { DBG_PRTBUF; DBG_PRNT("\n"); DBG_TAG; DBG_PRNT(": ");		\
     DBG_PRNT(__VA_ARGS__); DBG_OUTPUT; } while(0)
 
+#ifndef LDPIP
+#define DONT_WRAP_MALLOC	pip_dont_wrap_malloc=1
+#define DO_WRAP_MALLOC		pip_dont_wrap_malloc=0
+#else
+#define DONT_WRAP_MALLOC	
+#define DO_WRAP_MALLOC		
+#endif
+
 #define ASSERTD(X)		   				\
-  do { pip_dont_wrap_malloc=1;					\
+  do { DONT_WRAP_MALLOC;					\
     if(!(X)) { NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);	\
-      pip_debug_info(); pip_abort();				\
-    } pip_dont_wrap_malloc=0; } while(0)
+      PIP_DEBUG_INFO; PIP_ABORT;				\
+    } DO_WRAP_MALLOC; } while(0)
 
 #ifdef DEBUG
 
 #define DBG_TAG_ENTER							\
-  do { char __tag[DBGTAGLEN]; pip_idstr(__tag,DBGTAGLEN);		\
+  do { char __tag[DBGTAGLEN]; IDSTR(__tag,DBGTAGLEN);		\
     DBG_PRNT("%s %s:%d >> %s()",__tag,					\
 	     basename(__FILE__), __LINE__, __func__ );	} while(0)
 #define DBG_TAG_LEAVE							\
-  do { char __tag[DBGTAGLEN]; pip_idstr(__tag,DBGTAGLEN);		\
+  do { char __tag[DBGTAGLEN]; IDSTR(__tag,DBGTAGLEN);		\
     DBG_PRNT("%s %s:%d << %s()",__tag,					\
 	     basename(__FILE__), __LINE__, __func__ );	} while(0)
 
 #define DBG						\
-  if(DBGSW) { pip_dont_wrap_malloc=1;			\
+  if(DBGSW) { DONT_WRAP_MALLOC;				\
     DBG_PRTBUF; DBG_TAG; DBG_OUTPUT;			\
-    pip_dont_wrap_malloc=0;}
+    DO_WRAP_MALLOC;}
 
 #define DBG_NL						\
   if(DBGSW) { DBG_PRTBUF; DBG_PRNT("\n"); DBG_OUTPUT; }
 
 #define DBGF(...)						\
-  if(DBGSW) { pip_dont_wrap_malloc=1;				\
+  if(DBGSW) { DONT_WRAP_MALLOC;				\
     EMSG(__VA_ARGS__);						\
-    pip_dont_wrap_malloc=0; }
+    DO_WRAP_MALLOC; }
 
 #define DBGF_NNL(...)						\
   if(DBGSW) { EMSG_NNL(__VA_ARGS__); }
 
 #define ENTER							\
-  if(DBGSW) { pip_dont_wrap_malloc=1;				\
+    if(DBGSW) { DONT_WRAP_MALLOC;				\
     DBG_PRTBUF; DBG_TAG_ENTER; DBG_OUTPUT;			\
-    pip_dont_wrap_malloc=0; }
+    DO_WRAP_MALLOC; }
 
 #define ENTERF(...)							\
-  if(DBGSW) do { pip_dont_wrap_malloc=1;				\
+    if(DBGSW) do { DONT_WRAP_MALLOC;					\
       DBG_PRTBUF; DBG_TAG_ENTER; DBG_PRNT(": ");			\
       DBG_PRNT(__VA_ARGS__); DBG_OUTPUT;				\
-      pip_dont_wrap_malloc=0; } while(0)
+      DO_WRAP_MALLOC; } while(0)
 
 #define LEAVE							\
-  if(DBGSW) { pip_dont_wrap_malloc=1;				\
-    DBG_PRTBUF; DBG_TAG_LEAVE; DBG_OUTPUT;			\
-    pip_dont_wrap_malloc=0; }
+    if(DBGSW) { DONT_WRAP_MALLOC;				\
+      DBG_PRTBUF; DBG_TAG_LEAVE; DBG_OUTPUT;			\
+      DO_WRAP_MALLOC; }
 
 #define LEAVEF(...)							\
-  if(DBGSW) do { pip_dont_wrap_malloc=1;				\
+    if(DBGSW) do { DONT_WRAP_MALLOC;					\
       DBG_PRTBUF; DBG_TAG_LEAVE; DBG_PRNT(": ");			\
       DBG_PRNT(__VA_ARGS__); DBG_OUTPUT;				\
-      pip_dont_wrap_malloc=0; } while(0)
+      DO_WRAP_MALLOC; } while(0)
 
 #define RETURN(X)							\
   do { int __xxx=(X);							\
-    if(DBGSW) { pip_dont_wrap_malloc=1;					\
+    if(DBGSW) { DONT_WRAP_MALLOC;					\
       DBG_PRTBUF; DBG_TAG_LEAVE;					\
       if(__xxx) { DBG_PRNT(": ERROR RETURN %d:'%s'",__xxx,strerror(__xxx)); \
       } else { DBG_PRNT(": returns %d",__xxx); }  DBG_OUTPUT;		\
-      pip_dont_wrap_malloc=0; } return (__xxx); } while(0)
+      DO_WRAP_MALLOC; } return (__xxx); } while(0)
 
 #define RETURN_NE(X)							\
   do { int __xxx=(X);							\
-    if(DBGSW) { pip_dont_wrap_malloc=1;					\
+    if(DBGSW) { DONT_WRAP_MALLOC;					\
       DBG_PRTBUF; DBG_TAG_LEAVE;					\
       DBG_PRNT(": returns %d",__xxx);					\
-      DBG_OUTPUT; pip_dont_wrap_malloc=0; } return (__xxx); } while(0)
+      DBG_OUTPUT; DO_WRAP_MALLOC; } return (__xxx); } while(0)
 
 #define RETURNV								\
-  do { if(DBGSW) { pip_dont_wrap_malloc=1;				\
+    do { if(DBGSW) { DONT_WRAP_MALLOC;					\
       DBG_PRTBUF; DBG_TAG_LEAVE; DBG_OUTPUT;				\
-      pip_dont_wrap_malloc=0; } return; } while(0)
+      DO_WRAP_MALLOC; } return; } while(0)
 
 #define DPAUSE	\
   do { struct timespec __ts; __ts.tv_sec=0; __ts.tv_nsec=1*1000*1000;	\
     nanosleep( &__ts, NULL ); } while(0)
 
 #define ASSERT(X)		   				\
-  do { pip_dont_wrap_malloc=1;					\
+  do { DONT_WRAP_MALLOC;					\
     if(!(X)) { NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);	\
-      pip_debug_info(); pip_abort();				\
+      PIP_DEBUG_INFO; PIP_ABORT;				\
     } else if(DBGSW) {						\
       EMSG("{%s} Assertion SUCCEEDED",#X);			\
-    } pip_dont_wrap_malloc=0; } while(0)
+    } DO_WRAP_MALLOC; } while(0)
 
 #else  /* DEBUG */
 

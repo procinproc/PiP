@@ -34,39 +34,72 @@
  */
 
 #include <pip/pip_internal.h>
-#include <pip/pip.h>
 
-typedef int(*main_t)(int,char**,char**);
+#define PIP_MESGLEN		(512)
 
-int main( int argc, char **argv, char **env ) {
-  char *prel = argv[1];
-  char *func = argv[2];
-  char *arg2 = argv[3];
-  char *prog = argv[4];
-  char **new_argv = &argv[4];
+static void
+pip_message( FILE *fp, char *tag, int dnl, const char *format, va_list ap ) {
+  char mesg[PIP_MESGLEN];
+  char idstr[PIP_MIDLEN];
+  int len, nnl, fd;
 
-  void *loaded;
-  void *start, *argp;
-  int  extval;
+  if( pip_root == NULL || !pip_root->flag_quiet ) {
+    if( !dnl ) {
+      nnl = 2;
+    } else {
+      nnl = 3;
+    }
+    pip_idstr( idstr, PIP_MIDLEN );
+    len = 0;
+    if( dnl ) {
+      len += snprintf(  &mesg[len], PIP_MESGLEN-len-nnl, "\n" );
+    }
+    len += snprintf(    &mesg[len], PIP_MESGLEN-len-nnl, "%s%s ", tag, idstr );
+    len += vsnprintf(   &mesg[len], PIP_MESGLEN-len-nnl, format, ap );
+    if( dnl ) {
+      len += snprintf(  &mesg[len], PIP_MESGLEN-len, "\n\n" );
+    } else {
+      len += snprintf(  &mesg[len], PIP_MESGLEN-len, "\n" );
+    }
+    fflush( fp );
+    /* !!!! DON'T USE FPRINTF HERE !!!! */
+    fd = fileno( fp );
+    (void) write( fd, mesg, len );
+  }
+}
 
-  if( *prel != '\0' ) {
-    load_preload( prel );
-  }
-  loaded = dlopen( prog, RTLD_NOW );
-  if( loaded == NULL ) {
-    printf( "dlopen(%s): %s\n", prog, dlerror() );
-    return( 1 );
-  }
-  start = dlsym( loaded, func );
-  if( start == NULL ) {
-    printf( "dlsym(%s): %s\n", prog, dlerror() );
-    return( 1 );
-  }
-  if( strcmp( func, "main" ) == 0 ) {
-    extval = start( argc - 4, new_argv, env );
-  } else {
-    argp = (void*) strtol( args, NULL, 16 );
-    extval = start( argp );
-  }
-  return( extval );
+void pip_info_fmesg( FILE *fp, const char *format, ... ) {
+  va_list ap;
+  va_start( ap, format );
+  if( fp == NULL ) fp = stderr;
+  pip_message( fp, "PiP-INFO", 0, format, ap );
+  va_end( ap );
+}
+
+void pip_info_mesg( const char *format, ... ) {
+  va_list ap;
+  va_start( ap, format );
+  pip_message( stderr, "PiP-INFO", 0, format, ap );
+  va_end( ap );
+}
+
+void pip_warn_mesg( const char *format, ... ) {
+  va_list ap;
+  va_start( ap, format );
+  pip_message( stderr, "PiP-WARN", 0, format, ap );
+  va_end( ap );
+}
+
+void pip_err_mesg( const char *format, ... ) {
+  va_list ap;
+  va_start( ap, format );
+  pip_message( stderr,
+	       "PiP-ERR", 
+#ifdef DEBUG
+	       1,
+#else
+	       0,
+#endif
+	       format, ap );
+  va_end( ap );
 }

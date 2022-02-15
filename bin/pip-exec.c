@@ -275,6 +275,43 @@ static int isa_sep( char *str ) {
 	   strcmp( str, "::" ) == 0 );
 }
 
+static int pip_check_pie( const char *path ) {
+  struct stat stbuf;
+  Elf64_Ehdr elfh;
+  int fd;
+  int err = 0;
+
+  if( strchr( path, '/' ) == NULL ) {
+    pip_err_mesg( "'%s' is not a path (no slash '/')", path );
+    err = ENOENT;
+  } else if( ( fd = open( path, O_RDONLY ) ) < 0 ) {
+    err = errno;
+    pip_err_mesg( "'%s': open() fails (%s)", path, strerror( errno ) );
+  } else {
+    if( fstat( fd, &stbuf ) < 0 ) {
+      err = errno;
+      pip_err_mesg( "'%s': stat() fails (%s)", path, strerror( errno ) );
+    } else if( ( stbuf.st_mode & (S_IXUSR|S_IXGRP|S_IXOTH) ) == 0 ) {
+      pip_err_mesg( "'%s' is not executable", path );
+      err = EACCES;
+    } else if( read( fd, &elfh, sizeof( elfh ) ) != sizeof( elfh ) ) {
+      pip_err_mesg( "Unable to read '%s'", path );
+      err = EUNATCH;
+    } else if( elfh.e_ident[EI_MAG0] != ELFMAG0 ||
+	       elfh.e_ident[EI_MAG1] != ELFMAG1 ||
+	       elfh.e_ident[EI_MAG2] != ELFMAG2 ||
+	       elfh.e_ident[EI_MAG3] != ELFMAG3 ) {
+      pip_err_mesg( "'%s' is not ELF", path );
+      err = ELIBBAD;
+    } else if( elfh.e_type != ET_DYN ) {
+      pip_err_mesg( "'%s' is not PIE", path );
+      err = ELIBEXEC;
+    }
+    (void) close( fd );
+  }
+  return err;
+}
+
 int main( int argc, char **argv ) {
   pip_spawn_program_t prog;
   spawn_t	*spawn, *head, *tail;

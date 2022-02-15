@@ -35,6 +35,247 @@
 
 #include <pip/pip_internal.h>
 
+static char 	*pip_path_gdb;
+static char 	*pip_command_gdb;
+
+static void pip_attach_gdb( void ) {
+  pid_t	target = pip_gettid();
+  pid_t	pid;
+
+  ENTER;
+  if( pip_path_gdb != NULL ) {
+    pip_info_mesg( "*** Attaching pip-gdb (%s)", pip_path_gdb );
+    if( ( pid = fork() ) == 0 ) {
+      extern char **environ;
+      char attach[32];
+      char *argv[32];
+      int argc = 0;
+
+      snprintf( attach,   sizeof(attach),   "%d", target );
+      if( pip_command_gdb == NULL ) {
+	/*  1 */ argv[argc++] = pip_path_gdb;
+	/*  2 */ argv[argc++] = "-quiet";
+	/*  3 */ argv[argc++] = "-p";
+	/*  4 */ argv[argc++] = attach;
+	/*  5 */ argv[argc++] = "-ex";
+	/*  6 */ argv[argc++] = "set pagination off";
+	/*  7 */ argv[argc++] = "-ex";
+	/*  8 */ argv[argc++] = "set verbose off";
+	/*  9 */ argv[argc++] = "-ex";
+	/* 10 */ argv[argc++] = "set complaints 0";
+	/* 11 */ argv[argc++] = "-ex";
+	/* 12 */ argv[argc++] = "set confirm off";
+	/* 13 */ argv[argc++] = "-ex";
+	/* 14 */ argv[argc++] = "info inferiors";
+	/* 15 */ argv[argc++] = "-ex";
+	/* 16 */ argv[argc++] = "bt";
+	/* 17 */ argv[argc++] = "-ex";
+	/* 18 */ argv[argc++] = "detach";
+	/* 19 */ argv[argc++] = "-ex";
+	/* 20 */ argv[argc++] = "quit";
+	/* 21 */ argv[argc++] = NULL;
+      } else {
+	/*  1 */ argv[argc++] = pip_path_gdb;
+	/*  2 */ argv[argc++] = "-quiet";
+	/*  3 */ argv[argc++] = "-p";
+	/*  4 */ argv[argc++] = attach;
+	/*  5 */ argv[argc++] = "-x";
+	/*  6 */ argv[argc++] = pip_command_gdb;
+	/*  7 */ argv[argc++] = "-batch";
+	/*  8 */ argv[argc++] = NULL;
+      }
+      (void) close( 0 );		/* close STDIN */
+      dup2( 2, 1 );
+      execve( pip_path_gdb, argv, environ );
+      pip_err_mesg( "Failed to execute PiP-gdb (%s)", pip_path_gdb );
+
+    } else if( pid < 0 ) {
+      pip_err_mesg( "Failed to fork PiP-gdb (%s)", pip_path_gdb );
+    } else {
+      waitpid( pid, NULL, 0 );
+    }
+  } else {			/* show backtrace instead */
+#define BTBUF_SZ	(128)
+    void *btbuf[BTBUF_SZ];
+    int nbt;
+    char **bt_str;
+
+    if( ( nbt = backtrace( btbuf, BTBUF_SZ ) ) == 0 ) {
+      pip_info_mesg( "No backtrace available (1)" );
+    } else if( ( bt_str = backtrace_symbols( btbuf, nbt ) ) == 
+	       NULL ) {
+      pip_info_mesg( "No backtrace available (2)" );
+    } else {
+      int i;
+      for( i=0; i<nbt; i++ ) {
+	pip_info_mesg( "backtrace: %s", bt_str[i] );
+      }
+      free( bt_str );
+    }
+  }
+  RETURNV;
+}
+
+#define PIP_DEBUG_BUFSZ		(4096)
+
+void pip_fprint_maps( FILE *fp ) {
+  int fd = open( PIP_MAPS_PATH, O_RDONLY );
+  char buf[PIP_DEBUG_BUFSZ];
+
+  if( fd >= 0 ) {
+    while( 1 ) {
+      ssize_t rc;
+      size_t  wc;
+      char *p;
+
+      if( ( rc = read( fd, buf, PIP_DEBUG_BUFSZ ) ) <= 0 ) break;
+      p = buf;
+      do {
+	wc = fwrite( p, 1, rc, fp );
+	p  += wc;
+	rc -= wc;
+      } while( rc > 0 );
+    }
+    close( fd );
+  } else {
+    pip_err_mesg( "Unable to open %s", PIP_MAPS_PATH );
+  }
+}
+
+static void pip_show_maps( void ) {
+  ENTER;
+  char *env = getenv( PIP_ENV_SHOW_MAPS );
+  if( env != NULL && strcasecmp( env, "on" ) == 0 ) {
+    pip_info_mesg( "*** Show MAPS" );
+    pip_fprint_maps( stderr );
+  }
+  RETURNV;
+}
+
+static void pip_show_pips( void ) {
+  ENTER;
+  char *env    = getenv( PIP_ENV_SHOW_PIPS );
+  char *prefix = pip_root->prefixdir;
+  if( env                     != NULL && 
+      strcasecmp( env, "on" ) == 0    &&
+      prefix                  != NULL ) {
+    char *pips_comm = "/bin/pips";
+    char *pips_opts = " x";
+    char *pips_exec;
+    char *p;
+
+    sleep(1);
+    ASSERT( ( pips_exec = alloca( strlen( prefix    ) +
+				  strlen( pips_comm ) + 
+				  strlen( pips_opts ) + 1 ) ) 
+	    != NULL );
+    p = pips_exec;
+    p = stpcpy( p, prefix    );
+    p = stpcpy( p, pips_comm );
+    pip_info_mesg( "*** Show PIPS (%s)", pips_exec );
+    stpcpy( p, pips_opts );
+    system( pips_exec );
+    sleep( 1 );			/* to flush out pips messages */
+  }
+  RETURNV;
+}
+
+void pip_debug_info( void ) {
+  ENTER;
+  pip_show_maps();
+  pip_show_pips();
+  pip_attach_gdb();
+  RETURNV;
+}
+
+static int
+pip_strncasecmp( const char *str0, const char *str1, const int len1 ) {
+  int len0 = strlen( str0 );
+  if( len0 != len1 ) return 1;
+  len0 = ( len0 < len1 ) ? len0 : len1;
+  int x = strncasecmp( str0, str1, len0 );
+  return x;
+}
+
+struct sigtab {
+  char	*name;
+  int	signum;
+} static const pip_gdb_sigtab[] =
+  { { "HUP",  SIGHUP  },
+    { "INT",  SIGINT  },
+    { "QUIT", SIGQUIT },
+    { "ILL",  SIGILL  },
+    { "ABRT", SIGABRT },
+    { "FPE",  SIGFPE  },
+    { "INT",  SIGINT  },
+    { "SEGV", SIGSEGV },
+    { "PIPE", SIGPIPE },
+    { "USR1", SIGUSR1 },
+    { "USR2", SIGUSR2 },
+    { NULL, 0 } };
+
+static void pip_set_gdb_signal( sigset_t *sigs,
+				char *token,
+				int len,
+				int(*sigman)(sigset_t*,int) ) {
+  int i;
+  if( pip_strncasecmp( "ALL", token, len ) == 0 ) {
+    for( i=0; pip_gdb_sigtab[i].name!=NULL; i++ ) {
+      ASSERT( sigman( sigs, pip_gdb_sigtab[i].signum ) == 0 );
+    }
+  } else {
+    for( i=0; pip_gdb_sigtab[i].name!=NULL; i++ ) {
+      if( pip_strncasecmp( pip_gdb_sigtab[i].name, token, len ) == 0 ) {
+	ASSERT( sigman( sigs, pip_gdb_sigtab[i].signum ) == 0 );
+	goto done;
+      }
+    }
+    pip_warn_mesg( "%s: signal name '%.*s' is not acceptable for attaching PiP-gdb and ignored",
+		   PIP_ENV_GDB_SIGNALS, len, token );
+  }
+ done:
+  return;
+}
+
+static int pip_next_token( char *str, int idx ) {
+  int i = idx;
+  while( str[i] != '\0' &&
+	 str[i] != '+'  &&
+	 str[i] != '-' ) i ++;
+  DBGF( "token:%.*s (%d)", i-idx, str, i-idx );
+  return i;
+}
+
+static void pip_set_gdb_sigset( char *env, sigset_t *sigs ) {
+  int  sign, len, i, j;
+
+  DBGF( "signals: %s", env );
+  if( env[0] != '\0' ) {
+    sign = '+';
+    for( i=0; sign!='\0'; i=j+1 ) {
+      DBGF( "i=%d", i );
+      j = pip_next_token( env, i );
+      DBGF( "j=%d", j );
+      if( j == i ) continue;
+      len = j - i;
+      switch( sign ) {
+      case '+':
+	pip_set_gdb_signal( sigs, &env[i], len, sigaddset );
+	DBGF( "%.*s is added", len, &env[i] );
+	break;
+      case '-':
+	pip_set_gdb_signal( sigs, &env[i], len, sigdelset );
+	DBGF( "%.*s is removed", len, &env[i] );
+	break;
+      case '\0':
+	return;
+      }
+      sign = env[j];
+      DBGF( "sign:%c (%d)", sign, j );
+    }
+  }
+}
+
 int pip_kill( int pipid, int signo ) {
   int id = pipid;
   int err;
@@ -294,17 +535,37 @@ static int pip_exception_signals[] = {
 void pip_set_signal_handlers( void ) {
   /* setting PiP exceptional signal handler for    */
   /* the signals terminating PiP task (by default) */
-  int sig, i;
+  char		*path, *signals;
+  sigset_t	*sigsetp, sigempty;
+  int 		sig, i;
+
+  ASSERTD( ( sigsetp = malloc( sizeof(sigset_t) ) ) != NULL );
+  ASSERTD( sigemptyset( sigsetp   ) == 0 );
+  ASSERTD( sigemptyset( &sigempty ) == 0 );
+  if( ( signals = getenv( PIP_ENV_GDB_SIGNALS ) ) != NULL ) {
+    pip_set_gdb_sigset( signals, sigsetp );
+  } else {
+    ASSERTD( sigaddset( sigsetp, SIGHUP  ) == 0 );
+    ASSERTD( sigaddset( sigsetp, SIGSEGV ) == 0 );
+  }
+  pip_task->debug_signals = sigsetp;
+
+  if( ( path = getenv( PIP_ENV_GDB_PATH ) ) != NULL ) {
+    pip_path_gdb    = path;
+    pip_command_gdb = getenv( PIP_ENV_GDB_COMMAND );
+  }
 
   if( PIP_ISA_ROOT( pip_task ) ) {
     for( i=0; (sig=pip_exception_signals[i])>0; i++ ) {
       pip_set_exception_handler( sig );
     }
-    if( !pip_is_threaded_() ) {
-      /* in process mode, all tasks must be aborted explicitly */
-      pip_set_abort_handler();
-    } else {
-      /* in thread mode, no handler is required to kill tasks */
+    if( !sigismember( sigsetp, SIGABRT ) ) {
+      if( !pip_is_threaded_() ) {
+	/* in process mode, all tasks must be aborted explicitly */
+	pip_set_abort_handler();
+      } else {
+	/* in thread mode, no handler is required to kill tasks */
+      }
     }
     pip_block_signal( SIGCHLD ); /* for sigwait(SIGCHLD) */
 #ifdef DEBUG
@@ -344,3 +605,4 @@ void pip_unset_signal_handlers( void ) {
     }
   }
 }
+
