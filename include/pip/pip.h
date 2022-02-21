@@ -92,7 +92,7 @@
 
 #define PIP_CPUCORE_FLAG_SHIFT		(24)
 #define PIP_CPUCORE_FLAG_MASK		(0xFFU<<PIP_CPUCORE_FLAG_SHIFT)
-#define PIP_CPUCORE_CORENO_MAX		((1U<<20)-1)
+#define PIP_CPUCORE_CORENO_MAX		(1U<<20)
 #define PIP_CPUCORE_ASIS 		(0x1U<<PIP_CPUCORE_FLAG_SHIFT)
 #define PIP_CPUCORE_ABS 		(0x2U<<PIP_CPUCORE_FLAG_SHIFT)
 #define PIP_CPUCORE_CORENO_MASK		((0x1U<<PIP_CPUCORE_FLAG_SHIFT)-1)
@@ -1512,7 +1512,6 @@ void pip_spawn_hook( pip_spawn_hook_t *hook,
   void   pip_universal_unlock( void );
   void   pip_debug_info( void );
   size_t pip_idstr( char*, size_t );
-  int    pip_check_pie( const char* );
 
   void pip_info_fmesg( FILE *fp, const char *format, ... )
     __attribute__((format (printf, 2, 3)));

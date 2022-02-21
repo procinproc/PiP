@@ -209,6 +209,8 @@ void pip_undo_patch_GOT( void ) {
 
 /* ---------------------------------------------------- */
 
+static pip_libc_ftab_t  *pip_libc_ftab_last_resort;
+
 typedef struct pip_libc_func {
   char 		*name;
   size_t	offset;
@@ -234,10 +236,10 @@ static void pip_find_faddr( pip_libc_func_t *funcs,
   for( func=funcs; func->name!=NULL; func++ ) c++;
 
   for( i=0; c>0; i++ ) {
-    /* FIXME: no way to stop this loop !! */
     char *name = strtab + symtab[i].st_name;
     if( name == NULL || *name == '\0' ) continue;
     for( func=funcs; func->name!=NULL; func++ ) {
+      /* FIXME: no way to stop this loop if not found !! */
       if( strcmp( func->name, name ) == 0  ) {
 	void *faddr = ((void*)symtab[i].st_value) + base;
 	DBGF( "%s : %p", name, faddr );
@@ -288,6 +290,7 @@ static void pip_find_dso_symbols( pip_libc_dso_syms_t *dsos[],
   while( lm != NULL ) {
     char *bname, *fname = (char*) lm->l_name;
 
+    DBGF( "DSO: %s", fname );
     if( fname != NULL && *fname != '\0' ) {
       if( ( bname = strrchr( fname, '/' ) ) != NULL ) {
 	bname ++;		/* skp '/' */
@@ -325,7 +328,7 @@ static pip_libc_dso_syms_t pip_dso_libc =
   };
 
 static pip_libc_dso_syms_t pip_dso_libpthread =
-  { "pthread.so", 
+  { "libpthread.so", 
     {
       LIBC_FUNC( pthread_exit ),
       LIBC_FUNC_NULL
@@ -337,23 +340,51 @@ static pip_libc_dso_syms_t pip_dso_libdl =
     {
       LIBC_FUNC( dlsym ),
       LIBC_FUNC( dlopen ),
+      LIBC_FUNC( dlmopen ),
       LIBC_FUNC( dlinfo ),
       LIBC_FUNC( dladdr ),
       LIBC_FUNC( dlvsym ),
+      LIBC_FUNC( dlerror ),
       LIBC_FUNC_NULL
     }
   };
 
 void pip_setup_libc_ftab( pip_libc_ftab_t *libc_ftab ) {
-  static int done = 0;
   pip_libc_dso_syms_t *pip_libc_dsos[] = {
     &pip_dso_libc,
     &pip_dso_libpthread,
     &pip_dso_libdl,
     NULL
   };
-  if( !done ) {
-    done = 1;
+  int i, c = 0;
+
+  if( libc_ftab->fflush == NULL ) { /* check the first one */
     pip_find_dso_symbols( pip_libc_dsos, libc_ftab );
   }
+  int n = sizeof(pip_libc_ftab_t)/sizeof(void*);
+  for( i=0; i<n; i++ ) {
+    if( ((void**)libc_ftab)[i] == NULL ) {
+      c ++;
+      DBGF( "libc_ftab[%d] is NULL", i );
+    }
+  }
+  ASSERT( c == 0 );
+  pip_libc_ftab_last_resort = libc_ftab;
+}
+
+void pip_set_libc_ftab( pip_libc_ftab_t *ftabp ) {
+  pip_libc_ftab_last_resort = ftabp;
+}
+
+pip_libc_ftab_t *pip_libc_ftab( pip_task_t *task ) {
+  static pip_libc_ftab_t ftab;
+  if( task == NULL ) task = pip_task;
+  if( task == NULL ) {
+    if( pip_libc_ftab_last_resort == NULL ) {
+      pip_setup_libc_ftab( &ftab );
+    }
+    return pip_libc_ftab_last_resort;
+  }
+  ASSERTD( task->libc_ftabp != NULL );
+  return task->libc_ftabp;
 }

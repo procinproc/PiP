@@ -45,6 +45,7 @@
 /* the following function is to set the right */
 /* name shown by the ps and top commands      */
 #define SET_NAME_BODY(R,T)					\
+  do {								\
   char *progname = NULL;					\
   char nam[16];							\
   char sym[] = "0*";						\
@@ -93,7 +94,31 @@
   if( ( fd = open( fname, O_RDWR ) ) >= 0 ) {			\
     (void) write( fd, nam, strlen(nam) );			\
     (void) close( fd );						\
-  }
+  }								\
+  } while( 0 )
+
+#define EXPAND_PATH_LIST_BODY(colon_sep_path,for_each_path,argp,flag,errp) \
+  do {									\
+  char *paths, *p, *q;							\
+  if( (colon_sep_path) != NULL && *(colon_sep_path) != '\0' ) {		\
+    int len = strlen( colon_sep_path );					\
+    paths = alloca( len + 1 );						\
+    strcpy( paths, colon_sep_path );					\
+    ASSERTD( paths != NULL );						\
+    for( p=paths; (q=index(p,':'))!=NULL; p=q+1) {			\
+      *q = '\0';							\
+      if( for_each_path( p, (argp), (flag), (errp) ) ) break;		\
+    }									\
+    /* first or last path */						\
+    if( *p != '\0' ) {							\
+      for_each_path( p, (argp), (flag), (errp) );			\
+    }									\
+  }									\
+  } while(0)
+
+#define CHECK_PIE( fd, path, msgp )					\
+  do {									\
+  } while(0)
    
 #endif	/* DOXYGEN */
 #endif

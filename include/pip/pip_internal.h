@@ -133,9 +133,9 @@ extern int 		pip_dont_wrap_malloc PIP_PRIVATE;
 #define PIP_NORETURN		__attribute__((noreturn))
 
 #ifdef RTLD_DEEPBIND
-#define DLMOPEN_FLAGS	  (RTLD_NOW | RTLD_DEEPBIND)
+#define DLOPEN_FLAGS	  (RTLD_NOW | RTLD_DEEPBIND)
 #else
-#define DLMOPEN_FLAGS	  (RTLD_NOW)
+#define DLOPEN_FLAGS	  (RTLD_NOW)
 #endif
 
 typedef struct pip_got_patch_list {
@@ -253,7 +253,6 @@ typedef struct pip_task {
   /* malloc free list */
   pip_atomic_t		malloc_free_list;
 
-  cpu_set_t 		*cpuset;
   sigset_t		*debug_signals;
   /* reserved for future use */
   void			*__reserved__[14];
@@ -364,7 +363,8 @@ typedef struct pip_root {
   pip_sem_t		universal_lock;
   pip_recursive_lock_t	glibc_lock; /* 5 64-bit words */
 
-  cpu_set_t 		*cpuset;
+  cpu_set_t 		cpuset;
+  cpu_set_t		maxset;
 
   pip_clone_mostly_pthread_t pip_pthread_create;
 
@@ -392,9 +392,9 @@ typedef void*(*pip_start_task_t)( pip_root_t*,
 
 extern void pip_setup_libc_ftab( pip_libc_ftab_t* ) PIP_PRIVATE;
 extern pip_libc_ftab_t *pip_libc_ftab( pip_task_t* ) PIP_PRIVATE;
-
+extern void pip_libc_free( void* ) PIP_PRIVATE;
+extern void pip_finalize_root( pip_root_t* ) PIP_PRIVATE;
 extern void pip_after_fork( void ) PIP_PRIVATE;
-
 extern int  pip_is_effective( void ) PIP_PRIVATE;
 extern int  pip_is_finalized( void ) PIP_PRIVATE;
 extern int  pip_fin_task_implicitly( void );

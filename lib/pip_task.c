@@ -232,23 +232,122 @@ size_t pip_idstr( char *p, size_t s ) {
   return s;
 }
 
-#define ROUNDUP(X,Y)		((((X)+(Y)-1)/(Y))*(Y))
-void pip_page_alloc( size_t sz, void **allocp ) {
-  size_t pgsz;
+static void pip_glibc_fin( pip_task_t *task ) {
+  /* call fflush() in the target context to flush out messages */
+  pip_libc_ftab(task)->fflush( NULL );
+}
 
-  if( pip_root == NULL ) {
-    pgsz = sysconf( _SC_PAGESIZE );
-    pgsz = ( pgsz <= 0 ) ? 4096 : pgsz;
-  } else if ( pip_root->page_size == 0 ) {
-    pgsz = sysconf( _SC_PAGESIZE );
-    pgsz = ( pgsz <= 0 ) ? 4096 : pgsz;
-    pip_root->page_size = pgsz;
+void pip_do_exit( pip_task_t *task, int flag, uintptr_t extval ) {
+  /* DONOT CALL pip_isa_root() in this function !!!! */
+  pip_root_t	*root;
+  int mode, is_threaded, flag_pip = 1;
+  int i, err = 0;
+
+  pip_free_all();
+
+  if( task != NULL ) {
+    ENTERF( "PIPID:%d  extval:%lu", task->pipid, extval );
   } else {
-    pgsz = pip_root->page_size;
+    ENTERF( "PIPID:(null)  extval:%lu", extval );
   }
-  sz = ROUNDUP( sz, pgsz );
-  ASSERT( pip_posix_memalign( allocp, pgsz, sz ) == 0 &&
-	  *allocp != NULL );
+  mode = ( pip_initialized != 0 ) ? pip_initialized : pip_finalized;
+  is_threaded = ( mode == PIP_MODE_PTHREAD );
+
+  DBG;
+  if( pip_root == NULL ) goto call_exit;
+  root = pip_root;
+
+  DBG;
+  if( task == NULL ) {
+    if( pip_task == NULL ) goto force_exit;
+    task = pip_task;
+  }
+  if( task != NULL && root == NULL ) root = task->task_root;
+
+  DBG;
+  if( PIP_ISNTA_TASK( task ) ) {
+    /* when a PiP task fork()s and the forked process exits */
+    DBGF( "returned from a fork()ed process or "
+	  "pthread_create()ed thread? (%d/%d)", 
+	  task->tid, pip_gettid() );
+    flag_pip = 0;
+    goto force_exit;
+  } else {
+  DBG;
+    if( task->hook_after != NULL ) {
+      if( ( err = task->hook_after( task->hook_arg ) ) != 0 ) {
+	pip_err_mesg( "PIPID:%d after-hook returns %d", 
+		      task->pipid, err );
+      }
+      if( flag != PIP_EXIT_PTHREAD && extval == 0 ) extval = err;
+    }
+    pip_gdbif_exit( task, WEXITSTATUS(extval) );
+    pip_gdbif_hook_after( task );
+    pip_glibc_fin( task );
+    if( task->symbols.named_export_fin != NULL ) {
+      task->symbols.named_export_fin( task );
+    }
+  }
+  DBG;
+
+  if( root != NULL && 
+      task != NULL &&
+      PIP_ISA_ROOT( task ) ) {
+    for( i=0; i<root->ntasks; i++ ) {
+      pip_task_t *t = &root->tasks[i];
+      if( PIP_IS_ALIVE( t ) ) {
+	/* sending signal 0 to check if the task 
+	   is really alive or not */
+	if( pip_raise_signal( t, 0 ) == 0 ) {
+	  pip_info_mesg( "PiP task %d is still running and killed", 
+			 t->pipid );
+	  /* if so, kill the task */
+	  (void) pip_raise_signal( t, SIGKILL );
+	}
+      }
+    }
+  }
+  DBG;
+
+ force_exit:
+  DBGF( "FORCE EXIT:%lu", extval );
+
+  if( task != NULL ) {
+    pip_set_exit_status( task, extval, 0 );
+  }
+
+  if( flag_pip && is_threaded ) {	/* thread mode */
+    if( task != NULL && root != NULL     && 
+	!PIP_ISA_ROOT( task )            &&
+	PIP_IS_ALIVE( root->task_root )  &&
+	!PIP_ISNTA_TASK( task ) ) {
+      pip_raise_sigchld( task );
+    }
+    libc_pthread_exit_t pthrd_exit = 
+      pip_libc_ftab(task)->pthread_exit;
+    if( task != NULL && PIP_ISA_ROOT(task) ) {
+      pip_finalize_root( task->task_root );
+      /* after calling above func., pip_root and pip_task are NOT accessible */
+    }
+    /* here we have to call (pthread_)exit() 
+       in the same context, if possible */
+    if( flag == PIP_EXIT_PTHREAD ) {
+      pthrd_exit( (void*) extval );
+    } else {
+      pthrd_exit( NULL );
+    }
+  } else {			/* process mode */
+  call_exit:
+    {
+      libc_exit_t libc_exit = pip_libc_ftab(task)->exit;
+      if( task != NULL && PIP_ISA_ROOT(task) ) {
+	pip_finalize_root( task->task_root );
+	/* after calling above func., pip_root is free()ed */
+      }
+      libc_exit( extval );
+    }
+  }
+  NEVER_REACH_HERE;
 }
 
 void pip_after_fork( void ) {
@@ -270,10 +369,9 @@ static int pip_init_task( pip_root_t *root, pip_task_t *task, char **envv ) {
     pip_task = task;
     pip_universal_lockp = &root->universal_lock;
     
-        if( root->opts & PIP_MODE_PTHREAD ) {
+    if( root->opts & PIP_MODE_PTHREAD ) {
       pip_initialized = PIP_MODE_PTHREAD;
     } else {
-      pip_debug_on_exceptions( root, task );
       pip_initialized = PIP_MODE_PROCESS;
     }
     pip_finalized = 0;
@@ -304,6 +402,10 @@ void *pip_start_task_( pip_root_t *root,
   void *start;
   int  extval;
 
+  ENTER;
+  void pip_set_libc_ftab( pip_libc_ftab_t* );
+  pip_set_libc_ftab( task->libc_ftabp );
+
   if( warn_mesg != NULL ) {
     pip_warn_mesg( "%s", warn_mesg );
     free( warn_mesg );
@@ -315,6 +417,7 @@ void *pip_start_task_( pip_root_t *root,
     err_mesg = NULL;
   }
   if( err ) {
+    DBG;
     extval = err;
 
   } else {
@@ -346,6 +449,7 @@ void *pip_start_task_( pip_root_t *root,
       }
     }
     if( err ) {
+      DBG;
       extval = err;
       
     } else if( args->funcname == NULL ) {

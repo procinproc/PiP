@@ -129,18 +129,17 @@ static size_t ldpip_idstr(char*,size_t);
     DBG_PRNT(__VA_ARGS__); DBG_OUTPUT; } while(0)
 
 #ifndef LDPIP
-#define DONT_WRAP_MALLOC	pip_dont_wrap_malloc=1
-#define DO_WRAP_MALLOC		pip_dont_wrap_malloc=0
+#define DISABLE_WRAP_MALLOC		pip_dont_wrap_malloc=1
+#define ENABLE_WRAP_MALLOC		pip_dont_wrap_malloc=0
 #else
-#define DONT_WRAP_MALLOC	
-#define DO_WRAP_MALLOC		
+#define DISABLE_WRAP_MALLOC	
+#define ENABLE_WRAP_MALLOC		
 #endif
 
 #define ASSERTD(X)		   				\
-  do { DONT_WRAP_MALLOC;					\
-    if(!(X)) { NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);	\
-      PIP_DEBUG_INFO; PIP_ABORT;				\
-    } DO_WRAP_MALLOC; } while(0)
+  do { if(!(X)) { DISABLE_WRAP_MALLOC;				\
+      NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);		\
+      PIP_DEBUG_INFO; PIP_ABORT; ENABLE_WRAP_MALLOC; } } while(0)
 
 #ifdef DEBUG
 
@@ -154,74 +153,74 @@ static size_t ldpip_idstr(char*,size_t);
 	     basename(__FILE__), __LINE__, __func__ );	} while(0)
 
 #define DBG						\
-  if(DBGSW) { DONT_WRAP_MALLOC;				\
+  if(DBGSW) { DISABLE_WRAP_MALLOC;				\
     DBG_PRTBUF; DBG_TAG; DBG_OUTPUT;			\
-    DO_WRAP_MALLOC;}
+    ENABLE_WRAP_MALLOC;}
 
 #define DBG_NL						\
   if(DBGSW) { DBG_PRTBUF; DBG_PRNT("\n"); DBG_OUTPUT; }
 
 #define DBGF(...)						\
-  if(DBGSW) { DONT_WRAP_MALLOC;				\
+  if(DBGSW) { DISABLE_WRAP_MALLOC;				\
     EMSG(__VA_ARGS__);						\
-    DO_WRAP_MALLOC; }
+    ENABLE_WRAP_MALLOC; }
 
 #define DBGF_NNL(...)						\
   if(DBGSW) { EMSG_NNL(__VA_ARGS__); }
 
 #define ENTER							\
-    if(DBGSW) { DONT_WRAP_MALLOC;				\
+    if(DBGSW) { DISABLE_WRAP_MALLOC;				\
     DBG_PRTBUF; DBG_TAG_ENTER; DBG_OUTPUT;			\
-    DO_WRAP_MALLOC; }
+    ENABLE_WRAP_MALLOC; }
 
 #define ENTERF(...)							\
-    if(DBGSW) do { DONT_WRAP_MALLOC;					\
+    if(DBGSW) do { DISABLE_WRAP_MALLOC;					\
       DBG_PRTBUF; DBG_TAG_ENTER; DBG_PRNT(": ");			\
       DBG_PRNT(__VA_ARGS__); DBG_OUTPUT;				\
-      DO_WRAP_MALLOC; } while(0)
+      ENABLE_WRAP_MALLOC; } while(0)
 
 #define LEAVE							\
-    if(DBGSW) { DONT_WRAP_MALLOC;				\
+    if(DBGSW) { DISABLE_WRAP_MALLOC;				\
       DBG_PRTBUF; DBG_TAG_LEAVE; DBG_OUTPUT;			\
-      DO_WRAP_MALLOC; }
+      ENABLE_WRAP_MALLOC; }
 
 #define LEAVEF(...)							\
-    if(DBGSW) do { DONT_WRAP_MALLOC;					\
+    if(DBGSW) do { DISABLE_WRAP_MALLOC;					\
       DBG_PRTBUF; DBG_TAG_LEAVE; DBG_PRNT(": ");			\
       DBG_PRNT(__VA_ARGS__); DBG_OUTPUT;				\
-      DO_WRAP_MALLOC; } while(0)
+      ENABLE_WRAP_MALLOC; } while(0)
 
 #define RETURN(X)							\
   do { int __xxx=(X);							\
-    if(DBGSW) { DONT_WRAP_MALLOC;					\
+    if(DBGSW) { DISABLE_WRAP_MALLOC;					\
       DBG_PRTBUF; DBG_TAG_LEAVE;					\
       if(__xxx) { DBG_PRNT(": ERROR RETURN %d:'%s'",__xxx,strerror(__xxx)); \
       } else { DBG_PRNT(": returns %d",__xxx); }  DBG_OUTPUT;		\
-      DO_WRAP_MALLOC; } return (__xxx); } while(0)
+      ENABLE_WRAP_MALLOC; } return (__xxx); } while(0)
 
 #define RETURN_NE(X)							\
   do { int __xxx=(X);							\
-    if(DBGSW) { DONT_WRAP_MALLOC;					\
+    if(DBGSW) { DISABLE_WRAP_MALLOC;					\
       DBG_PRTBUF; DBG_TAG_LEAVE;					\
       DBG_PRNT(": returns %d",__xxx);					\
-      DBG_OUTPUT; DO_WRAP_MALLOC; } return (__xxx); } while(0)
+      DBG_OUTPUT; ENABLE_WRAP_MALLOC; } return (__xxx); } while(0)
 
 #define RETURNV								\
-    do { if(DBGSW) { DONT_WRAP_MALLOC;					\
+  do { if(DBGSW) { DISABLE_WRAP_MALLOC;					\
       DBG_PRTBUF; DBG_TAG_LEAVE; DBG_OUTPUT;				\
-      DO_WRAP_MALLOC; } return; } while(0)
+      ENABLE_WRAP_MALLOC; } return; } while(0)
 
 #define DPAUSE	\
   do { struct timespec __ts; __ts.tv_sec=0; __ts.tv_nsec=1*1000*1000;	\
     nanosleep( &__ts, NULL ); } while(0)
 
 #define ASSERT(X)		   				\
-  do { DONT_WRAP_MALLOC;					\
-    if(!(X)) { NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);	\
+  do { DISABLE_WRAP_MALLOC; if(!(X)) {				\
+      NL_EMSG("{%s} Assertion FAILED !!!!!!\n",#X);		\
       PIP_DEBUG_INFO; PIP_ABORT;				\
     } else if(DBGSW) {						\
       EMSG("{%s} Assertion SUCCEEDED",#X);			\
-    } DO_WRAP_MALLOC; } while(0)
+    } ENABLE_WRAP_MALLOC; } while(0)
 
 #else  /* DEBUG */
 

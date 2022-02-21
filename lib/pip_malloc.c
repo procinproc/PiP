@@ -144,6 +144,10 @@ void pip_free_all( void ) {
   }
 }
 
+void pip_libc_free( void *addr ) {
+  __libc_free( addr );
+}
+
 void pip_free( void *addr ) {
   volatile pip_atomic_t free_list;
   pip_atomic_t	*free_listp;
@@ -261,6 +265,7 @@ int pip_posix_memalign( void **memptr, size_t alignment, size_t size ) {
   }
   if( !pip_initialized ) {
     rv = pip_libc_ftab(NULL)->posix_memalign( memptr, alignment, size );
+
   } else {
     pip_malloc_info_t 	info;
     size_t		sz;

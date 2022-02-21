@@ -169,6 +169,7 @@ void pip_gdbif_initialize_root( int ntasks ) {
   ENTER;
   sz = sizeof( *gdbif_root ) + sizeof( gdbif_root->tasks[0] ) * ( ntasks );
   pip_page_alloc( sz, (void**) &gdbif_root );
+  ASSERTD( gdbif_root != NULL );
   gdbif_root->hook_before_main = pip_gdb_hook_before;
   gdbif_root->hook_after_main  = pip_gdb_hook_after;
   PIP_SLIST_INIT( &gdbif_root->task_free );

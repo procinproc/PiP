@@ -50,6 +50,25 @@ static pip_spinlock_t 	*pip_clone_lock;
 static pip_clone_t*	pip_cloneinfo   = NULL;
 struct pip_gdbif_root	*pip_gdbif_root;
 
+#define ROUNDUP(X,Y)		((((X)+(Y)-1)/(Y))*(Y))
+void pip_page_alloc( size_t sz, void **allocp ) {
+  size_t pgsz;
+
+  if( pip_root == NULL ) {
+    pgsz = sysconf( _SC_PAGESIZE );
+    pgsz = ( pgsz <= 0 ) ? 4096 : pgsz;
+  } else if ( pip_root->page_size == 0 ) {
+    pgsz = sysconf( _SC_PAGESIZE );
+    pgsz = ( pgsz <= 0 ) ? 4096 : pgsz;
+    pip_root->page_size = pgsz;
+  } else {
+    pgsz = pip_root->page_size;
+  }
+  sz = ROUNDUP( sz, pgsz );
+  ASSERT( pip_posix_memalign( allocp, pgsz, sz ) == 0 &&
+	  *allocp != NULL );
+}
+
 static int pip_count_vec( char **vecsrc ) {
   int n;
   for( n=0; vecsrc[n]!= NULL; n++ );
@@ -63,7 +82,6 @@ static void pip_set_magic( pip_root_t *root ) {
 void pip_reset_task_struct( pip_task_t *task ) {
   pip_root_t	*root = task->task_root;
   void		*namexp = task->named_exptab;
-  if( task->cpuset != NULL ) free( task->cpuset );
   memset( (void*) task, 0, sizeof(pip_task_t) );
   task->pipid        = PIP_PIPID_NULL;
   task->type         = PIP_TYPE_NULL;
@@ -71,39 +89,54 @@ void pip_reset_task_struct( pip_task_t *task ) {
   task->named_exptab = namexp;
 }
 
-#include <elf.h>
-
-int pip_check_pie( const char *path ) {
+static int pip_check_prog( const char *path, int verbose ) {
   struct stat stbuf;
   Elf64_Ehdr elfh;
   int fd;
   int err = 0;
 
-  if( strchr( path, '/' ) == NULL ) {
-    pip_err_mesg( "'%s' is not a path (no slash '/')", path );
-    err = ENOENT;
-  } else if( ( fd = open( path, O_RDONLY ) ) < 0 ) {
+  if( ( fd = open( (path), O_RDONLY ) ) < 0 ) {
     err = errno;
-    pip_err_mesg( "'%s': open() fails (%s)", path, strerror( errno ) );
   } else {
     if( fstat( fd, &stbuf ) < 0 ) {
       err = errno;
-      pip_err_mesg( "'%s': stat() fails (%s)", path, strerror( errno ) );
-    } else if( ( stbuf.st_mode & (S_IXUSR|S_IXGRP|S_IXOTH) ) == 0 ) {
-      pip_err_mesg( "'%s' is not executable", path );
-      err = EACCES;
-    } else if( read( fd, &elfh, sizeof( elfh ) ) != sizeof( elfh ) ) {
-      pip_err_mesg( "Unable to read '%s'", path );
-      err = EUNATCH;
-    } else if( elfh.e_ident[EI_MAG0] != ELFMAG0 ||
-	       elfh.e_ident[EI_MAG1] != ELFMAG1 ||
-	       elfh.e_ident[EI_MAG2] != ELFMAG2 ||
-	       elfh.e_ident[EI_MAG3] != ELFMAG3 ) {
-      pip_err_mesg( "'%s' is not ELF", path );
-      err = ELIBBAD;
-    } else if( elfh.e_type != ET_DYN ) {
-      pip_err_mesg( "'%s' is not PIE", path );
-      err = ELIBEXEC;
+      if( verbose ) {
+	pip_err_mesg( "'%s': stat() fails (%s)", path, strerror( errno ) );
+      }
+    } else {
+      /* check file attributes */
+      if( !( stbuf.st_mode & S_IFREG ) ) {
+	err = EACCES;
+	if( verbose ) {
+	  pip_err_mesg( "'%s' is not a regular file", path );
+	}
+      } else if( ( stbuf.st_mode & (S_IXUSR|S_IXGRP|S_IXOTH) ) == 0 ) {
+	err = EACCES;
+	if( verbose ) {
+	  pip_err_mesg( "'%s' is not executable", path );
+	}
+      } else {
+	/* check ELF header */
+	if( read( (fd), &elfh, sizeof( elfh ) ) != sizeof( elfh ) ) {
+	  err = EUNATCH;
+	  if( verbose ) {
+	    pip_err_mesg( "Unable to read ELF header (%s)", path );
+	  }
+	} else if( elfh.e_ident[EI_MAG0] != ELFMAG0 ||
+		   elfh.e_ident[EI_MAG1] != ELFMAG1 ||
+		   elfh.e_ident[EI_MAG2] != ELFMAG2 ||
+		   elfh.e_ident[EI_MAG3] != ELFMAG3 ) {
+	  err = ELIBBAD;
+	  if( verbose ) {
+	    pip_err_mesg( "'%s' is not ELF", path );
+	  }
+	} else if( elfh.e_type != ET_DYN ) {
+	  err = ELIBEXEC;
+	  if( verbose ) {
+	    pip_err_mesg( "'%s' is not PIE", path );
+	  }
+	}
+      }
     }
     (void) close( fd );
   }
@@ -344,6 +377,27 @@ static void pip_set_name( pip_root_t *root, pip_task_t *task ) {
   SET_NAME_BODY(root,task);
 }
 
+static void pip_get_cpuset( pip_root_t *root ) {
+  cpu_set_t *maxp = &root->maxset;
+  cpu_set_t cpuset;
+  pid_t pid = getpid();
+  int coreno_max, i;
+
+  coreno_max = ( CPU_SETSIZE < PIP_CPUCORE_CORENO_MAX ) ? 
+    CPU_SETSIZE : PIP_CPUCORE_CORENO_MAX;
+  ASSERT( sched_getaffinity( pid, sizeof(cpuset), &root->cpuset ) == 0 );
+  CPU_ZERO( maxp );
+  for( i=0; i<coreno_max; i++ ) {
+    CPU_ZERO( &cpuset );
+    CPU_SET( i, &cpuset );
+    if( sched_setaffinity( pid, sizeof(cpuset), &cpuset ) == 0 ) {
+      CPU_SET( i, maxp );
+    }
+  }
+  ASSERT( CPU_COUNT( maxp ) > 0 );
+  ASSERT( sched_setaffinity( pid, sizeof(cpuset), &root->cpuset ) == 0 );
+}
+
 int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
   void pip_named_export_init( pip_task_t* );
   pip_root_t	*root;
@@ -376,11 +430,10 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     }
     if( ( err = pip_check_opt_and_env( &opts ) ) != 0 ) RETURN( err );
 
-    pip_set_name( pip_root, pip_task );
-
     sz = sizeof( pip_root_t ) + sizeof( pip_task_t ) * ( ntasks + 1 );
     pip_page_alloc( sz, (void**) &root );
     (void) memset( root, 0, sz );
+    pip_set_magic( root );
     root->size_whole = sz;
     root->size_root  = sizeof( pip_root_t );
     root->size_task  = sizeof( pip_task_t );
@@ -393,10 +446,8 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     pip_sem_init( &root->universal_lock );
     pip_sem_post( &root->universal_lock );
 
-    pip_setup_libc_ftab( &root->libc_ftab );
-
-    root->prefixdir = pip_prefix_dir();
-    pip_set_magic( root );
+    pip_get_cpuset( root );
+    root->prefixdir    = pip_prefix_dir();
     root->flag_quiet   = ( getenv( PIP_ENV_QUIET ) != NULL );
     root->version      = PIP_API_VERSION;
     root->ntasks       = ntasks;
@@ -413,17 +464,18 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
       root->export_root = *rt_expp;
     }
     pipid = PIP_PIPID_ROOT;
-    root->task_root->pipid     = pipid;
-    root->task_root->type      = PIP_TYPE_ROOT;
-    root->task_root->loaded    = pip_dlopen_unsafe( NULL, RTLD_NOW );
-    root->task_root->thread    = pthread_self();
-    root->task_root->pid       = getpid();
-    root->task_root->tid       = pip_gettid();
-    root->task_root->task_root = root;
-    root->task_root->libc_ftabp = &root->libc_ftab;
+    root->task_root->pipid      = pipid;
+    root->task_root->type       = PIP_TYPE_ROOT;
+    root->task_root->loaded     = pip_dlopen_unsafe( NULL, RTLD_NOW );
+    root->task_root->thread     = pthread_self();
+    root->task_root->pid        = getpid();
+    root->task_root->tid        = pip_gettid();
+    root->task_root->task_root  = root;
+    root->task_root->libc_ftabp = pip_libc_ftab( NULL );
     pip_task = root->task_root;
     pip_root = root;
 
+    pip_set_name( pip_root, pip_task );
     pip_dont_wrap_malloc = 0;
 
     if( opts & PIP_MODE_PTHREAD ) {
@@ -627,127 +679,17 @@ static int pip_copy_env( char **envsrc, int pipid, pip_char_vec_t *vecp ) {
   return pip_copy_vec( addenv, envsrc, vecp );
 }
 
-static void pip_glibc_fin( pip_task_t *task ) {
-  /* call fflush() in the target context to flush out messages */
-  pip_libc_ftab(task)->fflush( NULL );
-}
-
-static void pip_finalize_root( pip_root_t *root ) {
+void pip_finalize_root( pip_root_t *root ) {
   if( root != NULL ) {
     pip_named_export_fin_all( root );
   }
   pip_unset_signal_handlers();
+  pip_undo_patch_GOT();
+
   memset( root, 0, sizeof(pip_root_t) );
-  free( root );
+  pip_libc_free( root );
   pip_root = NULL;
   pip_task = NULL;
-  pip_undo_patch_GOT();
-}
-
-void pip_do_exit( pip_task_t *task, int flag, uintptr_t extval ) {
-  /* DONOT CALL pip_isa_root() in this function !!!! */
-  pip_root_t	*root;
-  int mode, is_threaded, flag_pip = 1;
-  int i, err = 0;
-
-  pip_free_all();
-
-  if( task != NULL ) {
-    ENTERF( "PIPID:%d  extval:%lu", task->pipid, extval );
-  } else {
-    ENTERF( "PIPID:(null)  extval:%lu", extval );
-  }
-  mode = ( pip_initialized != 0 ) ? pip_initialized : pip_finalized;
-  is_threaded = ( mode == PIP_MODE_PTHREAD );
-
-  if( pip_root == NULL ) goto call_exit;
-  root = pip_root;
-
-  if( task == NULL ) {
-    if( pip_task == NULL ) goto force_exit;
-    task = pip_task;
-  }
-  if( task != NULL && root == NULL ) root = task->task_root;
-
-  if( PIP_ISNTA_TASK( task ) ) {
-    /* when a PiP task fork()s and the forked process exits */
-    DBGF( "returned from a fork()ed process or "
-	  "pthread_create()ed thread? (%d/%d)", 
-	  task->tid, pip_gettid() );
-    flag_pip = 0;
-    goto force_exit;
-  } else {
-    if( task->hook_after != NULL ) {
-      if( ( err = task->hook_after( task->hook_arg ) ) != 0 ) {
-	pip_err_mesg( "PIPID:%d after-hook returns %d", 
-		      task->pipid, err );
-      }
-      if( flag != PIP_EXIT_PTHREAD && extval == 0 ) extval = err;
-    }
-    pip_gdbif_exit( task, WEXITSTATUS(extval) );
-    pip_gdbif_hook_after( task );
-    pip_glibc_fin( task );
-    if( task->symbols.named_export_fin != NULL ) {
-      task->symbols.named_export_fin( task );
-    }
-  }
-
-  if( root != NULL && 
-      task != NULL &&
-      PIP_ISA_ROOT( task ) ) {
-    for( i=0; i<root->ntasks; i++ ) {
-      pip_task_t *t = &root->tasks[i];
-      if( PIP_IS_ALIVE( t ) ) {
-	/* sending signal 0 to check if the task 
-	   is really alive or not */
-	if( pip_raise_signal( t, 0 ) == 0 ) {
-	  pip_info_mesg( "PiP task %d is still running and killed", 
-			 t->pipid );
-	  /* if so, kill the task */
-	  (void) pip_raise_signal( t, SIGKILL );
-	}
-      }
-    }
-  }
-
- force_exit:
-  DBGF( "FORCE EXIT:%lu", extval );
-
-  if( task != NULL ) {
-    pip_set_exit_status( task, extval, 0 );
-  }
-
-  if( flag_pip && is_threaded ) {	/* thread mode */
-    if( task != NULL && root != NULL     && 
-	!PIP_ISA_ROOT( task )            &&
-	PIP_IS_ALIVE( root->task_root )  &&
-	!PIP_ISNTA_TASK( task ) ) {
-      pip_raise_sigchld( task );
-    }
-    libc_pthread_exit_t pthrd_exit = 
-      pip_libc_ftab(task)->pthread_exit;
-    if( task != NULL && PIP_ISA_ROOT(task) ) {
-      pip_finalize_root( task->task_root );
-      /* after calling above func., pip_root and pip_task are NOT accessible */
-    }
-    /* here we have to call (pthread_)exit() 
-       in the same context, if possible */
-    if( flag == PIP_EXIT_PTHREAD ) {
-      pthrd_exit( (void*) extval );
-    } else {
-      pthrd_exit( NULL );
-    }
-  } else {			/* process mode */
-  call_exit:
-    do {} while(0);
-    libc_exit_t libc_exit = pip_libc_ftab(task)->exit;
-    if( task != NULL && PIP_ISA_ROOT(task) ) {
-      pip_finalize_root( task->task_root );
-      /* after calling above func., pip_root is free()ed */
-    }
-    libc_exit( extval );
-  }
-  NEVER_REACH_HERE;
 }
 
 static char *pip_onstart_script( char *env, size_t len ) {
@@ -846,6 +788,52 @@ static int pip_find_a_free_task( int *pipidp ) {
   RETURN( err );
 }
 
+static int 
+pip_foreach_path( char *path, void **argp, int flag, int *errp ) {
+  char **progp = (char**)argp;
+  char *fullpath, *p;
+  size_t len;
+
+  len = strlen( path ) + strlen( *progp ) + 1;
+  fullpath = alloca( len );
+  p = fullpath;
+  p = stpcpy( p, path );
+  p = stpcpy( p, "/" );
+  p = stpcpy( p, *progp );
+
+  if( pip_check_prog( fullpath, flag ) == 0 ) {
+    *((char**)argp) = strdup( fullpath );
+    ASSERTD( *progp != NULL );
+    *errp = 0;
+    return 1;			/* stop the foreeach loop */
+  }
+  return 0;
+}
+
+static void pip_colon_sep_path( char *colon_sep_path,
+				int(*for_each_path)(char*,void**,int,int*),
+				void **argp,
+				int flag,
+				int *errp ) {
+  *errp = ENOENT;
+  EXPAND_PATH_LIST_BODY(colon_sep_path,for_each_path,argp,flag,errp);
+}
+
+static int pip_check_user_prog( char **progp ) {
+  char *paths = getenv( "PATH" );
+  int err = 0;
+
+  if( index( *progp, '/' ) == NULL &&
+      paths  != NULL &&
+      *paths != '\0' ) {
+    pip_colon_sep_path( paths, pip_foreach_path, (void**)progp, 0, &err );
+
+  } else {
+    err = pip_check_prog( *progp, 1 );
+  }
+  return err;
+}
+
 static int pip_do_task_spawn( pip_spawn_program_t *progp,
 			      int pipid,
 			      int coreno,
@@ -854,7 +842,7 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
 			      pip_spawn_hook_t *hookp ) {
   pip_spawn_args_t	*args = NULL;
   pip_task_t		*task = NULL;
-  char			*env_stop;
+  char			*userprog, *env_stop;
   int 			err = 0;
 
   ENTER;
@@ -870,6 +858,11 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
   if( progp->funcname == NULL && progp->prog == NULL ) {
     progp->prog = progp->argv[0];
   }
+  /* checking user program */
+  userprog = progp->prog;
+  if( ( err = pip_check_user_prog( &userprog ) ) ) RETURN( err );
+  progp->prog = userprog;
+  /* checking pipid */
   if( pipid == PIP_PIPID_MYSELF ||
       pipid == PIP_PIPID_NULL ) {
     RETURN( EINVAL );
@@ -877,7 +870,14 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
   if( pipid != PIP_PIPID_ANY ) {
     if( pipid < 0 || pipid > pip_root->ntasks ) RETURN( EINVAL );
   }
-  if( coreno < 0 ) RETURN( EINVAL );
+  /* checking coreno */
+  if( coreno != PIP_CPUCORE_ASIS ) {
+    int flags = coreno & PIP_CPUCORE_FLAG_MASK;
+    int value = coreno & PIP_CPUCORE_CORENO_MASK;
+    if( ( flags & PIP_CPUCORE_ABS ) != flags ) RETURN( EINVAL );
+    if( value >= PIP_CPUCORE_CORENO_MAX      ) RETURN( EINVAL );
+  }
+  /* checking prog */
 
   if( ( err = pip_find_a_free_task( &pipid ) ) != 0 ) goto error;
   task = &pip_root->tasks[pipid];
@@ -893,14 +893,14 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
     char *prog = progp->prog;
     char *p = strrchr( prog, '/' );
     if( p == NULL ) {
-      args->prog      = pip_strdup( prog );
-      args->prog_full = pip_strdup( prog );
+      args->prog = pip_strdup( prog );
     } else {
-      args->prog      = pip_strdup( p + 1 );
-      args->prog_full = pip_strdup( prog );
+      args->prog = pip_strdup( p + 1 );
     }
-    ASSERT( args->prog != NULL && args->prog_full != NULL );
+    args->prog_full = pip_strdup( prog );
+
     DBGF( "prog:%s full:%s", args->prog, args->prog_full );
+    ASSERTD( args->prog != NULL && args->prog_full != NULL );
   }
   err = pip_copy_env( progp->envv, pipid, &args->envvec );
   if( err ) ERRJ_ERR( err );
@@ -943,7 +943,9 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
 
   pip_gdbif_task_new( task );
   {
-    int l = strlen( pip_root->prefixdir ) + strlen( LDPIP_NAME ) + 2;
+    char *libdir = "/lib/";
+    int l = strlen( pip_root->prefixdir ) + strlen( libdir ) +
+      strlen( LDPIP_NAME ) + 1;
     char *p = alloca( l );
     char *q;
     Lmid_t lmid;
@@ -953,10 +955,10 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
 		      pip_spinlock_t *lock );
     q = p;
     q = stpcpy( q, pip_root->prefixdir );
-    q = stpcpy( q, "/" );
+    q = stpcpy( q, "/lib/" );
     q = stpcpy( q, LDPIP_NAME );
 
-    void *loaded = pip_dlmopen( LM_ID_NEWLM, p, DLMOPEN_FLAGS );
+    void *loaded = pip_dlmopen( LM_ID_NEWLM, p, DLOPEN_FLAGS );
     if( loaded == NULL ) {
       pip_err_mesg( "Unable to load %s - %s", LDPIP_NAME, pip_dlerror() );
       err = ENOEXEC;

@@ -94,7 +94,8 @@ $(LIBRARY): $(OBJS) Makefile
 	ln -s $(LIBRARY) $(LIBNAME)
 
 $(LDPIP): $(SRC_LDPIP) $(DEPINCS) Makefile
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(SRC_LDPIP) -ldl -shared -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(SRC_LDPIP) -o $@ \
+	$(PTHREAD_FLAG) $(GLIBC_LDFLAGS) -shared -ldl
 
 $(LIBRARY_PRELOAD): $(OBJS_PRELOAD) $(DEPINCS) Makefile
 	$(CC) $(LDFLAGS_PRELOAD) $(OBJS_PRELOAD) -o $@

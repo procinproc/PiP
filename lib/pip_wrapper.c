@@ -36,22 +36,6 @@
 #include <pip/pip_internal.h>
 #include <pip/pip_dlfcn.h>
 
-pip_libc_ftab_t *pip_libc_ftab( pip_task_t *task ) {
-  static pip_libc_ftab_t  pip_libc_ftab_last_resort;
-  static int pip_libc_ftab_ready = 0;
-
-  if( task == NULL && pip_task == NULL ) {
-    if( !pip_libc_ftab_ready ) {
-      pip_libc_ftab_ready = 1;
-      pip_setup_libc_ftab( &pip_libc_ftab_last_resort );
-    }
-    return &pip_libc_ftab_last_resort;
-  } else if( task != NULL ) {
-    return task->libc_ftabp;
-  }
-  return pip_task->libc_ftabp;
-}
-
 /* safe (locked) dl* functions */
 
 void *pip_dlsym_unsafe( void *handle, const char *symbol ) {

@@ -82,9 +82,9 @@ typedef struct pip_libc_ftab {
   libc_dlopen_t			dlopen;
   libc_dlmopen_t		dlmopen;
   libc_dlinfo_t			dlinfo;
-  libc_dlerror_t		dlerror;
   libc_dladdr_t			dladdr;
   libc_dlvsym_t			dlvsym;
+  libc_dlerror_t		dlerror;
 } pip_libc_ftab_t;
 
 #endif /* _pip_glibc_funcs_h_ */

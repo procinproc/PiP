@@ -129,9 +129,7 @@ static void ldpip_close_on_exec( void ) {
   }
 }
 
-static int ldpip_corebind( pip_task_t *task, 
-			   uint32_t coreno, 
-			   cpu_set_t *oldsetp ) {
+static int ldpip_corebind( uint32_t coreno ) {
   cpu_set_t cpuset;
   pid_t tid;
   int flags  = coreno & PIP_CPUCORE_FLAG_MASK;
@@ -139,36 +137,26 @@ static int ldpip_corebind( pip_task_t *task,
 
   ENTER;
   /* PIP_CPUCORE_* flags are exclusive */
-  if( ( flags & PIP_CPUCORE_ASIS ) != flags &&
-      ( flags & PIP_CPUCORE_ABS  ) != flags ) RETURN( EINVAL );
-  if( !( flags & PIP_CPUCORE_ASIS ) ) {
-    coreno &= PIP_CPUCORE_CORENO_MASK;
-    if( coreno >= PIP_CPUCORE_CORENO_MAX ) RETURN ( EINVAL );
-  }
-
-  task->cpuset = (cpu_set_t*) malloc( sizeof(cpu_set_t) );
-  ASSERTD( task->cpuset != NULL );
 
   tid = ldpip_gettid();
-  if( sched_getaffinity( tid, sizeof(cpu_set_t), oldsetp ) != 0 ) {
-    err = errno;
-    goto error;
-  }
-
   if( flags & PIP_CPUCORE_ASIS ) {
-    memcpy( task->cpuset, oldsetp, sizeof(cpu_set_t) );
-    RETURN( 0 );
+    /* we do need to bind cores explicitly */
+    /* unless they bind cores mysteriously */
+    if( sched_setaffinity( tid, 
+			   sizeof(cpu_set_t), 
+			   &ldpip_root->cpuset ) != 0 ) {
+      err = errno;
+    }
+    RETURN( err );
   }
+  coreno &= PIP_CPUCORE_CORENO_MASK;
   /* the coreno might be absolute or not. this is beacuse */
-  /* the Fujist A64FX CPU has non-contiguoes cpu numbers  */
+  /* the Fujist A64FX CPU has non-contiguoes core numbers */
   if( flags == 0 ) {		/* not absolute */
+    cpu_set_t	*maxset = &ldpip_root->maxset;
     int ncores, nth;
 
-    if( sched_getaffinity( tid, sizeof(cpu_set_t), &cpuset ) != 0 ) {
-      err = errno;
-      goto error;
-    }
-    if( ( ncores = CPU_COUNT( &cpuset ) ) ==  0 ) RETURN( 0 );
+    ncores = CPU_COUNT( maxset );
     coreno %= ncores;
     nth = coreno;
     for( i=0; ; i++ ) {
@@ -187,40 +175,26 @@ static int ldpip_corebind( pip_task_t *task,
     CPU_SET( coreno, &cpuset );
     /* here, do not call pthread_setaffinity(). This MAY fail */
     /* because pd->tid is NOT set yet.  I do not know why.    */
-    /* But this is OK to call sched_setaffinity() with tid.   */
+    /* But it is OK to call sched_setaffinity() with tid.     */
     if( sched_setaffinity( tid, sizeof(cpuset), &cpuset ) != 0 ) {
       err = errno;
     }
-  }
-  if( err ) {
-  error:
-    free( task->cpuset );
-    task->cpuset = NULL;
-  } else {
-    memcpy( task->cpuset, &cpuset, sizeof(cpu_set_t) );
   }
   RETURN( err );
 }
 
 static void ldpip_colon_sep_path( char *colon_sep_path,
-				  int(*for_each_path)(char*,void*,int*),
-				  void *arg,
+				  int(*for_each_path)(char*,void**,int,int*),
+				  void **argp,
+				  int flag,
 				  int *errp ) {
-  char *paths, *p, *q;
-
-  if( colon_sep_path != NULL ) {
-    int len = strlen( colon_sep_path );
-    paths = alloca( len + 1 );
-    strcpy( paths, colon_sep_path );
-    ASSERTD( paths != NULL );
-    for( p=paths; (q=index(p,':'))!=NULL; p=q+1) {
-      *q = '\0';
-      if( for_each_path( p, arg, errp ) ) break;
-    }
-  }
+  EXPAND_PATH_LIST_BODY(colon_sep_path,for_each_path,argp,flag,errp);
 }
 
-static int ldpip_foreach_preload( char *path, void *unused_arg, int *errp ) {
+static int ldpip_foreach_preload( char *path, 
+				  void **unused_argp, 
+				  int unused_flag, 
+				  int *errp ) {
   struct stat st;
 
   if( stat( path, &st ) != 0 ) {
@@ -231,128 +205,57 @@ static int ldpip_foreach_preload( char *path, void *unused_arg, int *errp ) {
 	     !( st.st_mode & S_IRGRP ) &&
 	     !( st.st_mode & S_IROTH ) ) {
     ldpip_warning( "Specified preload object (%s) is not readable", path );
-  } else if( dlopen( path, DLMOPEN_FLAGS ) == NULL ) {
+  } else if( dlopen( path, RTLD_LAZY ) == NULL ) {
     ldpip_warning( "Specified preload object (%s) is not loadable", path );
+  } else {
+    if( dlopen( path, RTLD_LAZY ) == NULL ) {
+      ldpip_warning( "Unable to load preload object (%s): ", path, dlerror() );
+    }
   }
   return 0;
 }
 
 static void ldpip_preload( char *env ) {
-  ldpip_colon_sep_path( env, ldpip_foreach_preload, NULL, NULL );
+  if( env != NULL && *env != '\0' ) {
+    ldpip_colon_sep_path( env, ldpip_foreach_preload, NULL, 1, NULL );
+  }
 }
 
 static void ldpip_libc_init( pip_spawn_args_t *args ) {
   extern void __ctype_init( void );
-  void	*loaded = ldpip_task->loaded;
   char	**progname;
   char	**progfull;
 
-  if( ( progname = dlsym( loaded, "__progname"      ) ) != NULL ) {
+  if( ( progname = dlsym( RTLD_DEFAULT, "__progname"      ) ) != NULL ) {
     *progname = args->prog;
   }
-  if( ( progfull = dlsym( loaded, "__progname_full" ) ) != NULL ) {
+  if( ( progfull = dlsym( RTLD_DEFAULT, "__progname_full" ) ) != NULL ) {
     *progfull = args->prog_full;
   }
   __ctype_init();
  }
 
 static void ldpip_load_libpip( void **start_task ) {
-  int 	l = strlen( ldpip_root->prefixdir ) + strlen( PIPLIB_NAME ) + 2;
-  char 	*path = alloca( l );
+  char 	*path;
+  char  *libdir = "/lib/";
   char 	*q;
   void	*loaded;
+  int 	l;
   
-  q = path;
+  l = strlen( ldpip_root->prefixdir ) + 
+    strlen( libdir ) + 
+    strlen( PIPLIB_NAME ) + 1;
+  q = path = alloca( l );
   q = stpcpy( q, ldpip_root->prefixdir );
-  q = stpcpy( q, "/" );
+  q = stpcpy( q, libdir );
   q = stpcpy( q, PIPLIB_NAME );
 
+  DBGF( "path: %s", path );
   *start_task = NULL;
-  if( ( loaded = dlopen( path, DLMOPEN_FLAGS ) ) != NULL ) {
+  if( ( loaded = dlopen( path, DLOPEN_FLAGS ) ) != NULL ) {
     *start_task = dlsym( loaded, "pip_start_task_" );
   }
   ASSERT( *start_task != NULL );
-}
-
-static int ldpip_check_pie( const char *path ) {
-  Elf64_Ehdr elfh;
-  int fd;
-  int err = 0;
-
-  ASSERT( ( fd = open( path, O_RDONLY ) ) >= 0 );
-  if( read( fd, &elfh, sizeof( elfh ) ) != sizeof( elfh ) ) {
-    ldpip_error( "Unable to obtain ELF header (%s)", path );
-    err = EUNATCH;
-  } else if( elfh.e_ident[EI_MAG0] != ELFMAG0 ||
-	     elfh.e_ident[EI_MAG1] != ELFMAG1 ||
-	     elfh.e_ident[EI_MAG2] != ELFMAG2 ||
-	     elfh.e_ident[EI_MAG3] != ELFMAG3 ) {
-    ldpip_error( "'%s' is not ELF", path );
-    err = ELIBBAD;
-  } else if( elfh.e_type != ET_DYN ) {
-    ldpip_error( "'%s' is not PIE", path );
-    err = ELIBEXEC;
-  }
-  (void) close( fd );
-  return err;
-}
-
-static int ldpip_foreach_path( char *path, void *arg, int *errp ) {
-  char *prog = arg;
-  char *fullpath, *p;
-  size_t len;
-  struct stat st;
-
-  len = strlen( path ) + strlen( prog ) + 1;
-  fullpath = alloca( len );
-  p = fullpath;
-  p = stpcpy( p, path );
-  p = stpcpy( p, "/" );
-  p = stpcpy( p, prog );
-
-  if( stat( fullpath, &st ) != 0 ) {
-    /* Unable to find task program */
-    return 0;
-  } else if( !S_ISREG(st.st_mode) ) {
-    /* Specified task program is not a file */
-    return 0;
-  } else if( !( st.st_mode & S_IRUSR ) &&
-	     !( st.st_mode & S_IRGRP ) &&
-	     !( st.st_mode & S_IROTH ) ) {
-    /* Specified task program is not readable */
-    return 0;
-  } else if( dlopen( fullpath, DLMOPEN_FLAGS ) == NULL ) {
-    /* Specified task program is not loadable */
-    *errp = ldpip_check_pie( fullpath );
-  }
-  return 1;
-}
-
-static int ldpip_load_user_prog( char *prog ) {
-  char *paths = getenv( "PATH" );
-  int err = 0;
-
-  if(  index( prog, '/' ) == NULL) {
-    ldpip_colon_sep_path( paths, ldpip_foreach_path, prog, &err );
-  } else {
-    struct stat st;
-    
-    if( stat( prog, &st ) != 0 ) {
-      err = errno;
-      ldpip_warning( "Unable to find PiP task program (%s)", prog );
-    } else if( !S_ISREG(st.st_mode) ) {
-      err = EACCES;
-      ldpip_warning( "Specified PiP task program (%s) is not a file", prog );
-    } else if( !( st.st_mode & S_IXUSR ) &&
-	       !( st.st_mode & S_IXGRP ) &&
-	       !( st.st_mode & S_IXOTH ) ) {
-      err = EACCES;
-      ldpip_warning( "Specified PiP task program (%s) is not executable", prog );
-    } else if( dlopen( prog, DLMOPEN_FLAGS ) == NULL ) {
-      err = ldpip_check_pie( prog );
-    }
-  }
-  return err;
 }
 
 static void *ldpip_load( void *vargs ) {
@@ -365,20 +268,23 @@ static void *ldpip_load( void *vargs ) {
   ldpip_task->thread = pthread_self();
   ldpip_task->pid    = getpid();
   ldpip_task->tid    = ldpip_gettid();
-  /* resume root after setting above variables */
   ldpip_set_name( ldpip_root, ldpip_task );
+  /* resume root after setting above variables */
   pip_sem_post( &ldpip_root->sync_spawn );
 
   if( !( ldpip_root->opts & PIP_MODE_PTHREAD ) ) ldpip_close_on_exec();
-  if( ldpip_corebind( ldpip_task, coreno, NULL ) != 0 ) {
-    ldpip_warning( "Failed to bound CPU core:%d (%d)", coreno, err );
+  if( ldpip_corebind( coreno ) != 0 ) {
+    ldpip_warning( "Unable to bind CPU core:%d (%d)", coreno, err );
   }
 
   ldpip_libc_init( args );
   ldpip_set_libc_ftab( ldpip_task );
   ldpip_preload( getenv( PIP_ENV_PRELOAD ) );
   ldpip_load_libpip( (void**) &start_task );
-  err = ldpip_load_user_prog( args->prog_full );
+  /* eventually load the user program */
+  if( dlopen( args->prog_full, DLOPEN_FLAGS ) == NULL ) {
+    ldpip_error( "Unable to load %s: %s", args->prog_full, dlerror() );
+  }
 
   return start_task( ldpip_root, 
 		     ldpip_task, 
