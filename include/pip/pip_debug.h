@@ -129,11 +129,13 @@ static size_t ldpip_idstr(char*,size_t);
     DBG_PRNT(__VA_ARGS__); DBG_OUTPUT; } while(0)
 
 #ifndef LDPIP
-#define DISABLE_WRAP_MALLOC		pip_dont_wrap_malloc=1
-#define ENABLE_WRAP_MALLOC		pip_dont_wrap_malloc=0
+#define DISABLE_WRAP_MALLOC		\
+  int __wrap_malloc = pip_dont_wrap_malloc; pip_dont_wrap_malloc=1
+#define ENABLE_WRAP_MALLOC		\
+  pip_dont_wrap_malloc = __wrap_malloc;
 #else
-#define DISABLE_WRAP_MALLOC	
-#define ENABLE_WRAP_MALLOC		
+#define DISABLE_WRAP_MALLOC
+#define ENABLE_WRAP_MALLOC
 #endif
 
 #define ASSERTD(X)		   				\

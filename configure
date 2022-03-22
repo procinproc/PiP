@@ -603,6 +603,7 @@ CPPFLAGS
 LDFLAGS
 CFLAGS
 CC
+pip_wrapper
 malloc_ldflags
 dynamic_linker
 glibc_lib
@@ -664,6 +665,7 @@ ac_subst_files=''
 ac_user_opts='
 enable_option_checking
 with_glibc_libdir
+enable_pipwrapper
 with_malloc
 '
       ac_precious_vars='build_alias
@@ -1287,6 +1289,13 @@ if test -n "$ac_init_help"; then
      short | recursive ) echo "Configuration of Process-in-Processs 2.4.0:";;
    esac
   cat <<\_ACEOF
+
+Optional Features:
+  --disable-option-checking  ignore unrecognized --enable/--with options
+  --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
+  --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
+  --enable-pipwrapper     allow PiP lib. to wrap some glibc functions
+                          (default)
 
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
@@ -2018,6 +2027,16 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: ${glibc_incdir}" >&5
 $as_echo "${glibc_incdir}" >&6; }
 
+# Check whether --enable-pipwrapper was given.
+if test "${enable_pipwrapper+set}" = set; then :
+  enableval=$enable_pipwrapper;
+fi
+
+case "${enable_pipwrapper}" in
+""|yes) pip_wrapper=1;;
+*) pip_wrapper=0;;
+esac
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking malloc library" >&5
 $as_echo_n "checking malloc library... " >&6; }
 
@@ -2045,6 +2064,7 @@ $as_echo "${with_malloc}" >&6; }
 else
   malloc_ldflags=""
 fi
+
 
 
 

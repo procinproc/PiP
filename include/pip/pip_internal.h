@@ -73,10 +73,10 @@
 #include <libgen.h>
 #include <fcntl.h>
 #include <link.h>
-#include <execinfo.h>
 #include <getopt.h>
 #include <dlfcn.h>
 #include <elf.h>
+#include <malloc.h>
 
 #define PIP_PRIVATE		__attribute__((visibility ("hidden")))
 
@@ -94,11 +94,9 @@ struct pip_task;
 
 extern struct pip_root	*pip_root       PIP_PRIVATE;
 extern struct pip_task	*pip_task       PIP_PRIVATE;
+extern int 		pip_dont_wrap_malloc PIP_PRIVATE;
 extern int		pip_initialized PIP_PRIVATE;
 extern int		pip_finalized   PIP_PRIVATE;
-#ifndef LDPIP
-extern int 		pip_dont_wrap_malloc PIP_PRIVATE;
-#endif
 
 #define PIP_BASE_VERSION	(0x3200U)
 
@@ -241,8 +239,7 @@ typedef struct pip_task {
   volatile int32_t	status;	   /* exit value */
   int			retval;
 
-  struct pip_gdbif_task	*gdbif_task;
-
+  cpu_set_t 		cpuset;
   pip_spawnhook_t	hook_before;
   pip_spawnhook_t	hook_after;
   void			*hook_arg;
@@ -250,12 +247,14 @@ typedef struct pip_task {
   /* stop_on_start fomr PiP 2.1 */
   pid_t			pid_onstart;
   char			*onstart_script;
+  /* PiP-gdb interface */
+  struct pip_gdbif_task	*gdbif_task;
   /* malloc free list */
   pip_atomic_t		malloc_free_list;
 
   sigset_t		*debug_signals;
   /* reserved for future use */
-  void			*__reserved__[14];
+  void			*__reserved__[16];
 } pip_task_t;
 
 #define PIP_FILLER_SZ	(PIP_CACHE_SZ-sizeof(pip_spinlock_t))
@@ -298,8 +297,7 @@ INLINE void pip_recursive_lock_init( pip_recursive_lock_t *lock ) {
   pip_sem_init( &lock->semaphore );
 }
 
-INLINE void pip_recursive_lock_lock( pip_recursive_lock_t *lock ) {
-  pid_t 	tid = pip_gettid();
+INLINE void pip_recursive_lock_lock( pid_t tid, pip_recursive_lock_t *lock ) {
   pip_atomic_t 	count = pip_atomic_fetch_and_add( &lock->count, 1 );
   if( count >= 1 ) {
     if( tid != lock->owner ) pip_sem_wait( &lock->semaphore );
@@ -308,8 +306,8 @@ INLINE void pip_recursive_lock_lock( pip_recursive_lock_t *lock ) {
   lock->nrecursive ++;
 }
 
-INLINE void pip_recursive_lock_unlock( pip_recursive_lock_t *lock ) {
-  pid_t 	tid = pip_gettid();
+INLINE void
+pip_recursive_lock_unlock( pid_t tid, pip_recursive_lock_t *lock ) {
   int		nrec;
   pip_atomic_t 	count;
   ASSERTD( tid == lock->owner );
@@ -321,7 +319,8 @@ INLINE void pip_recursive_lock_unlock( pip_recursive_lock_t *lock ) {
   }
 }
 
-INLINE void pip_recursive_lock_fin( pip_recursive_lock_t *lock ) {
+INLINE void
+pip_recursive_lock_fin( pip_recursive_lock_t *lock ) {
   pip_sem_fin( &lock->semaphore );
   memset( lock, 0, sizeof(pip_recursive_lock_t) );
 }
@@ -342,7 +341,6 @@ typedef struct pip_root {
   int			ntasks_accum;
   int			pipid_curr;
 
-  pip_clone_t		*cloneinfo;   /* only valid with process:preload */
   pip_sem_t		lock_clone;   /* lock for clone */
   pip_sem_t		sync_spawn;   /* Spawn synch */
 
@@ -361,9 +359,8 @@ typedef struct pip_root {
   int			flag_quiet;
 
   pip_sem_t		universal_lock;
-  pip_recursive_lock_t	glibc_lock; /* 5 64-bit words */
+  pip_recursive_lock_t	libc_lock; /* 5 64-bit words */
 
-  cpu_set_t 		cpuset;
   cpu_set_t		maxset;
 
   pip_clone_mostly_pthread_t pip_pthread_create;
@@ -390,7 +387,7 @@ typedef void*(*pip_start_task_t)( pip_root_t*,
 #define PIP_W_EXITCODE(X,S)	__W_EXITCODE(X,S)
 
 
-extern void pip_setup_libc_ftab( pip_libc_ftab_t* ) PIP_PRIVATE;
+extern void pip_set_libc_ftab( pip_libc_ftab_t* ) PIP_PRIVATE;
 extern pip_libc_ftab_t *pip_libc_ftab( pip_task_t* ) PIP_PRIVATE;
 extern void pip_libc_free( void* ) PIP_PRIVATE;
 extern void pip_finalize_root( pip_root_t* ) PIP_PRIVATE;
@@ -424,7 +421,7 @@ extern void pip_raise_sigchld( pip_task_t* ) PIP_PRIVATE;
 extern void pip_set_signal_handlers( void ) PIP_PRIVATE;
 extern void pip_unset_signal_handlers( void ) PIP_PRIVATE;
 extern void pip_abort_handler( int ) PIP_PRIVATE;
-extern void pip_kill_all_tasks_( int ) PIP_PRIVATE;
+extern int  pip_kill_all_children_( int ) PIP_PRIVATE;
 
 extern void pip_onstart( pip_task_t* ) PIP_PRIVATE;
 extern void pip_set_exit_status( pip_task_t*, int, int ) PIP_PRIVATE;
@@ -439,9 +436,10 @@ extern int  pip_is_threaded_( void );
 extern void pip_page_alloc( size_t, void** );
 extern int  pip_raise_signal( pip_task_t*, int );
 extern void pip_debug_on_exceptions( pip_root_t*, pip_task_t* );
+
+extern int  pip_wrap_clone( void );
 extern int  pip_patch_GOT( char*, char**, pip_got_patch_list_t* );
 extern void pip_undo_patch_GOT( void );
-
 
 INLINE int pip_check_pipid( int *pipidp ) {
   if( !pip_is_effective() ) RETURN( EPERM  );

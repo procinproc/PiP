@@ -41,6 +41,74 @@ extern int pip_root_p_( void );
 
 /* the following function(s) are for debugging */
 
+static int
+pip_pipid_str( char *p, size_t sz, int pipid, int upper ) {
+  char	c;
+
+  /* !! NEVER CALL CTYPE FUNCTION HERE !! */
+  /* it may NOT be initialized and cause SIGSEGV */
+  switch( pipid ) {
+  case PIP_PIPID_ROOT:
+    c = (upper)? 'R' : 'r'; goto one_char;
+    break;
+  case PIP_PIPID_MYSELF:
+    c = (upper)? 'S' : 's'; goto one_char;
+    break;
+  case PIP_PIPID_ANY:
+    c = (upper)? 'A' : 'a'; goto one_char;
+    break;
+  case PIP_PIPID_NULL:
+    c = (upper)? 'U' : 'u'; goto one_char;
+    break;
+  default:
+    c = (upper)? 'T' : 't';
+    if( pip_root != NULL && pip_root->ntasks > 0 ) {
+      if( 0 <= pipid && pipid < pip_root->ntasks ) {
+	return snprintf( p, sz, "%c%d", c, pipid );
+      } else {
+	return snprintf( p, sz, "%c##", c );
+      }
+    }
+  }
+  c = '?';
+
+ one_char:
+  return snprintf( p, sz, "%c", c );
+}
+
+static int pip_task_str( char *p, size_t sz, pip_task_t *task ) {
+  int 	n = 0;
+
+  if( task == NULL ) {
+    n = snprintf( p, sz, "-" );
+  } else if( task->type == PIP_TYPE_NULL ) {
+    n = snprintf( p, sz, "*" );
+  } else if( PIP_IS_ALIVE( task ) ) {
+    n = pip_pipid_str( p, sz, task->pipid, 1 );
+  } else {
+    n = snprintf( p, sz, "x" );
+  }
+  return n;
+}
+
+size_t pip_idstr( char *p, size_t s ) {
+  pid_t		tid  = pip_gettid();
+  pip_task_t	*ctx = pip_task;
+  pip_task_t	*kc  = pip_current_task();
+  char 		*opn = "[", *cls = "]", *delim = ":";
+  int		n;
+
+  n = snprintf( p, s, "%s", opn ); 	s -= n; p += n;
+  {
+    n = snprintf( p, s, "%d(", tid ); 	s -= n; p += n;
+    n = pip_task_str( p, s, kc ); 	s -= n; p += n;
+    n = snprintf( p, s, ")%s", delim );	s -= n; p += n;
+    n = pip_task_str( p, s, ctx );	s -= n; p += n;
+  }
+  n = snprintf( p, s, "%s", cls ); 	s -= n; p += n;
+  return s;
+}
+
 #define PIP_DEBUG_BUFSZ		(4096)
 
 void pip_print_maps( void ) {
@@ -54,7 +122,7 @@ void pip_print_maps( void ) {
     if( ( rc = read( fd, buf, PIP_DEBUG_BUFSZ ) ) <= 0 ) break;
     p = buf;
     do {
-      if( ( wc = write( 1, p, rc ) ) < 0 ) { /* STDOUT */
+      if( ( wc = write( 2, p, rc ) ) < 0 ) { /* STDOUT */
 	fprintf( stderr, "write error\n" );
 	goto error;
       }

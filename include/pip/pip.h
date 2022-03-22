@@ -48,12 +48,19 @@
 #define PIP_OPTS_NONE			(0x0)
 
 #define PIP_MODE_PTHREAD		(0x1000U)
-#define PIP_MODE_PROCESS		(0x2000U)
 /* the following two modes are a submode of PIP_MODE_PROCESS */
-#define PIP_MODE_PROCESS_PRELOAD	(0x2100U)
-#define PIP_MODE_PROCESS_PIPCLONE	(0x2200U)
-#define PIP_MODE_PROCESS_GOT		(0x2400U)
+#define PIP_MODE_PROCESS_PRELOAD	(0x0100U)
+#define PIP_MODE_PROCESS_PIPCLONE	(0x0400U)
+#define PIP_MODE_PROCESS_GOT_OBS	(0x8000U) /* obsolete */
 #define PIP_MODE_MASK			(0xFF00U)
+#define PIP_MODE_PROCESS			\
+  ( PIP_MODE_PROCESS_PRELOAD | PIP_MODE_PROCESS_PIPCLONE )
+
+#define PIP_VALID_OPTS					\
+  ( PIP_MODE_PTHREAD         |				\
+    PIP_MODE_PROCESS_PRELOAD |				\
+    PIP_MODE_PROCESS_GOT_OBS |				\
+    PIP_MODE_PROCESS_PIPCLONE )
 
 #define PIP_ENV_PRELOAD			"PIP_PRELOAD"
 #define PIP_ENV_MODE			"PIP_MODE"
@@ -61,8 +68,8 @@
 #define PIP_ENV_MODE_PTHREAD		"pthread"
 #define PIP_ENV_MODE_PROCESS		"process"
 #define PIP_ENV_MODE_PROCESS_PRELOAD	"process:preload"
-#define PIP_ENV_MODE_PROCESS_PIPCLONE	"process:pipclone"
 #define PIP_ENV_MODE_PROCESS_GOT	"process:got"
+#define PIP_ENV_MODE_PROCESS_PIPCLONE	"process:pipclone"
 
 #define PIP_ENV_STOP_ON_START		"PIP_STOP_ON_START"
 
@@ -73,10 +80,6 @@
 #define PIP_ENV_SHOW_PIPS		"PIP_SHOW_PIPS"
 
 #define PIP_ENV_QUIET			"PIP_QUIET"
-
-#define PIP_VALID_OPTS	\
-  ( PIP_MODE_PTHREAD | PIP_MODE_PROCESS_PRELOAD | \
-    PIP_MODE_PROCESS_PIPCLONE | PIP_MODE_PROCESS_GOT )
 
 #define PIP_ENV_STACKSZ			"PIP_STACKSZ"
 
@@ -100,6 +103,9 @@
 #define PIP_YIELD_DEFAULT		(0x0U)
 #define PIP_YIELD_USER			(0x1U)
 #define PIP_YIELD_SYSTEM		(0x2U)
+
+/* PiP Version 2.4 or later */
+#define PIP_HAVE_LDPIP
 
 typedef struct {
   char		*prog;
@@ -201,8 +207,8 @@ extern "C" {
    * three ways implmented; using LD_PRELOAD, modifying GLIBC, and
    * modifying GIOT entry of the \b clone() systemcall. One of the
    * option flag values; \b PIP_MODE_PTHREAD, \b PIP_MODE_PROCESS,
-   * \b PIP_MODE_PROCESS_PRELOAD, \b PIP_MODE_PROCESS_PIPCLONE, or
-   * \b PIP_MODE_PROCESS_GOT can be specified as the option flag. Or,
+   * \b PIP_MODE_PROCESS_PRELOAD, or 
+   * \b PIP_MODE_PROCESS_LIBCCLONE can be specified as the option flag. Or,
    * users may specify the execution mode by the \b PIP_MODE environment
    * described below.
    *
@@ -219,13 +225,7 @@ extern "C" {
    * \environment
    * \arg \b PIP_MODE Specifying the PiP execution mmode. Its value can be
    * either \c thread, \c pthread, \c process, \c process:preload,
-   * \c process:pipclone, or \c process:got.
-   * \arg \b LD_PRELOAD This is required to set appropriately to hold the path
-   * to the \c pip_preload.so file, if the PiP execution mode is
-   * \c PIP_MODE_PROCESS_PRELOAD (the \c opts in \c pip_init) and/or
-   * the PIP_MODE ennvironment is set to \c process:preload. See also
-   * the \c pip-mode command to set the environment variable appropriately and
-   * easily.
+   * \c process:got, or \c process:pipclone.
    * \arg \b PIP_STACKSZ Sepcifying the stack size (in bytes). The
    * \b KMP_STACKSIZE and \b OMP_STACKSIZE are also effective. The 't',
    * 'g', 'm', 'k' and 'b' posfix character can be used.
@@ -1282,13 +1282,32 @@ void pip_spawn_hook( pip_spawn_hook_t *hook,
    * int pip_kill_all_tasks( void );
    *
    * \note
-   * This function must be called from PiP root.
+   * This function must be called from PiP root. This function is deprecated and 
+   * use \b pip_kill_all_child_tasks().
    *
    * \return Return 0 on success. Return an error code on error.
    * \retval EPERM The PiP library is not initialized yet
    * \retval EPERM Not called from root
    */
   int pip_kill_all_tasks( void );
+
+  /**
+   * \PiPManEntry{pip_kill_all_child_tasks}
+   *
+   * \brief kill all PiP tasks
+   *
+   * \synopsis
+   * \#include <pip/pip.h> \n
+   * int pip_kill_all_child_tasks( void );
+   *
+   * \note
+   * This function must be called from PiP root.
+   *
+   * \return Return 0 on success. Return an error code on error.
+   * \retval EPERM The PiP library is not initialized yet
+   * \retval EPERM Not called from root
+   */
+  int pip_kill_all_child_tasks( void );
 
   /**
    * \PiPManEntry{pip_abort}
@@ -1486,8 +1505,8 @@ void pip_spawn_hook( pip_spawn_hook_t *hook,
 
 #ifndef DOXYGEN_INPROGRESS
 
-  void pip_glibc_lock( void );
-  void pip_glibc_unlock( void );
+  void pip_libc_lock( void );
+  void pip_libc_unlock( void );
 
   void *pip_malloc( size_t );
   size_t pip_malloc_usable_size( void* );

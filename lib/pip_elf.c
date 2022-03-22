@@ -290,7 +290,7 @@ static void pip_find_dso_symbols( pip_libc_dso_syms_t *dsos[],
   while( lm != NULL ) {
     char *bname, *fname = (char*) lm->l_name;
 
-    DBGF( "DSO: %s", fname );
+    DBGF( "DSO: '%s' @ %p", fname, (void*) lm->l_addr );
     if( fname != NULL && *fname != '\0' ) {
       if( ( bname = strrchr( fname, '/' ) ) != NULL ) {
 	bname ++;		/* skp '/' */
@@ -349,7 +349,7 @@ static pip_libc_dso_syms_t pip_dso_libdl =
     }
   };
 
-void pip_setup_libc_ftab( pip_libc_ftab_t *libc_ftab ) {
+static void pip_setup_libc_ftab( pip_libc_ftab_t *libc_ftab ) {
   pip_libc_dso_syms_t *pip_libc_dsos[] = {
     &pip_dso_libc,
     &pip_dso_libpthread,
@@ -358,6 +358,7 @@ void pip_setup_libc_ftab( pip_libc_ftab_t *libc_ftab ) {
   };
   int i, c = 0;
 
+  DBG;
   if( libc_ftab->fflush == NULL ) { /* check the first one */
     pip_find_dso_symbols( pip_libc_dsos, libc_ftab );
   }
@@ -378,6 +379,7 @@ void pip_set_libc_ftab( pip_libc_ftab_t *ftabp ) {
 
 pip_libc_ftab_t *pip_libc_ftab( pip_task_t *task ) {
   static pip_libc_ftab_t ftab;
+
   if( task == NULL ) task = pip_task;
   if( task == NULL ) {
     if( pip_libc_ftab_last_resort == NULL ) {

@@ -422,7 +422,7 @@ int main( int argc, char **argv ) {
       pipid = j++;
       err = pip_task_spawn( &prog, d, 0, &pipid, NULL );
       if( err ) {
-	(void) pip_kill_all_tasks();
+	(void) pip_kill_all_child_tasks();
 	pip_exit( 9 );
       }
     }

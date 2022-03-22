@@ -46,8 +46,6 @@ pip_root_t		*pip_root            PIP_PRIVATE;
 pip_task_t		*pip_task            PIP_PRIVATE;
 struct pip_gdbif_root	*pip_gdbif_root      PIP_PRIVATE;
 
-static pip_spinlock_t 	*pip_clone_lock;
-static pip_clone_t*	pip_cloneinfo   = NULL;
 struct pip_gdbif_root	*pip_gdbif_root;
 
 #define ROUNDUP(X,Y)		((((X)+(Y)-1)/(Y))*(Y))
@@ -89,60 +87,6 @@ void pip_reset_task_struct( pip_task_t *task ) {
   task->named_exptab = namexp;
 }
 
-static int pip_check_prog( const char *path, int verbose ) {
-  struct stat stbuf;
-  Elf64_Ehdr elfh;
-  int fd;
-  int err = 0;
-
-  if( ( fd = open( (path), O_RDONLY ) ) < 0 ) {
-    err = errno;
-  } else {
-    if( fstat( fd, &stbuf ) < 0 ) {
-      err = errno;
-      if( verbose ) {
-	pip_err_mesg( "'%s': stat() fails (%s)", path, strerror( errno ) );
-      }
-    } else {
-      /* check file attributes */
-      if( !( stbuf.st_mode & S_IFREG ) ) {
-	err = EACCES;
-	if( verbose ) {
-	  pip_err_mesg( "'%s' is not a regular file", path );
-	}
-      } else if( ( stbuf.st_mode & (S_IXUSR|S_IXGRP|S_IXOTH) ) == 0 ) {
-	err = EACCES;
-	if( verbose ) {
-	  pip_err_mesg( "'%s' is not executable", path );
-	}
-      } else {
-	/* check ELF header */
-	if( read( (fd), &elfh, sizeof( elfh ) ) != sizeof( elfh ) ) {
-	  err = EUNATCH;
-	  if( verbose ) {
-	    pip_err_mesg( "Unable to read ELF header (%s)", path );
-	  }
-	} else if( elfh.e_ident[EI_MAG0] != ELFMAG0 ||
-		   elfh.e_ident[EI_MAG1] != ELFMAG1 ||
-		   elfh.e_ident[EI_MAG2] != ELFMAG2 ||
-		   elfh.e_ident[EI_MAG3] != ELFMAG3 ) {
-	  err = ELIBBAD;
-	  if( verbose ) {
-	    pip_err_mesg( "'%s' is not ELF", path );
-	  }
-	} else if( elfh.e_type != ET_DYN ) {
-	  err = ELIBEXEC;
-	  if( verbose ) {
-	    pip_err_mesg( "'%s' is not PIE", path );
-	  }
-	}
-      }
-    }
-    (void) close( fd );
-  }
-  return err;
-}
-
 const char *pip_get_mode_str( void ) {
   char *mode;
 
@@ -157,9 +101,6 @@ const char *pip_get_mode_str( void ) {
   case PIP_MODE_PROCESS_PRELOAD:
     mode = PIP_ENV_MODE_PROCESS_PRELOAD;
     break;
-  case PIP_MODE_PROCESS_GOT:
-    mode = PIP_ENV_MODE_PROCESS_GOT;
-    break;
   case PIP_MODE_PROCESS_PIPCLONE:
     mode = PIP_ENV_MODE_PROCESS_PIPCLONE;
     break;
@@ -169,111 +110,53 @@ const char *pip_get_mode_str( void ) {
   return mode;
 }
 
-typedef void(*pip_set_clone_t)(void);
-
 static int pip_check_opt_and_env( int *optsp ) {
-  extern pip_spinlock_t pip_lock_got_clone;
-  pip_set_clone_t	set_clone;
+  static int(*pip_clone_mostly_pthread_ptr)
+    ( pthread_t*, int, int, size_t, void*(*)(void*), void*, pid_t* ) = 
+    NULL;
   int opts   = *optsp;
-  int mode   = ( opts & PIP_MODE_MASK );
-  int newmod = 0;
+  int mode   = opts & PIP_MODE_MASK;
+  int newmod;
   char *env  = getenv( PIP_ENV_MODE );
-
   enum PIP_MODE_BITS {
     PIP_MODE_PTHREAD_BIT          = 1,
     PIP_MODE_PROCESS_PRELOAD_BIT  = 2,
-    PIP_MODE_PROCESS_GOT_BIT      = 4,
     PIP_MODE_PROCESS_PIPCLONE_BIT = 8
   } desired = 0;
 
-  if( ( opts & ~PIP_VALID_OPTS ) != 0 ) {
-    /* unknown option(s) specified */
-    RETURN( EINVAL );
-  }
-  /* check if pip_preload.so is pre-loaded. if so, */
-  /* PIP_MODE_PROCESS_PRELOAD is the only choice   */
-  if( pip_cloneinfo == NULL ) {
-    pip_cloneinfo = (pip_clone_t*) pip_dlsym( RTLD_DEFAULT, "pip_clone_info" );
-  }
-  set_clone = (pip_set_clone_t) pip_dlsym( RTLD_DEFAULT, "pip_set_clone" );
-  DBGF( "cloneinfo:%p", pip_cloneinfo );
-
-  if( pip_cloneinfo != NULL ) {
-    DBGF( "mode:0x%x", mode );
-    if( mode == 0 || 
-	( mode & PIP_MODE_PROCESS_PRELOAD ) == mode ) {
-      newmod = PIP_MODE_PROCESS_PRELOAD;
-      set_clone();
-      pip_clone_lock = &pip_cloneinfo->lock;
-      goto done;
-    }
-    if( mode & ~PIP_MODE_PROCESS_PRELOAD ) {
-      pip_err_mesg( "pip_preload.so is already loaded by LD_PRELOAD and "
-		    "process:preload is the only possible choice of PiP mode" );
-      RETURN( EPERM );
-    }
-    if( env == NULL || env[0] == '\0' ) {
-      newmod = PIP_MODE_PROCESS_PRELOAD;
-      set_clone();
-      pip_clone_lock = &pip_cloneinfo->lock;
-      goto done;
-    }
-    if( strcasecmp( env, PIP_ENV_MODE_PROCESS_PRELOAD ) == 0 ||
-	strcasecmp( env, PIP_ENV_MODE_PROCESS         ) == 0 ) {
-      newmod = PIP_MODE_PROCESS_PRELOAD;
-      set_clone();
-      pip_clone_lock = &pip_cloneinfo->lock;
-      goto done;
-    } else {
-      pip_err_mesg( "pip_preload.so is already loaded by LD_PRELOAD and "
-		    "process:preload is the only possible choice of PiP mode" );
-      RETURN( EPERM );
-    }
-  } else {
-    /* pip_preload.so is not loaded. i.e., LD_PRELOAD does not include pip_preload.so */
-    if( mode != 0 &&
-	( mode & PIP_MODE_PROCESS_PRELOAD ) == PIP_MODE_PROCESS_PRELOAD ) {
-      pip_err_mesg( "pip_preload.so is not loaded by LD_PRELOAD and "
-		    "process:preload might be a wrong choice" );
-      RETURN( EPERM );
-    }
-    if( env != NULL && strcasecmp( env, PIP_ENV_MODE_PROCESS_PRELOAD ) == 0 ) {
-      pip_err_mesg( "pip_preload.so is not loaded by LD_PRELOAD and "
-		    "process:preload is a wrong choice of PIP_MODE environment" );
-      RETURN( EPERM );
-    }
-  }
-
+  DBGF( "mode:0x%x", mode );
   switch( mode ) {
   case 0:
     if( env == NULL || env[0] == '\0' ) {
-      desired = PIP_MODE_PTHREAD_BIT     |
-	        PIP_MODE_PROCESS_GOT_BIT |
+      desired = PIP_MODE_PTHREAD_BIT         |
+	        PIP_MODE_PROCESS_PRELOAD_BIT |
 	        PIP_MODE_PROCESS_PIPCLONE_BIT;
+    } else if( strcasecmp( env, PIP_ENV_MODE_PROCESS ) == 0 ) {
+      desired = PIP_MODE_PROCESS_PRELOAD_BIT |
+	        PIP_MODE_PROCESS_PIPCLONE_BIT;
+    } else if( strcasecmp( env, PIP_ENV_MODE_PROCESS_PRELOAD  ) == 0 ) {
+      desired = PIP_MODE_PROCESS_PRELOAD_BIT;
+    } else if( strcasecmp( env, PIP_ENV_MODE_PROCESS_GOT      ) == 0 ) {
+      pip_err_mesg( "%s is obsolete", PIP_ENV_MODE_PROCESS_GOT );
+      RETURN( EPERM );
+    } else if( strcasecmp( env, PIP_ENV_MODE_PROCESS_PIPCLONE ) == 0 ) {
+      desired = PIP_MODE_PROCESS_PIPCLONE_BIT;
     } else if( strcasecmp( env, PIP_ENV_MODE_THREAD  ) == 0 ||
 	       strcasecmp( env, PIP_ENV_MODE_PTHREAD ) == 0 ) {
       desired = PIP_MODE_PTHREAD_BIT;
-    } else if( strcasecmp( env, PIP_ENV_MODE_PROCESS ) == 0 ) {
-      desired = PIP_MODE_PROCESS_GOT_BIT |
-	        PIP_MODE_PROCESS_PIPCLONE_BIT;
-    } else if( strcasecmp( env, PIP_ENV_MODE_PROCESS_GOT      ) == 0 ) {
-      desired = PIP_MODE_PROCESS_GOT_BIT;
-    } else if( strcasecmp( env, PIP_ENV_MODE_PROCESS_PIPCLONE ) == 0 ) {
-      desired = PIP_MODE_PROCESS_PIPCLONE_BIT;
     } else {
       pip_warn_mesg( "unknown environment setting PIP_MODE='%s'", env );
       RETURN( EPERM );
     }
-    break;
-  case PIP_MODE_PTHREAD:
-    desired = PIP_MODE_PTHREAD_BIT;
     break;
   case PIP_MODE_PROCESS:
     if( env == NULL || env[0] == '\0' ) {
-      desired = PIP_MODE_PROCESS_GOT_BIT |
+      desired = PIP_MODE_PROCESS_PRELOAD_BIT |
 	        PIP_MODE_PROCESS_PIPCLONE_BIT;
+    } else if( strcasecmp( env, PIP_ENV_MODE_PROCESS_PRELOAD  ) == 0 ) {
+      desired = PIP_MODE_PROCESS_PRELOAD_BIT;
     } else if( strcasecmp( env, PIP_ENV_MODE_PROCESS_GOT      ) == 0 ) {
-      desired = PIP_MODE_PROCESS_GOT_BIT;
+      RETURN( EINVAL );
     } else if( strcasecmp( env, PIP_ENV_MODE_PROCESS_PIPCLONE ) == 0 ) {
       desired = PIP_MODE_PROCESS_PIPCLONE_BIT;
     } else {
@@ -281,49 +164,60 @@ static int pip_check_opt_and_env( int *optsp ) {
       RETURN( EPERM );
     }
     break;
-  case PIP_MODE_PROCESS_GOT:
-    desired = PIP_MODE_PROCESS_GOT_BIT;
+  case PIP_MODE_PROCESS_PRELOAD:
+    if( env == NULL || env[0] == '\0' ||
+	strcasecmp( env, PIP_ENV_MODE_PROCESS          ) == 0 ||
+	strcasecmp( env, PIP_ENV_MODE_PROCESS_PRELOAD  ) == 0 ) {
+      desired = PIP_MODE_PROCESS_PRELOAD_BIT;
+    } else {
+      RETURN( EPERM );
+    }
     break;
   case PIP_MODE_PROCESS_PIPCLONE:
-    desired = PIP_MODE_PROCESS_PIPCLONE_BIT;
+    if( env == NULL || env[0] == '\0' ||
+	strcasecmp( env, PIP_ENV_MODE_PROCESS          ) == 0 ||
+	strcasecmp( env, PIP_ENV_MODE_PROCESS_PIPCLONE ) == 0 ) {
+      desired = PIP_MODE_PROCESS_PIPCLONE_BIT;
+    } else {
+      RETURN( EPERM );
+    }
+    break;
+  case PIP_MODE_PROCESS_GOT_OBS:
+    pip_err_mesg( "process:got is obsolete" );
+    RETURN( EINVAL );
+    break;
+  case PIP_MODE_PTHREAD:
+    if( env == NULL || env[0] == '\0' ||
+	strcasecmp( env, PIP_ENV_MODE_THREAD  ) == 0 ||
+	strcasecmp( env, PIP_ENV_MODE_PTHREAD ) == 0 ) {
+      desired = PIP_MODE_PTHREAD_BIT;
+    } else {
+      RETURN( EPERM );
+    }
     break;
   default:
     RETURN( EINVAL );
+    break;
   }
-  if( desired == 0 ) {
-    RETURN( EPERM );
-  }
+  if( desired == 0 ) RETURN( EINVAL );
 
-  if( desired & PIP_MODE_PROCESS_GOT_BIT ) {
-    int pip_wrap_clone( void );
-    if( pip_wrap_clone() == 0 ) {
-      newmod = PIP_MODE_PROCESS_GOT;
-      pip_clone_lock = &pip_lock_got_clone;
-      goto done;
-    } else if( !( desired & ( PIP_MODE_PTHREAD_BIT |
-			      PIP_MODE_PROCESS_PIPCLONE_BIT ) ) ) {
-      RETURN( EPERM );
-    }
-  }
-  if( desired & PIP_MODE_PROCESS_PIPCLONE_BIT ) {
-    if ( pip_root->pip_pthread_create == NULL )
-      pip_root->pip_pthread_create = 
+  newmod = 0;
+  if( desired & PIP_MODE_PROCESS_PRELOAD_BIT ) {
+    newmod = PIP_MODE_PROCESS_PRELOAD;
+  } else if( desired & PIP_MODE_PROCESS_PIPCLONE_BIT ) {
+    if ( pip_clone_mostly_pthread_ptr == NULL )
+      pip_clone_mostly_pthread_ptr =
 	pip_dlsym( RTLD_DEFAULT, "pip_clone_mostly_pthread" );
-    if ( pip_root->pip_pthread_create != NULL ) {
+    if ( pip_clone_mostly_pthread_ptr != NULL ) {
       newmod = PIP_MODE_PROCESS_PIPCLONE;
-      goto done;
-    } else if( !( desired & PIP_MODE_PTHREAD_BIT) ) {
-      pip_err_mesg( "%s mode is requested but pip_clone_mostly_pthread() "
-		    "cannot not be found in PiP-glibc",
-		    PIP_ENV_MODE_PROCESS_PIPCLONE );
+    } else {
       RETURN( EPERM );
     }
-  }
-  if( desired & PIP_MODE_PTHREAD_BIT ) {
+  } else if( desired & PIP_MODE_PTHREAD_BIT ) {
     newmod = PIP_MODE_PTHREAD;
   }
-
- done:
+  if( newmod == 0 ) RETURN( EPERM );
+  /* succeeded */
   *optsp = ( opts & ~PIP_MODE_MASK ) | newmod;
   RETURN( 0 );
 }
@@ -351,7 +245,7 @@ char *pip_prefix_dir( void ) {
 	libpip[0] != '\0'  &&
 	sta       <= faddr && 
 	faddr     <  end ) {
-      ASSERTD( ( p = rindex( libpip, '/' ) ) != NULL );
+      ASSERTD( ( p = strrchr( libpip, '/' ) ) != NULL );
       *p = '\0';
       ASSERTD( ( prefix = (char*) pip_malloc( strlen( libpip ) + 
 					      strlen( updir ) + 1 ) )
@@ -377,25 +271,42 @@ static void pip_set_name( pip_root_t *root, pip_task_t *task ) {
   SET_NAME_BODY(root,task);
 }
 
-static void pip_get_cpuset( pip_root_t *root ) {
+static void pip_max_cpuset( pip_root_t *root ) {
   cpu_set_t *maxp = &root->maxset;
-  cpu_set_t cpuset;
+  cpu_set_t saveset, cpuset;
   pid_t pid = getpid();
   int coreno_max, i;
 
-  coreno_max = ( CPU_SETSIZE < PIP_CPUCORE_CORENO_MAX ) ? 
-    CPU_SETSIZE : PIP_CPUCORE_CORENO_MAX;
-  ASSERT( sched_getaffinity( pid, sizeof(cpuset), &root->cpuset ) == 0 );
-  CPU_ZERO( maxp );
-  for( i=0; i<coreno_max; i++ ) {
-    CPU_ZERO( &cpuset );
-    CPU_SET( i, &cpuset );
-    if( sched_setaffinity( pid, sizeof(cpuset), &cpuset ) == 0 ) {
-      CPU_SET( i, maxp );
+  ASSERT( sched_getaffinity( pid, sizeof(cpuset), &saveset ) == 0 );
+  {
+    /* CPU_SETIZE : 1024 in <bits/sched.h> */
+    coreno_max = ( CPU_SETSIZE < PIP_CPUCORE_CORENO_MAX ) ? 
+      CPU_SETSIZE : PIP_CPUCORE_CORENO_MAX;
+    CPU_ZERO( maxp );
+    for( i=0; i<coreno_max; i++ ) {
+      CPU_ZERO( &cpuset );
+      CPU_SET( i, &cpuset );
+      if( sched_setaffinity( pid, sizeof(cpuset), &cpuset ) == 0 ) {
+	CPU_SET( i, maxp );
+      }
     }
+    ASSERT( CPU_COUNT( maxp ) > 0 );
   }
-  ASSERT( CPU_COUNT( maxp ) > 0 );
-  ASSERT( sched_setaffinity( pid, sizeof(cpuset), &root->cpuset ) == 0 );
+  ASSERT( sched_setaffinity( pid, sizeof(cpuset), &saveset ) == 0 );
+}
+
+static int pip_determin_narena( void ) {
+  /* workaround for glibc */
+  long nproc_conf, nproc_online;
+  long narena = pip_root->ntasks;
+
+  nproc_conf   = (int) sysconf( _SC_NPROCESSORS_CONF );
+  nproc_online = (int) sysconf( _SC_NPROCESSORS_ONLN );
+  narena = ( 8            > narena ) ? 8            : narena;
+  narena = ( nproc_conf   > narena ) ? nproc_conf   : narena;
+  narena = ( nproc_online > narena ) ? nproc_online : narena; 
+  narena ++;
+  return narena;
 }
 
 int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
@@ -420,14 +331,6 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     }
     if( ntasks <= 0             ) RETURN( EINVAL );
     if( ntasks > PIP_NTASKS_MAX ) RETURN( EOVERFLOW );
-    {
-      sigset_t sigset;
-      (void) sigprocmask( SIG_BLOCK, NULL, &sigset );
-      if( sigismember( &sigset, SIGCHLD ) ) {
-	pip_warn_mesg( "SICHLD is being masked (blocked)" );
-	RETURN( EINVAL );
-      }
-    }
     if( ( err = pip_check_opt_and_env( &opts ) ) != 0 ) RETURN( err );
 
     sz = sizeof( pip_root_t ) + sizeof( pip_task_t ) * ( ntasks + 1 );
@@ -439,20 +342,19 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     root->size_task  = sizeof( pip_task_t );
 
     pip_spin_init( &root->lock_tasks   );
-    pip_recursive_lock_init( &root->glibc_lock );
+    pip_recursive_lock_init( &root->libc_lock );
     pip_sem_init( &root->lock_clone );
     pip_sem_post( &root->lock_clone );
     pip_sem_init( &root->sync_spawn );
     pip_sem_init( &root->universal_lock );
     pip_sem_post( &root->universal_lock );
 
-    pip_get_cpuset( root );
+    pip_max_cpuset( root );
     root->prefixdir    = pip_prefix_dir();
     root->flag_quiet   = ( getenv( PIP_ENV_QUIET ) != NULL );
     root->version      = PIP_API_VERSION;
     root->ntasks       = ntasks;
     root->ntasks_count = 1; /* root is also a PiP task */
-    root->cloneinfo    = pip_cloneinfo;
     root->opts         = opts;
     root->page_size    = sysconf( _SC_PAGESIZE );
     root->task_root    = &root->tasks[ntasks];
@@ -488,9 +390,40 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     pip_gdbif_initialize_root( ntasks );
     pip_gdbif_task_commit( pip_task );
     
+    {
+      sigset_t sigset;
+      (void) sigprocmask( SIG_BLOCK, NULL, &sigset );
+      if( sigismember( &sigset, SIGCHLD ) ) {
+	pip_err_mesg( "SICHLD is being masked (blocked)" );
+	RETURN( EPERM );
+      }
+    }
     pip_set_signal_handlers();
     ASSERTD( pthread_atfork( NULL, NULL, pip_after_fork ) == 0 );
 
+    {
+      /* workaround to avoid SEGV in glibc by increasing the    */
+      /* number of arenas in malloc. Reasons;                   */
+      /* 1) the defaul value is 8 and when the number of tasks  */
+      /* is beyond this, glibc tries to read and parse /proc    */
+      /* file when calling dlopen() and resulting the call to   */
+      /* some ctype functions. But __ctype_init() is not yet    */
+      /* called in the calls of dlopen() in ldpip.              */
+      /* 2) the number of arena should be more than or equal to */
+      /* the number of PiP tasks so that each PiP task may have */
+      /* its own arena. */
+      char *env_arena_max  = NULL;
+      char *env_arena_test = NULL;
+      int narena = pip_determin_narena();
+
+      asprintf( &env_arena_max,  "MALLOC_ARENA_MAX=%d",  narena );
+      asprintf( &env_arena_test, "MALLOC_ARENA_TEST=%d", narena );
+      ASSERTD( env_arena_max != NULL && env_arena_test != NULL );
+      putenv( env_arena_max  );
+      putenv( env_arena_test );
+      DBGF( "MALLOC_ARENA_TEST=%s", getenv( "MALLOC_ARENA_TEST" ) );
+      DBGF( "MALLOC_ARENA_MAX=%s",  getenv( "MALLOC_ARENA_MAX"  ) );
+    }
     DBGF( "PiP Execution Mode: %s", pip_get_mode_str() );
 
   } else if( PIP_ISA_ROOT( pip_task ) ) {
@@ -684,7 +617,6 @@ void pip_finalize_root( pip_root_t *root ) {
     pip_named_export_fin_all( root );
   }
   pip_unset_signal_handlers();
-  pip_undo_patch_GOT();
 
   memset( root, 0, sizeof(pip_root_t) );
   pip_libc_free( root );
@@ -717,7 +649,7 @@ static char *pip_onstart_target( pip_task_t *task, char *env ) {
   char *p, *q;
   int pipid;
 
-  p = index( env, '@' );
+  p = strchr( env, '@' );
   if( p == NULL ) {
     return pip_onstart_script( env, strlen( env ) );
   } else if( env[0] == '@' ) {		/* no script */
@@ -788,22 +720,68 @@ static int pip_find_a_free_task( int *pipidp ) {
   RETURN( err );
 }
 
+static int
+pip_check_prog( char *rprog, pip_spawn_args_t *args, char **pathp, int verbose ) {
+  struct stat stbuf;
+  char *prog;
+  int err = 0;
+
+  if( ( prog = realpath( rprog, NULL ) ) == NULL ) {
+    err = errno;
+    if( verbose ) {
+      switch( err ) {
+      case ENOENT:
+	pip_err_mesg( "'%s': no such file", rprog );
+	break;
+      case EACCES:
+	pip_err_mesg( "'%s': permission denied", rprog );
+	break;
+      default:
+	pip_err_mesg( "'%s': unable to open (%s)", rprog, strerror( err ) );
+	break;
+      }
+    }
+  }
+  if( !err ) {
+    if( stat( prog, &stbuf ) < 0 ) {
+      err = errno;
+      if( verbose ) {
+	pip_err_mesg( "'%s': stat() fails (%s)", prog, strerror( errno ) );
+      }
+    } else {
+      /* check file attributes */
+      if( !( stbuf.st_mode & S_IFREG ) ) {
+	err = EACCES;
+	if( verbose ) {
+	  pip_err_mesg( "'%s' is not a regular file", prog );
+	}
+      } else if( ( stbuf.st_mode & (S_IXUSR|S_IXGRP|S_IXOTH) ) == 0 ) {
+	err = EACCES;
+	if( verbose ) {
+	  pip_err_mesg( "'%s' is not executable", prog );
+	}
+      }
+    }
+  }
+  if( !err ) *pathp = prog;
+  return err;
+}
+
 static int 
-pip_foreach_path( char *path, void **argp, int flag, int *errp ) {
-  char **progp = (char**)argp;
+pip_foreach_path( char *path, void *vargs, int flag, char **pathp, int *errp ) {
+  pip_spawn_args_t *args = vargs;
+  char *prog = args->prog;
   char *fullpath, *p;
   size_t len;
 
-  len = strlen( path ) + strlen( *progp ) + 1;
+  len = strlen( path ) + strlen( args->prog ) + 1;
   fullpath = alloca( len );
   p = fullpath;
   p = stpcpy( p, path );
   p = stpcpy( p, "/" );
-  p = stpcpy( p, *progp );
+  p = stpcpy( p, prog );
 
-  if( pip_check_prog( fullpath, flag ) == 0 ) {
-    *((char**)argp) = strdup( fullpath );
-    ASSERTD( *progp != NULL );
+  if( pip_check_prog( fullpath, args, pathp, flag ) == 0 ) {
     *errp = 0;
     return 1;			/* stop the foreeach loop */
   }
@@ -811,27 +789,111 @@ pip_foreach_path( char *path, void **argp, int flag, int *errp ) {
 }
 
 static void pip_colon_sep_path( char *colon_sep_path,
-				int(*for_each_path)(char*,void**,int,int*),
+				int(*for_each_path)(char*,void*,int,char**,int*),
 				void **argp,
 				int flag,
+				char **pathp,
 				int *errp ) {
   *errp = ENOENT;
-  EXPAND_PATH_LIST_BODY(colon_sep_path,for_each_path,argp,flag,errp);
+  EXPAND_PATH_LIST_BODY(colon_sep_path,for_each_path,argp,flag,pathp,errp);
 }
 
-static int pip_check_user_prog( char **progp ) {
-  char *paths = getenv( "PATH" );
-  int err = 0;
-
-  if( index( *progp, '/' ) == NULL &&
-      paths  != NULL &&
-      *paths != '\0' ) {
-    pip_colon_sep_path( paths, pip_foreach_path, (void**)progp, 0, &err );
-
-  } else {
-    err = pip_check_prog( *progp, 1 );
+static int pip_check_pie( char *prog ) {
+  Elf64_Ehdr elfh;
+  int fd, err = 0;
+	/* check ELF header */
+  if( ( fd = open( prog, O_RDONLY ) ) < 0 ) {
+    err = errno;
+  } else if( read( fd, &elfh, sizeof(elfh) ) != sizeof(elfh) ) {
+      err = EUNATCH;
+      pip_err_mesg( "Unable to read ELF header (%s)", prog );
+    } else if( elfh.e_ident[EI_MAG0] != ELFMAG0 ||
+	       elfh.e_ident[EI_MAG1] != ELFMAG1 ||
+	       elfh.e_ident[EI_MAG2] != ELFMAG2 ||
+	       elfh.e_ident[EI_MAG3] != ELFMAG3 ) {
+    err = ELIBBAD;
+    pip_err_mesg( "'%s' is not ELF", prog );
+  } else if( elfh.e_type != ET_DYN ) {
+    err = ELIBEXEC;
+    pip_err_mesg( "'%s' is not PIE", prog );
   }
   return err;
+}
+
+static int pip_check_user_prog( pip_spawn_program_t *progp,
+				pip_spawn_args_t *args ) {
+  char *prog = args->prog = progp->prog;
+  char *paths = getenv( "PATH" );
+  char *path;
+  int err = 0;
+
+  DBGF( "prog = '%s'", prog );
+  if( *prog == '\0' ) {
+    err = ENOENT;
+  } else if( strchr( prog, '/' ) == NULL &&
+      paths != NULL && *paths != '\0' ) {
+    err = ENOENT;
+    pip_colon_sep_path( paths, pip_foreach_path, (void*)args, 0, &path, &err );
+  } else {
+    err = pip_check_prog( prog, args, &path, 1 );
+  }
+  if( !err ) err = pip_check_pie( path );
+
+  if( !err ) {
+    char *p;
+    args->prog_full = path;	/* malloec()ed by realpath() */
+    if( ( p = strrchr( path, '/' ) ) != NULL ) {
+      args->prog = strdup( p );
+    } else {
+      args->prog = strdup( path );
+    }
+    ASSERTD( args->prog != NULL );
+  }
+  return err;
+}
+
+static int pip_corebind( pip_task_t *task, uint32_t coreno ) {
+  cpu_set_t *cpuset = &task->cpuset;
+  pid_t tid = pip_gettid();
+  int flags, i;
+
+  ENTER;
+  /* PIP_CPUCORE_* flags are exclusive */
+  flags = coreno & PIP_CPUCORE_FLAG_MASK;
+  if( flags & PIP_CPUCORE_ASIS ) {
+    DBG;
+    if( sched_getaffinity( tid, 
+			   sizeof(cpu_set_t), 
+			   &task->cpuset ) != 0 ) {
+      RETURN( errno );
+    }
+  } else {
+    /* the coreno might be absolute or not. this is beacuse */
+    /* the Fujist A64FX CPU has non-contiguoes core numbers */
+    CPU_ZERO( cpuset );
+    coreno &= PIP_CPUCORE_CORENO_MASK;
+    if( flags & PIP_CPUCORE_ABS ) { /* absolute */
+    DBG;
+      CPU_SET( coreno, cpuset );
+    } else {			/* n-th coreno */
+      cpu_set_t	*maxset = &pip_root->maxset;
+      int ncores;
+
+      ncores = CPU_COUNT( maxset );
+    DBG;
+      coreno %= ncores;
+      for( i=0; ; i++ ) {
+	DBGF( "i:%d", i );
+	if( !CPU_ISSET( i, maxset ) ) continue;
+	if( coreno-- == 0 ) {
+	  DBGF( "i:%d set", i );
+	  CPU_SET( i, cpuset );
+	  break;
+	}
+      }
+    }
+  }
+  RETURN( 0 );
 }
 
 static int pip_do_task_spawn( pip_spawn_program_t *progp,
@@ -842,7 +904,7 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
 			      pip_spawn_hook_t *hookp ) {
   pip_spawn_args_t	*args = NULL;
   pip_task_t		*task = NULL;
-  char			*userprog, *env_stop;
+  char			*env_stop;
   int 			err = 0;
 
   ENTER;
@@ -858,10 +920,6 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
   if( progp->funcname == NULL && progp->prog == NULL ) {
     progp->prog = progp->argv[0];
   }
-  /* checking user program */
-  userprog = progp->prog;
-  if( ( err = pip_check_user_prog( &userprog ) ) ) RETURN( err );
-  progp->prog = userprog;
   /* checking pipid */
   if( pipid == PIP_PIPID_MYSELF ||
       pipid == PIP_PIPID_NULL ) {
@@ -877,31 +935,21 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
     if( ( flags & PIP_CPUCORE_ABS ) != flags ) RETURN( EINVAL );
     if( value >= PIP_CPUCORE_CORENO_MAX      ) RETURN( EINVAL );
   }
-  /* checking prog */
 
-  if( ( err = pip_find_a_free_task( &pipid ) ) != 0 ) goto error;
+  if( ( err = pip_find_a_free_task( &pipid ) ) != 0 ) ERRJ_ERR( err );
   task = &pip_root->tasks[pipid];
   pip_reset_task_struct( task );
   task->pipid     = pipid;	/* mark it as occupied */
   task->type      = PIP_TYPE_TASK;
   task->task_root = pip_root;
 
+  /* checking user program */
   args = &task->args;
+  if( ( err = pip_check_user_prog( progp, args) ) ) ERRJ_ERR( err );
+
   args->pipid  = pipid;
   args->coreno = coreno;
-  { 				/* GLIBC/misc/init-misc.c */
-    char *prog = progp->prog;
-    char *p = strrchr( prog, '/' );
-    if( p == NULL ) {
-      args->prog = pip_strdup( prog );
-    } else {
-      args->prog = pip_strdup( p + 1 );
-    }
-    args->prog_full = pip_strdup( prog );
-
-    DBGF( "prog:%s full:%s", args->prog, args->prog_full );
-    ASSERTD( args->prog != NULL && args->prog_full != NULL );
-  }
+  ASSERTD( args->prog != NULL );
   err = pip_copy_env( progp->envv, pipid, &args->envvec );
   if( err ) ERRJ_ERR( err );
 
@@ -921,6 +969,8 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
   } else {
     task->import_root = pip_root->export_root;
   }
+  pip_corebind( task, coreno );
+
   if( hookp != NULL ) {
     task->hook_before = hookp->before;
     task->hook_after  = hookp->after;
@@ -942,6 +992,7 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
   DBGF( "ONSTART: '%s'", task->onstart_script );
 
   pip_gdbif_task_new( task );
+    DBG;
   {
     char *libdir = "/lib/";
     int l = strlen( pip_root->prefixdir ) + strlen( libdir ) +
@@ -951,27 +1002,30 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
     Lmid_t lmid;
     int(*ldpip_load)( pip_root_t*, 
 		      pip_task_t*, 
-		      pip_spawn_args_t *arg,
-		      pip_spinlock_t *lock );
+		      pip_spawn_args_t *arg );
     q = p;
     q = stpcpy( q, pip_root->prefixdir );
     q = stpcpy( q, "/lib/" );
     q = stpcpy( q, LDPIP_NAME );
 
     void *loaded = pip_dlmopen( LM_ID_NEWLM, p, DLOPEN_FLAGS );
+    DBGF( "%s : %p : %s", p, loaded, dlerror() );
     if( loaded == NULL ) {
-      pip_err_mesg( "Unable to load %s - %s", LDPIP_NAME, pip_dlerror() );
+      pip_err_mesg( "Unable to load %s - %s", p, pip_dlerror() );
       err = ENOEXEC;
       goto error;
     }
-    ASSERT( ( ldpip_load = pip_dlsym( loaded, "ldpip_load_prog_" ) ) != NULL );
-    if( ( err = ldpip_load( pip_root, task, args, pip_clone_lock ) ) != 0 ) goto error;
     ASSERT( pip_dlinfo( loaded, RTLD_DI_LMID, &lmid ) == 0 );
-
     DBGF( "lmid:%d", (int) lmid );
-
     task->loaded = loaded;
     task->lmid   = lmid;
+
+#ifdef DEBUG_AHA
+    pip_print_maps();
+#endif
+
+    ASSERT( ( ldpip_load = pip_dlsym( loaded, "__ldpip_load_prog" ) ) != NULL );
+    if( ( err = ldpip_load( pip_root, task, args ) ) != 0 ) goto error;
   }
   if( err == 0 ) {
     pip_root->ntasks_count ++;
@@ -1190,15 +1244,17 @@ int pip_get_aux( void **auxp ) {
   RETURN( 0 );
 }
 
-void pip_glibc_lock( void ) {
+void pip_libc_lock( void ) {
   if( pip_root != NULL ) {
-    (void) pip_recursive_lock_lock( &pip_root->glibc_lock );
+    pip_recursive_lock_lock( pip_gettid(), 
+			     &pip_root->libc_lock );
   }
 }
 
-void pip_glibc_unlock( void ) {
+void pip_libc_unlock( void ) {
   if( pip_root != NULL ) {
-    (void) pip_recursive_lock_unlock( &pip_root->glibc_lock );
+    pip_recursive_lock_unlock( pip_gettid(),
+			       &pip_root->libc_lock );
   }
 }
 

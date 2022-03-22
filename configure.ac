@@ -59,6 +59,14 @@ if ! test -d "${glibc_incdir}" ; then
 fi
 AC_MSG_RESULT([${glibc_incdir}])
 
+AC_ARG_ENABLE([pipwrapper],
+  [AS_HELP_STRING([--enable-pipwrapper],
+                  [allow PiP lib. to wrap some glibc functions (default)])])
+case "${enable_pipwrapper}" in
+""|yes) pip_wrapper=1;;
+*) pip_wrapper=0;;
+esac
+
 AC_MSG_CHECKING([malloc library])
 AC_ARG_WITH([malloc],
   [AS_HELP_STRING([--with-malloc=PATH_TO_MALLOC.SO],
@@ -93,6 +101,7 @@ AC_SUBST(glibc_libdir)
 AC_SUBST(glibc_lib)
 AC_SUBST(dynamic_linker)
 AC_SUBST(malloc_ldflags)
+AC_SUBST(pip_wrapper)
 
 getconf=`type -P getconf`
 if test -x $getconf; then

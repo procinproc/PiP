@@ -36,6 +36,8 @@
 #include <pip/pip_internal.h>
 #include <pip/pip_dlfcn.h>
 
+#if PIP_WRAPPER == 1
+
 /* safe (locked) dl* functions */
 
 void *pip_dlsym_unsafe( void *handle, const char *symbol ) {
@@ -47,16 +49,16 @@ void *pip_dlsym_next_unsafe( const char *symbol ) {
 }
 
 void *pip_dlsym_next( const char *symbol ) {
-  pip_glibc_lock();
+  pip_libc_lock();
   void *addr = pip_dlsym_unsafe( RTLD_NEXT, symbol );
-  pip_glibc_unlock();
+  pip_libc_unlock();
   return addr;
 }
 
 void *pip_dlsym( void *handle, const char *symbol ) {
-  pip_glibc_lock();
+  pip_libc_lock();
   void *addr = pip_dlsym_unsafe( handle, symbol );
-  pip_glibc_unlock();
+  pip_libc_unlock();
   return addr;
 }
 
@@ -69,9 +71,9 @@ void *pip_dlopen_unsafe( const char *filename, int flag ) {
 }
 
 void *pip_dlopen( const char *filename, int flag ) {
-  pip_glibc_lock();
+  pip_libc_lock();
   void *handle = pip_dlopen_unsafe( filename, flag );
-  pip_glibc_unlock();
+  pip_libc_unlock();
   return handle;
 }
 
@@ -80,9 +82,9 @@ void *dlopen( const char *filename, int flag ) {
 }
 
 void *pip_dlmopen( Lmid_t lmid, const char *filename, int flag ) {
-  pip_glibc_lock();
+  pip_libc_lock();
   void *handle = pip_libc_ftab(NULL)->dlmopen( lmid, filename, flag );
-  pip_glibc_unlock();
+  pip_libc_unlock();
   return handle;
 }
 
@@ -91,9 +93,9 @@ void *dlmopen( Lmid_t lmid, const char *filename, int flag ) {
 }
 
 int pip_dlinfo( void *handle, int request, void *info ) {
-  pip_glibc_lock();
+  pip_libc_lock();
   int rv = pip_libc_ftab(NULL)->dlinfo( handle, request, info );
-  pip_glibc_unlock();
+  pip_libc_unlock();
   return rv;
 }
 
@@ -103,9 +105,9 @@ int dlinfo( void *handle, int request, void *info ) {
 
 int pip_dlclose( void *handle ) {
   extern int __libc_dlclose( void *handle );
-  pip_glibc_lock();
+  pip_libc_lock();
   int rv = __libc_dlclose( handle );
-  pip_glibc_unlock();
+  pip_libc_unlock();
   return rv;
 }
 
@@ -113,21 +115,21 @@ int dlclose( void *handle ) {
   return pip_dlclose( handle );
 }
 
-char *pip_dlerror( void ) {
-  pip_glibc_lock();
+char *dlerror( void ) {
+  pip_libc_lock();
   char *dlerr = pip_libc_ftab(NULL)->dlerror();
-  pip_glibc_unlock();
+  pip_libc_unlock();
   return dlerr;
 }
 
-char *dlerror( void ) {
+char *pip_dlerror( void ) {
   return pip_dlerror();
 }
 
 int pip_dladdr(const void *addr, Dl_info *info) {
-  pip_glibc_lock();
+  pip_libc_lock();
   int rv = pip_libc_ftab(NULL)->dladdr( addr, info );
-  pip_glibc_unlock();
+  pip_libc_unlock();
   return rv;
 }
 
@@ -137,9 +139,9 @@ int dladdr(const void *addr, Dl_info *info) {
 
 void*
 pip_dlvsym(void *__restrict handle, const char *symbol, const char *version) {
-  pip_glibc_lock();
+  pip_libc_lock();
   void *rv = pip_libc_ftab(NULL)->dlvsym( handle, symbol, version );
-  pip_glibc_unlock();
+  pip_libc_unlock();
   return rv;
 }
 
@@ -150,9 +152,9 @@ void *dlvsym(void *__restrict handle, const char *symbol, const char *version) {
 /* misc. */
 
 void *pip_sbrk( intptr_t inc ) {
-  pip_glibc_lock();
+  pip_libc_lock();
   void *rv = pip_libc_ftab(NULL)->sbrk( inc );
-  pip_glibc_lock();
+  pip_libc_unlock();
   return rv;
 }
 
@@ -166,22 +168,22 @@ void *sbrk( intptr_t inc ) {
 int getaddrinfo(const char *node, const char *service,
 		const struct addrinfo *hints,
 		struct addrinfo **res) {
-  pip_glibc_lock();
+  pip_libc_lock();
   int rv = pip_libc_ftab(NULL)->getaddrinfo( node, service, hints, res );
-  pip_glibc_unlock();
+  pip_libc_unlock();
   return rv;
 }
 
 void freeaddrinfo(struct addrinfo *res) {
-  pip_glibc_lock();
+  pip_libc_lock();
   pip_libc_ftab(NULL)->freeaddrinfo( res );
-  pip_glibc_unlock();
+  pip_libc_unlock();
 }
 
 const char *gai_strerror(int errcode) {
-  pip_glibc_lock();
+  pip_libc_lock();
   const char *rv = pip_libc_ftab(NULL)->gai_strerror( errcode );
-  pip_glibc_unlock();
+  pip_libc_unlock();
   return rv;
 }
 
@@ -202,3 +204,45 @@ void pthread_exit( void *retval ) {
   pip_pthread_exit( retval );
   NEVER_REACH_HERE;
 }
+
+#else
+
+/* safe (locked) dl* functions */
+
+int pip_dlclose( void *handle ) {
+  return dlclose( handle );
+}
+
+void *pip_dlopen_unsafe( const char *filename, int flag ) {
+  return dlopen( filename, flag );
+}
+
+void *pip_dlmopen( Lmid_t lmid, const char *filename, int flag ) {
+  pip_libc_lock();
+  void *rv = dlmopen( lmid, filename, flag );
+  pip_libc_unlock();
+  return rv;
+}
+
+int pip_dlinfo( void *handle, int request, void *info ) {
+  pip_libc_lock();
+  int rv = dlinfo( handle, request, info );
+  pip_libc_unlock();
+  return rv;
+}
+
+void *pip_dlsym( void *handle, const char *symbol ) {
+  pip_libc_lock();
+  void *addr = dlsym( handle, symbol );
+  pip_libc_unlock();
+  return addr;
+}
+
+char *pip_dlerror( void ) {
+  pip_libc_lock();
+  char *dlerr = dlerror();
+  pip_libc_unlock();
+  return dlerr;
+}
+
+#endif /* PIP_WRAPPER */

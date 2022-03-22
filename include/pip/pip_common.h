@@ -64,9 +64,6 @@
   case PIP_MODE_PROCESS_PIPCLONE:				\
     sym[1] = ';';						\
     break;							\
-  case PIP_MODE_PROCESS_GOT:					\
-    sym[1] = '.';						\
-    break;							\
   case PIP_MODE_PTHREAD:					\
     sym[1] = '|';						\
     break;							\
@@ -97,7 +94,7 @@
   }								\
   } while( 0 )
 
-#define EXPAND_PATH_LIST_BODY(colon_sep_path,for_each_path,argp,flag,errp) \
+#define EXPAND_PATH_LIST_BODY(colon_sep_path,for_each_path,argp,flag,pathp,errp) \
   do {									\
   char *paths, *p, *q;							\
   if( (colon_sep_path) != NULL && *(colon_sep_path) != '\0' ) {		\
@@ -107,11 +104,11 @@
     ASSERTD( paths != NULL );						\
     for( p=paths; (q=index(p,':'))!=NULL; p=q+1) {			\
       *q = '\0';							\
-      if( for_each_path( p, (argp), (flag), (errp) ) ) break;		\
+      if( for_each_path( p, (argp), (flag), (pathp), (errp) ) ) break;	\
     }									\
     /* first or last path */						\
     if( *p != '\0' ) {							\
-      for_each_path( p, (argp), (flag), (errp) );			\
+      for_each_path( p, (argp), (flag), (pathp), (errp) );		\
     }									\
   }									\
   } while(0)

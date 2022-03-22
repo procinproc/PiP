@@ -66,12 +66,13 @@ int pip_is_threaded( int *flagp ) {
   return err;
 }
 
-int pip_kill_all_tasks( void ) {
-  int err = 0;
+int pip_kill_all_child_tasks( void ) {
   if( !pip_is_effective() || !pip_isa_root() ) {
-    err = EPERM;
-  } else {
-    pip_kill_all_tasks_( 0 );
+    return EPERM;
   }
-  return err;
+  return pip_kill_all_children_( SIGKILL );
+}
+
+int pip_kill_all_tasks( void ) { 
+  return pip_kill_all_child_tasks();
 }

@@ -92,7 +92,7 @@ int pip_raise_signal( pip_task_t *task, int sig ) {
 
 void pip_abort( void ) PIP_NORETURN;
 void pip_abort( void ) {
-    ENTER;
+  ENTER;
   if( pip_is_threaded_() ) {
     abort();
   } else {
@@ -164,74 +164,6 @@ pip_task_t *pip_current_task( void ) {
   return task;
 }
 
-static int
-pip_pipid_str( char *p, size_t sz, int pipid, int upper ) {
-  char	c;
-
-  /* !! NEVER CALL CTYPE FUNCTION HERE !! */
-  /* it may NOT be initialized and cause SIGSEGV */
-  switch( pipid ) {
-  case PIP_PIPID_ROOT:
-    c = (upper)? 'R' : 'r'; goto one_char;
-    break;
-  case PIP_PIPID_MYSELF:
-    c = (upper)? 'S' : 's'; goto one_char;
-    break;
-  case PIP_PIPID_ANY:
-    c = (upper)? 'A' : 'a'; goto one_char;
-    break;
-  case PIP_PIPID_NULL:
-    c = (upper)? 'U' : 'u'; goto one_char;
-    break;
-  default:
-    c = (upper)? 'T' : 't';
-    if( pip_root != NULL && pip_root->ntasks > 0 ) {
-      if( 0 <= pipid && pipid < pip_root->ntasks ) {
-	return snprintf( p, sz, "%c%d", c, pipid );
-      } else {
-	return snprintf( p, sz, "%c##", c );
-      }
-    }
-  }
-  c = '?';
-
- one_char:
-  return snprintf( p, sz, "%c", c );
-}
-
-static int pip_task_str( char *p, size_t sz, pip_task_t *task ) {
-  int 	n = 0;
-
-  if( task == NULL ) {
-    n = snprintf( p, sz, "-" );
-  } else if( task->type == PIP_TYPE_NULL ) {
-    n = snprintf( p, sz, "*" );
-  } else if( PIP_IS_ALIVE( task ) ) {
-    n = pip_pipid_str( p, sz, task->pipid, 1 );
-  } else {
-    n = snprintf( p, sz, "x" );
-  }
-  return n;
-}
-
-size_t pip_idstr( char *p, size_t s ) {
-  pid_t		tid  = pip_gettid();
-  pip_task_t	*ctx = pip_task;
-  pip_task_t	*kc  = pip_current_task();
-  char 		*opn = "[", *cls = "]", *delim = ":";
-  int		n;
-
-  n = snprintf( p, s, "%s", opn ); 	s -= n; p += n;
-  {
-    n = snprintf( p, s, "%d(", tid ); 	s -= n; p += n;
-    n = pip_task_str( p, s, kc ); 	s -= n; p += n;
-    n = snprintf( p, s, ")%s", delim );	s -= n; p += n;
-    n = pip_task_str( p, s, ctx );	s -= n; p += n;
-  }
-  n = snprintf( p, s, "%s", cls ); 	s -= n; p += n;
-  return s;
-}
-
 static void pip_glibc_fin( pip_task_t *task ) {
   /* call fflush() in the target context to flush out messages */
   pip_libc_ftab(task)->fflush( NULL );
@@ -253,18 +185,15 @@ void pip_do_exit( pip_task_t *task, int flag, uintptr_t extval ) {
   mode = ( pip_initialized != 0 ) ? pip_initialized : pip_finalized;
   is_threaded = ( mode == PIP_MODE_PTHREAD );
 
-  DBG;
   if( pip_root == NULL ) goto call_exit;
   root = pip_root;
 
-  DBG;
   if( task == NULL ) {
     if( pip_task == NULL ) goto force_exit;
     task = pip_task;
   }
   if( task != NULL && root == NULL ) root = task->task_root;
 
-  DBG;
   if( PIP_ISNTA_TASK( task ) ) {
     /* when a PiP task fork()s and the forked process exits */
     DBGF( "returned from a fork()ed process or "
@@ -273,7 +202,6 @@ void pip_do_exit( pip_task_t *task, int flag, uintptr_t extval ) {
     flag_pip = 0;
     goto force_exit;
   } else {
-  DBG;
     if( task->hook_after != NULL ) {
       if( ( err = task->hook_after( task->hook_arg ) ) != 0 ) {
 	pip_err_mesg( "PIPID:%d after-hook returns %d", 
@@ -288,7 +216,6 @@ void pip_do_exit( pip_task_t *task, int flag, uintptr_t extval ) {
       task->symbols.named_export_fin( task );
     }
   }
-  DBG;
 
   if( root != NULL && 
       task != NULL &&
@@ -307,30 +234,25 @@ void pip_do_exit( pip_task_t *task, int flag, uintptr_t extval ) {
       }
     }
   }
-  DBG;
-
  force_exit:
   DBGF( "FORCE EXIT:%lu", extval );
 
   if( task != NULL ) {
     pip_set_exit_status( task, extval, 0 );
   }
-
-  if( flag_pip && is_threaded ) {	/* thread mode */
+  if( flag_pip && is_threaded && !PIP_ISA_ROOT( task ) ) {	
+    /* child task in thread mode */
+    libc_pthread_exit_t pthrd_exit = 
+      pip_libc_ftab(task)->pthread_exit;
     if( task != NULL && root != NULL     && 
-	!PIP_ISA_ROOT( task )            &&
 	PIP_IS_ALIVE( root->task_root )  &&
 	!PIP_ISNTA_TASK( task ) ) {
       pip_raise_sigchld( task );
     }
-    libc_pthread_exit_t pthrd_exit = 
-      pip_libc_ftab(task)->pthread_exit;
     if( task != NULL && PIP_ISA_ROOT(task) ) {
       pip_finalize_root( task->task_root );
       /* after calling above func., pip_root and pip_task are NOT accessible */
     }
-    /* here we have to call (pthread_)exit() 
-       in the same context, if possible */
     if( flag == PIP_EXIT_PTHREAD ) {
       pthrd_exit( (void*) extval );
     } else {
@@ -340,6 +262,7 @@ void pip_do_exit( pip_task_t *task, int flag, uintptr_t extval ) {
   call_exit:
     {
       libc_exit_t libc_exit = pip_libc_ftab(task)->exit;
+      DBGF( "libc_exit: %p", libc_exit );
       if( task != NULL && PIP_ISA_ROOT(task) ) {
 	pip_finalize_root( task->task_root );
 	/* after calling above func., pip_root is free()ed */
@@ -365,16 +288,7 @@ static int pip_init_task( pip_root_t *root, pip_task_t *task, char **envv ) {
 
   ENTER;
   if( ( err = pip_check_root_and_task( root, task ) ) == 0 ) {
-    pip_root = root;
-    pip_task = task;
     pip_universal_lockp = &root->universal_lock;
-    
-    if( root->opts & PIP_MODE_PTHREAD ) {
-      pip_initialized = PIP_MODE_PTHREAD;
-    } else {
-      pip_initialized = PIP_MODE_PROCESS;
-    }
-    pip_finalized = 0;
     
     pip_set_signal_handlers();
     ASSERTD( pthread_atfork( NULL, NULL, pip_after_fork ) == 0 );
@@ -388,12 +302,17 @@ static int pip_init_task( pip_root_t *root, pip_task_t *task, char **envv ) {
   RETURN( err );
 }
 
-void *pip_start_task_( pip_root_t *root, 
-		       pip_task_t *task, 
-		       pip_spawn_args_t *args, 
-		       int err,
-		       char *err_mesg,
-		       char *warn_mesg ) {
+static void pip_libc_init( void ) {
+  extern void __ctype_init( void );
+  __ctype_init();
+}
+
+void *__pip_start_task( pip_root_t *root, 
+			pip_task_t *task, 
+			pip_spawn_args_t *args, 
+			int err,
+			char *err_mesg,
+			char *warn_mesg ) {
   char **argv      = args->argvec.vec;
   char **envv      = args->envvec.vec;
   void *start_arg  = args->start_arg;
@@ -402,9 +321,19 @@ void *pip_start_task_( pip_root_t *root,
   void *start;
   int  extval;
 
+  pip_libc_init();
   ENTER;
-  void pip_set_libc_ftab( pip_libc_ftab_t* );
+  pip_root = root;
+  pip_task = task;
+
   pip_set_libc_ftab( task->libc_ftabp );
+    
+  if( root->opts & PIP_MODE_PTHREAD ) {
+    pip_initialized = PIP_MODE_PTHREAD;
+  } else {
+    pip_initialized = PIP_MODE_PROCESS;
+  }
+  pip_finalized = 0;
 
   if( warn_mesg != NULL ) {
     pip_warn_mesg( "%s", warn_mesg );
@@ -417,7 +346,6 @@ void *pip_start_task_( pip_root_t *root,
     err_mesg = NULL;
   }
   if( err ) {
-    DBG;
     extval = err;
 
   } else {

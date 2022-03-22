@@ -63,16 +63,16 @@ CPPFLAGS += $(PIP_CPPFLAGS) \
 	$(CPPFLAGS_DEBUG)
 CFLAGS   += $(PIC_CFLAG) $(PTHREAD_FLAG)
 
-LIBMAIN = -Wl,-e,pip_main -ldl
+MAINFLAGS = -Wl,-e,pip_main -ldl
 
-SRCS  = pip.c pip_task.c pip_main.c pip_2_backport.c pip_wait.c \
+SRCS  = pip.c pip_start.c pip_main.c pip_2_backport.c pip_wait.c \
 	pip_namexp.c pip_clone.c pip_signal.c pip_util.c pip_mesg.c \
-	pip_elf.c pip_onstart.c pip_gdbif.c pip_wrapper.c pip_malloc.c \
+	pip_elf.c pip_pip_onstart.c pip_gdbif.c pip_wrapper.c pip_malloc.c \
 	pip_preload.c xpmem.c
 
 SRC_LDPIP = ldpip.c
 
-OBJS  = pip.o pip_task.o pip_main.o pip_2_backport.o pip_wait.o \
+OBJS  = pip.o pip_start.o pip_main.o pip_2_backport.o pip_wait.o \
 	pip_namexp.o pip_clone.o pip_signal.o pip_util.o pip_mesg.o \
 	pip_elf.o pip_onstart.o pip_gdbif.o pip_wrapper.o pip_malloc.o
 
@@ -86,21 +86,22 @@ BUILD_H = $(top_srcdir)/include/pip/build.h
 $(BUILD_H): $(top_srcdir)/include/pip/pip_config.h
 	$(MAKE) -C ../include/pip header
 
-$(OBJS): $(BUILD_H) $(DEPINCS) 
+$(OBJS): $(BUILD_H) $(DEPINCS) $(DEPCONFIG)
 
-$(LIBRARY): $(OBJS) Makefile
-	$(CC) $(LDFLAGS_PIP) $(LIBMAIN) $(OBJS) -o $@
+$(LIBRARY): $(OBJS) $(DEPINCS) $(DEPCONFIG) Makefile
+	$(CC) $(LDFLAGS_PIP) $(MAINFLAGS) $(OBJS) -o $@
 	$(RM) $(LIBNAME)
 	ln -s $(LIBRARY) $(LIBNAME)
 
-$(LDPIP): $(SRC_LDPIP) $(DEPINCS) Makefile
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(SRC_LDPIP) -o $@ \
-	$(PTHREAD_FLAG) $(GLIBC_LDFLAGS) -shared -ldl
+$(LDPIP): $(SRC_LDPIP) $(DEPINCS) $(DEPCONFIG) Makefile
+	$(CC) $(CPPFLAGS) $(PIE_CFLAG) $(SRC_LDPIP) -o $@ \
+	$(PTHREAD_FLAG) $(GLIBC_LDFLAGS) -ldl \
+	$(PIE_LDFLAG) $(RDYNAMIC_FLAG) 
 
-$(LIBRARY_PRELOAD): $(OBJS_PRELOAD) $(DEPINCS) Makefile
+$(LIBRARY_PRELOAD): $(OBJS_PRELOAD) $(DEPINCS) $(DEPCONFIG) Makefile
 	$(CC) $(LDFLAGS_PRELOAD) $(OBJS_PRELOAD) -o $@
 
-$(LIBRARY_XPMEM): $(OBJS_XPMEM) $(DEPINCS) Makefile
+$(LIBRARY_XPMEM): $(OBJS_XPMEM) $(DEPINCS) $(DEPCONFIG) Makefile
 	$(CC) $(OBJS_XPMEM) -shared -o $@
 	$(RM) $(LIBNAME_XPMEM)
 	ln -s $(LIBRARY_XPMEM) $(LIBNAME_XPMEM)

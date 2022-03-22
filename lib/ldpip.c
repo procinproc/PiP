@@ -38,10 +38,52 @@
 #include <pip/pip_internal.h>
 #include <pip/pip_common.h>
 
+#define CLONE_SYSCALL	"__clone"
+
 static pip_root_t	*ldpip_root;
 static pip_task_t	*ldpip_task;
-static char		*ldpip_err_mesg  = NULL;
-static char		*ldpip_warn_mesg = NULL;
+static char		*ldpip_err_mesg     = NULL;
+static char		*ldpip_warn_mesg    = NULL;
+static pip_clone_syscall_t ldpip_clone_orig = NULL;
+static int		flag_wrap_clone  = 0;
+
+static int ldpip_iterate_phdr( struct dl_phdr_info *info, 
+			       size_t size, 
+			       void *unused ) {
+  fprintf( stderr, "PHDR: '%s'\t%p\n", info->dlpi_name, (void*)info->dlpi_addr );
+  return 0;
+}
+
+static void ldpip_print_maps( char *title, void *loaded ) {
+#ifdef DEBUG_AHAH
+#define LDPIP_BUFSZ		(4096)
+  int fd = open( "/proc/self/maps", O_RDONLY );
+  char buf[LDPIP_BUFSZ];
+  char *begin = ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>";
+  char *end   = "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<";
+
+  if( fd > 0 ) {
+    fprintf( stderr, "%s\n%s\n", begin, title );
+
+    dl_iterate_phdr( ldpip_iterate_phdr, NULL );
+    {
+      struct link_map *lm = (struct link_map*) loaded;
+      while( lm != NULL ) {
+	fprintf( stderr, "LINK: '%s'\t%p\n", lm->l_name, (void*)lm->l_addr );
+	lm = lm->l_next;
+      }
+    }
+    while( 1 ) {
+      ssize_t rc;
+      if( ( rc = read( fd, buf, LDPIP_BUFSZ-1 ) ) <= 0 ) break;
+      buf[rc] = '\0';
+      fprintf( stderr, "%s", buf );
+    }
+    close( fd );
+    fprintf( stderr, "%s\n", end );
+  }
+#endif
+}
 
 static pip_libc_ftab_t ldpip_libc_ftab;
 
@@ -65,21 +107,101 @@ static void ldpip_set_libc_ftab( pip_task_t *task ) {
   task->libc_ftabp = &ldpip_libc_ftab;
 }
 
-static void ldpip_set_name( pip_root_t *root, pip_task_t *task ) {
-  SET_NAME_BODY(root,task);
-}
-
 static pid_t ldpip_gettid( void ) {
   return (pid_t) syscall( (long int) SYS_gettid );
 }
 
-static size_t ldpip_idstr( char *p, size_t s ) {
+static void ldpip_libc_lock( void ) {
+  pip_recursive_lock_lock( ldpip_gettid(), 
+			   &ldpip_root->libc_lock );
+}
+
+static void ldpip_libc_unlock( void ) {
+  pip_recursive_lock_unlock( ldpip_gettid(),
+			     &ldpip_root->libc_lock );
+}
+
+static void *ldpip_dlopen( const char *filename, int flag ) {
+  void *handle;
+  ldpip_libc_lock();
+  handle = dlopen( filename, flag );
+  ldpip_libc_unlock();
+  return handle;
+}
+
+static void *ldpip_dlsym( void *handle, const char *symbol ) {
+  ldpip_libc_lock();
+  void *addr = dlsym( handle, symbol );
+  ldpip_libc_unlock();
+  return addr;
+}
+
+static void ldpip_set_name( pip_root_t *root, pip_task_t *task ) {
+  SET_NAME_BODY(root,task);
+}
+
+static int
+ldpip_pipid_str( char *p, size_t sz, int pipid, int upper ) {
+  char	c;
+
+  /* !! NEVER CALL CTYPE FUNCTION HERE !! */
+  /* it may NOT be initialized and cause SIGSEGV */
+  switch( pipid ) {
+  case PIP_PIPID_ROOT:
+    c = (upper)? 'R' : 'r'; goto one_char;
+    break;
+  case PIP_PIPID_MYSELF:
+    c = (upper)? 'S' : 's'; goto one_char;
+    break;
+  case PIP_PIPID_ANY:
+    c = (upper)? 'A' : 'a'; goto one_char;
+    break;
+  case PIP_PIPID_NULL:
+    c = (upper)? 'U' : 'u'; goto one_char;
+    break;
+  default:
+    c = (upper)? 'T' : 't';
+    if( ldpip_root != NULL && ldpip_root->ntasks > 0 ) {
+      if( 0 <= pipid && pipid < ldpip_root->ntasks ) {
+	return snprintf( p, sz, "%c%d", c, pipid );
+      } else {
+	return snprintf( p, sz, "%c##", c );
+      }
+    }
+  }
+  c = '?';
+
+ one_char:
+  return snprintf( p, sz, "%c", c );
+}
+
+static int ldpip_task_str( char *p, size_t sz, pip_task_t *task ) {
+  int 	n = 0;
+
+  if( task == NULL ) {
+    n = snprintf( p, sz, "-" );
+  } else if( task->type == PIP_TYPE_NULL ) {
+    n = snprintf( p, sz, "*" );
+  } else if( PIP_IS_ALIVE( task ) ) {
+    n = ldpip_pipid_str( p, sz, task->pipid, 1 );
+  } else {
+    n = snprintf( p, sz, "x" );
+  }
+  return n;
+}
+
+size_t ldpip_idstr( char *p, size_t s ) {
   pid_t		tid  = ldpip_gettid();
-  char 		*opn = "(", *cls = ")";
+  pip_task_t	*ctx = ldpip_task;
+  char 		*opn = "<", *cls = ">", *delim = ":";
   int		n;
 
   n = snprintf( p, s, "%s", opn ); 	s -= n; p += n;
-  n = snprintf( p, s, "%d", tid ); 	s -= n; p += n;
+  {
+    n = snprintf( p, s, "%d", tid ); 	s -= n; p += n;
+    n = snprintf( p, s, "%s", delim ); 	s -= n; p += n;
+    n = ldpip_task_str( p, s, ctx ); 	s -= n; p += n;
+  }
   n = snprintf( p, s, "%s", cls ); 	s -= n; p += n;
   return s;
 }
@@ -129,71 +251,205 @@ static void ldpip_close_on_exec( void ) {
   }
 }
 
-static int ldpip_corebind( uint32_t coreno ) {
-  cpu_set_t cpuset;
-  pid_t tid;
-  int flags  = coreno & PIP_CPUCORE_FLAG_MASK;
-  int i, err = 0;
+static pip_clone_syscall_t	pip_clone_orig;
+static pip_spinlock_t 		pip_lock_clone;
 
-  ENTER;
-  /* PIP_CPUCORE_* flags are exclusive */
+static pip_spinlock_t ldpip_lock_clone_lock( pid_t tid ) {
+  pip_spinlock_t oldval;
 
-  tid = ldpip_gettid();
-  if( flags & PIP_CPUCORE_ASIS ) {
-    /* we do need to bind cores explicitly */
-    /* unless they bind cores mysteriously */
-    if( sched_setaffinity( tid, 
-			   sizeof(cpu_set_t), 
-			   &ldpip_root->cpuset ) != 0 ) {
-      err = errno;
+  while( 1 ) {
+    oldval = pip_spin_trylock_wv( &pip_lock_clone, 
+				  PIP_CLONE_LOCK_OTHERWISE );
+    if( oldval == tid ) {
+      /* called and locked by PiP lib */
+      break;
     }
-    RETURN( err );
-  }
-  coreno &= PIP_CPUCORE_CORENO_MASK;
-  /* the coreno might be absolute or not. this is beacuse */
-  /* the Fujist A64FX CPU has non-contiguoes core numbers */
-  if( flags == 0 ) {		/* not absolute */
-    cpu_set_t	*maxset = &ldpip_root->maxset;
-    int ncores, nth;
-
-    ncores = CPU_COUNT( maxset );
-    coreno %= ncores;
-    nth = coreno;
-    for( i=0; ; i++ ) {
-      if( !CPU_ISSET( i, &cpuset ) ) continue;
-      if( nth-- == 0 ) {
-	CPU_ZERO( &cpuset );
-	CPU_SET( i, &cpuset );
-	if( sched_setaffinity( tid, sizeof(cpu_set_t), &cpuset ) != 0 ) {
-	  err = errno;
-	}
-	break;
-      }
-    }
-  } else {
-    CPU_ZERO( &cpuset );
-    CPU_SET( coreno, &cpuset );
-    /* here, do not call pthread_setaffinity(). This MAY fail */
-    /* because pd->tid is NOT set yet.  I do not know why.    */
-    /* But it is OK to call sched_setaffinity() with tid.     */
-    if( sched_setaffinity( tid, sizeof(cpuset), &cpuset ) != 0 ) {
-      err = errno;
+    if( oldval == PIP_CLONE_LOCK_UNLOCKED ) { /* lock succeeds */
+      /* not called by PiP lib */
+      break;
     }
   }
-  RETURN( err );
+  return oldval;
 }
 
-static void ldpip_colon_sep_path( char *colon_sep_path,
-				  int(*for_each_path)(char*,void**,int,int*),
-				  void **argp,
-				  int flag,
-				  int *errp ) {
-  EXPAND_PATH_LIST_BODY(colon_sep_path,for_each_path,argp,flag,errp);
+int __clone( int(*fn)(void*), void *child_stack, int flags, void *args, ... ) {
+  va_list ap;
+  va_start( ap, args );
+
+  pid_t		*ptid = va_arg( ap, pid_t* );
+  void		*tls  = va_arg( ap, void*  );
+  pid_t 	*ctid = va_arg( ap, pid_t* );
+  pid_t		tid = ldpip_gettid();
+  int 		retval = -1;
+
+  ENTER;
+  if( !flag_wrap_clone ) {
+    /* thread mode */
+    retval = ldpip_clone_orig( fn, child_stack, flags, args, ptid, tls, ctid );
+  } else {
+    if( ldpip_lock_clone_lock( tid ) == tid ) {
+      /* __clone is called from ldpip */
+      flags = pip_clone_flags( flags );
+    } else {
+      /* __clone is called outside of ldpip (and pip) */
+    }
+    retval = ldpip_clone_orig( fn, child_stack, flags, args, ptid, tls, ctid );
+    pip_spin_unlock( &pip_lock_clone );
+  }
+  va_end( ap );
+  RETURN_NE( retval );
+}
+
+typedef struct {
+  char		*name;
+  void		*oldaddr;
+  void		*newaddr;
+} ldpip_got_patch_list_t;
+
+typedef struct {
+  char				*dsoname;
+  char				**exclude;
+  ldpip_got_patch_list_t	*patch_list;
+} ldpip_got_patch_args;
+
+static void ldpip_unprotect_page( void *addr ) {
+  ssize_t pgsz = sysconf( _SC_PAGESIZE );
+  void   *page;
+
+  ASSERT( pgsz > 0 );
+  page = (void*) ( (uintptr_t)addr & ~( pgsz - 1 ) );
+  ASSERT( mprotect( page, (size_t) pgsz, PROT_READ | PROT_WRITE ) == 0 );
+}
+
+static ElfW(Dyn) *ldpip_get_dynseg( struct dl_phdr_info *info ) {
+  int i;
+  for( i=0; i<info->dlpi_phnum; i++ ) {
+    /* search DYNAMIC ELF section */
+    if( info->dlpi_phdr[i].p_type == PT_DYNAMIC ) {
+      return (ElfW(Dyn)*) ( info->dlpi_addr + info->dlpi_phdr[i].p_vaddr );
+    }
+  }
+  return NULL;
+}
+
+static int ldpip_get_dynent_val( ElfW(Dyn) *dyn, int type ) {
+  int i;
+  for( i=0; dyn[i].d_tag!=0||dyn[i].d_un.d_val!=0; i++ ) {
+    if( dyn[i].d_tag == type ) return dyn[i].d_un.d_val;
+  }
+  return 0;
+}
+
+static void *ldpip_get_dynent_ptr( ElfW(Dyn) *dyn, int type ) {
+  int i;
+  for( i=0; dyn[i].d_tag!=0||dyn[i].d_un.d_val!=0; i++ ) {
+    if( dyn[i].d_tag == type ) return (void*) dyn[i].d_un.d_ptr;
+  }
+  return NULL;
+}
+
+static int ldpip_replace_got_itr( struct dl_phdr_info *info,
+				  size_t size,
+				  void *got_args ) {
+  ldpip_got_patch_args *args = (ldpip_got_patch_args*) got_args;
+  char	       *dsoname = args->dsoname;
+  char        **exclude = args->exclude;
+  ldpip_got_patch_list_t *list = args->patch_list;
+  ldpip_got_patch_list_t *patch;
+  char	*fname, *bname, *symname;
+  void	*newaddr;
+  int	i, j;
+
+  fname = (char*) info->dlpi_name;
+  if( fname == NULL ) return 0;
+
+  if( ( bname = strrchr( fname, '/' ) ) != NULL ) {
+    bname ++;		/* skp '/' */
+  } else {
+    bname = fname;
+  }
+
+  if( exclude != NULL && *bname != '\0' ) {
+    for( i=0; exclude[i]!=NULL; i++ ) {
+      if( strncmp( exclude[i], bname, strlen(exclude[i]) ) == 0 ) {
+	return 0;
+      }
+    }
+  }
+  if( dsoname == NULL || *dsoname == '\0' ||
+      strncmp( dsoname, bname, strlen(dsoname) ) == 0 ) {
+    ElfW(Dyn) 	*dynseg = ldpip_get_dynseg( info );
+    ElfW(Rela) 	*rela   = (ElfW(Rela)*) ldpip_get_dynent_ptr( dynseg, DT_JMPREL );
+    ElfW(Rela) 	*irela;
+    ElfW(Sym)	*symtab = (ElfW(Sym)*)  ldpip_get_dynent_ptr( dynseg, DT_SYMTAB );
+    char	*strtab = (char*)       ldpip_get_dynent_ptr( dynseg, DT_STRTAB );
+    int		nrela   = ldpip_get_dynent_val(dynseg,DT_PLTRELSZ)/sizeof(ElfW(Rela));
+
+    for( i=0; ; i++ ) {
+      patch = &list[i];
+      symname  = patch->name;
+      newaddr = patch->newaddr;
+      DBGF( "symname: '%s'  addr: %p", symname, newaddr );
+      if( symname == NULL ) break;
+
+      irela = rela;
+      for( j=0; j<nrela; j++,irela++ ) {
+	int symidx;
+	if( sizeof(void*) == 8 ) {
+	  symidx = ELF64_R_SYM(irela->r_info);
+	} else {
+	  symidx = ELF32_R_SYM(irela->r_info);
+	}
+	char *sym = strtab + symtab[symidx].st_name;
+	if( strcmp( sym, symname ) == 0 ) {
+	  void	*secbase    = (void*) info->dlpi_addr;
+	  void	**got_entry = (void**) ( secbase + irela->r_offset );
+	  
+	  DBGF( "%s:GOT[%d] '%s'  GOT:%p", bname, j, sym, got_entry );
+	  ldpip_unprotect_page( (void*) got_entry );
+	  patch->oldaddr = *got_entry;
+	  *got_entry = newaddr;
+	  break;
+	}
+      }
+    }
+  }
+  return 0;
+}
+
+#ifdef OBSOLETE
+static int ldpip_patch_GOT( char *dsoname, 
+			    char **exclude, 
+			    ldpip_got_patch_list_t *patch_list ) {
+  ldpip_got_patch_args got_args;
+  int rv;
+
+  ENTER;
+  got_args.dsoname    = dsoname;
+  got_args.exclude    = exclude;
+  got_args.patch_list = patch_list;
+
+  ldpip_libc_lock();
+  rv = dl_iterate_phdr( ldpip_replace_got_itr, (void*) &got_args );
+  ldpip_libc_unlock();
+  RETURN_NE( rv );
+}
+#endif
+
+static void 
+ldpip_colon_sep_path( char *colon_sep_path,
+		      int(*for_each_path)(char*,void**,int,char**,int*),
+		      void **argp,
+		      int flag,
+		      char **pathp,
+		      int *errp ) {
+  EXPAND_PATH_LIST_BODY(colon_sep_path,for_each_path,argp,flag,pathp,errp);
 }
 
 static int ldpip_foreach_preload( char *path, 
 				  void **unused_argp, 
 				  int unused_flag, 
+				  char **pathp,
 				  int *errp ) {
   struct stat st;
 
@@ -205,10 +461,10 @@ static int ldpip_foreach_preload( char *path,
 	     !( st.st_mode & S_IRGRP ) &&
 	     !( st.st_mode & S_IROTH ) ) {
     ldpip_warning( "Specified preload object (%s) is not readable", path );
-  } else if( dlopen( path, RTLD_LAZY ) == NULL ) {
+  } else if( ldpip_dlopen( path, RTLD_LAZY ) == NULL ) {
     ldpip_warning( "Specified preload object (%s) is not loadable", path );
   } else {
-    if( dlopen( path, RTLD_LAZY ) == NULL ) {
+    if( ldpip_dlopen( path, RTLD_LAZY ) == NULL ) {
       ldpip_warning( "Unable to load preload object (%s): ", path, dlerror() );
     }
   }
@@ -217,25 +473,42 @@ static int ldpip_foreach_preload( char *path,
 
 static void ldpip_preload( char *env ) {
   if( env != NULL && *env != '\0' ) {
-    ldpip_colon_sep_path( env, ldpip_foreach_preload, NULL, 1, NULL );
+    ldpip_colon_sep_path( env, ldpip_foreach_preload, NULL, 1, NULL, NULL );
   }
 }
 
-static void ldpip_libc_init( pip_spawn_args_t *args ) {
+static void ldpip_libc_init( void ) {
   extern void __ctype_init( void );
+  __ctype_init();
+}
+
+static void ldpip_libc_setup( pip_spawn_args_t *args ) {
   char	**progname;
   char	**progfull;
 
-  if( ( progname = dlsym( RTLD_DEFAULT, "__progname"      ) ) != NULL ) {
+  if( ( progname = ldpip_dlsym( RTLD_DEFAULT, "__progname"      ) ) != NULL ) {
     *progname = args->prog;
   }
-  if( ( progfull = dlsym( RTLD_DEFAULT, "__progname_full" ) ) != NULL ) {
+  if( ( progfull = ldpip_dlsym( RTLD_DEFAULT, "__progname_full" ) ) != NULL ) {
     *progfull = args->prog_full;
   }
-  __ctype_init();
- }
+}
 
-static void ldpip_load_libpip( void **start_task ) {
+static int ldpip_determin_narena( void ) {
+  /* workaround for glibc */
+  long nproc_conf, nproc_online;
+  long narena = ldpip_root->ntasks;
+
+  nproc_conf   = (int) sysconf( _SC_NPROCESSORS_CONF );
+  nproc_online = (int) sysconf( _SC_NPROCESSORS_ONLN );
+  narena = ( 8            > narena ) ? 8            : narena;
+  narena = ( nproc_conf   > narena ) ? nproc_conf   : narena;
+  narena = ( nproc_online > narena ) ? nproc_online : narena; 
+  narena ++;
+  return narena;
+}
+
+static void *ldpip_load_libpip( void ) {
   char 	*path;
   char  *libdir = "/lib/";
   char 	*q;
@@ -243,28 +516,28 @@ static void ldpip_load_libpip( void **start_task ) {
   int 	l;
   
   l = strlen( ldpip_root->prefixdir ) + 
-    strlen( libdir ) + 
-    strlen( PIPLIB_NAME ) + 1;
+      strlen( libdir ) + 
+      strlen( PIPLIB_NAME ) + 1;
   q = path = alloca( l );
   q = stpcpy( q, ldpip_root->prefixdir );
   q = stpcpy( q, libdir );
   q = stpcpy( q, PIPLIB_NAME );
 
-  DBGF( "path: %s", path );
-  *start_task = NULL;
-  if( ( loaded = dlopen( path, DLOPEN_FLAGS ) ) != NULL ) {
-    *start_task = dlsym( loaded, "pip_start_task_" );
-  }
-  ASSERT( *start_task != NULL );
+  ASSERT( ( loaded = ldpip_dlopen( path, DLOPEN_FLAGS ) ) != NULL );
+  ldpip_print_maps( "libpip", loaded );
+  return loaded;
 }
 
 static void *ldpip_load( void *vargs ) {
   pip_spawn_args_t *args = vargs;
   pip_start_task_t start_task;
+  void	*loaded, *loaded_libpip;
+  char  **envv = args->envvec.vec;
   int	coreno = args->coreno;
-  int	err = 0;
+  int	i, err = 0;
 
   ENTER;
+  ldpip_libc_init();
   ldpip_task->thread = pthread_self();
   ldpip_task->pid    = getpid();
   ldpip_task->tid    = ldpip_gettid();
@@ -272,18 +545,38 @@ static void *ldpip_load( void *vargs ) {
   /* resume root after setting above variables */
   pip_sem_post( &ldpip_root->sync_spawn );
 
-  if( !( ldpip_root->opts & PIP_MODE_PTHREAD ) ) ldpip_close_on_exec();
-  if( ldpip_corebind( coreno ) != 0 ) {
-    ldpip_warning( "Unable to bind CPU core:%d (%d)", coreno, err );
+  ldpip_libc_setup( args );
+  {
+    /* here, do not call pthread_setaffinity(). This MAY fail */
+    /* because pd->tid is NOT set yet.  I do not know why.    */
+    /* But it is OK to call sched_setaffinity() with tid.     */
+    if( sched_setaffinity( ldpip_gettid(), 
+			   sizeof(cpu_set_t), 
+			   &ldpip_task->cpuset ) != 0 ) {
+      ldpip_warning( "Unable to bind CPU core:%d (%d)", coreno, err );
+    }
   }
-
-  ldpip_libc_init( args );
+  if( !( ldpip_root->opts & PIP_MODE_PTHREAD ) ) ldpip_close_on_exec();
+  ldpip_print_maps( "LDPIP", ldpip_task->loaded );
   ldpip_set_libc_ftab( ldpip_task );
   ldpip_preload( getenv( PIP_ENV_PRELOAD ) );
-  ldpip_load_libpip( (void**) &start_task );
   /* eventually load the user program */
-  if( dlopen( args->prog_full, DLOPEN_FLAGS ) == NULL ) {
+  DBGF( "%s", args->prog_full );
+  loaded = ldpip_dlopen( args->prog_full, DLOPEN_FLAGS );
+  if( loaded == NULL ) {
     ldpip_error( "Unable to load %s: %s", args->prog_full, dlerror() );
+  }
+  ldpip_print_maps( "dlopen", loaded );
+  ldpip_task->loaded = loaded;
+
+  environ = NULL;
+  for( i=0; envv[i]!=NULL; i++ ) putenv( envv[i] );
+
+  if( ( start_task = (pip_start_task_t) 
+	ldpip_dlsym( loaded, "__pip_start_task" ) ) == NULL ) {
+    loaded_libpip = ldpip_load_libpip();
+    ASSERT( ( start_task = (pip_start_task_t) 
+	      ldpip_dlsym( loaded_libpip, "__pip_start_task" ) ) != NULL );
   }
 
   return start_task( ldpip_root, 
@@ -349,36 +642,50 @@ static size_t ldpip_stack_size( void ) {
   return sz;
 }
 
-int ldpip_load_prog_( pip_root_t *root, 
-		      pip_task_t *task, 
-		      pip_spawn_args_t *args,
-		      pip_spinlock_t *lockp ) {
+int __ldpip_load_prog( pip_root_t *root, 
+		       pip_task_t *task, 
+		       pip_spawn_args_t *args ) {
   extern char **environ;
-  char 	**envv = args->envvec.vec;
+  pip_clone_mostly_pthread_t libc_clone;
+  char **envv = args->envvec.vec;
+  char *env_arena_max  = NULL;
+  char *env_arena_test = NULL;
   size_t stack_size;
   pid_t pid;
-  int i, err = 0;
+  int narena, i, err = 0;
 
   ldpip_root = root;
   ldpip_task = task;
 
   environ = NULL;
   for( i=0; envv[i]!=NULL; i++ ) putenv( envv[i] );
+  narena = ldpip_determin_narena();
+  asprintf( &env_arena_max,  "MALLOC_ARENA_MAX=%d",  narena );
+  asprintf( &env_arena_test, "MALLOC_ARENA_TEST=%d", narena );
+  ASSERTD( env_arena_max != NULL && env_arena_test != NULL );
+  putenv( env_arena_max  );
+  putenv( env_arena_test );
+  DBGF( "MALLOC_ARENA_TEST=%s", getenv( "MALLOC_ARENA_TEST" ) );
+  DBGF( "MALLOC_ARENA_MAX=%s",  getenv( "MALLOC_ARENA_MAX"  ) );
   /* from now on, getenv() can be called */
+
+  ldpip_clone_orig = ldpip_dlsym( RTLD_NEXT, CLONE_SYSCALL );
+  ASSERT( ldpip_clone_orig != NULL );
 
   stack_size = ldpip_stack_size();
 
-  if( ( root->opts & PIP_MODE_PROCESS_PIPCLONE ) ==
-      PIP_MODE_PROCESS_PIPCLONE ) {
+  if( ( root->opts & PIP_MODE_MASK ) == PIP_MODE_PROCESS_PIPCLONE ) {
     int flags = pip_clone_flags( CLONE_PARENT_SETTID |
 				 CLONE_CHILD_CLEARTID );
-    err = root->pip_pthread_create( &task->thread,
-				    flags,
-				    -1,
-				    stack_size,
-				    (void*(*)(void*)) ldpip_load,
-				    args,
-				    &pid );
+    libc_clone = ldpip_dlsym( RTLD_DEFAULT, "pip_clone_mostly_pthread" );
+    ASSERT( libc_clone != NULL );
+    err = libc_clone( &task->thread,
+		       flags,
+		       -1,
+		       stack_size,
+		       (void*(*)(void*)) ldpip_load,
+		       args,
+		       &pid );
     DBGF( "pip_clone_mostly_pthread()=%d", err );
 
   } else {
@@ -390,12 +697,14 @@ int ldpip_load_prog_( pip_root_t *root,
 					  PTHREAD_CREATE_JOINABLE ) == 0 );
     ASSERTD( pthread_attr_setstacksize( &attr, stack_size )         == 0 );
 
-    DBGF( "tid=%d  cloneinfo@%p", tid, root->cloneinfo );
+    DBGF( "tid=%d", tid );
     
-    if( lockp != NULL ) {
+    ldpip_clone_orig = ldpip_dlsym( RTLD_NEXT, CLONE_SYSCALL );
+    if( root->opts & PIP_MODE_PROCESS_PRELOAD ) {
+      flag_wrap_clone = 1;
       /* another lock is needed, because the pip_clone()
 	 might also be called from outside of PiP lib. */
-      pip_spin_lock_wv( lockp, tid );
+      pip_spin_lock_wv( &pip_lock_clone, tid );
       /* unlock is done in the wrapper function */
     }
     err = pthread_create( &task->thread,
@@ -407,4 +716,9 @@ int ldpip_load_prog_( pip_root_t *root,
   /* for synching */
   pip_sem_wait( &ldpip_root->sync_spawn );
   return err;
+}
+
+int main( int argc, char **argv ) {
+  fprintf( stderr, "%s: DO NOT RUN THIS PROGRAM\n", argv[0] );
+  return 1;
 }

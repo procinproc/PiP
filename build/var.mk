@@ -22,7 +22,6 @@ FC       = $(DEFAULT_FC)
 CFLAGS   = $(DEFAULT_CFLAGS)
 CXXFLAGS = $(DEFAULT_CFLAGS)
 FFLAGS   = $(DEFAULT_FFLAGS)
-LDFLAGS  = $(malloc_ldflags) $(DEFAULT_LDFLAGS)
 LIBS     = $(DEFAULT_LIBS)
 
 INCLUDE_BUILDDIR = $(top_builddir)/include
@@ -60,7 +59,7 @@ PIP_LIBDIR    = $(srcdir_top)/lib
 PIP_LIBS      = $(srcdir_top)/lib/libpip.so
 PIP_BINDIR    = $(srcdir_top)/bin
 
-PIP_CPPFLAGS  = -I$(PIP_INCDIR) -I$(GLIBC_INCDIR)
+PIP_CPPFLAGS  = -I$(PIP_INCDIR) -I$(GLIBC_INCDIR) -DPIP_WRAPPER=$(PIP_WRAPPER)
 PIP_LDFLAGS   = $(malloc_ldflags) -L$(PIP_LIBDIR) -Wl,-rpath=$(PIP_LIBDIR) $(GLIBC_LDFLAGS) \
 		-lpip -ldl $(PTHREAD_FLAG)
 PIP_LDFLAGS_TO_INSTALL = \
@@ -82,6 +81,8 @@ PIP_LDFLAGS_BOTH_TO_INSTALL = $(PIP_LDFLAGS_TO_INSTALL) $(RDYNAMIC_FLAG) $(DYLIN
 
 PIPCC = $(PIP_BINDIR)/pipcc
 
+DEPCONFIG = $(top_builddir)/build/config.mk
+
 DEPINCS = $(PIP_INCDIR)/pip/pip_config.h		\
 	  $(PIP_INCDIR)/pip/pip.h			\
 	  $(PIP_INCDIR)/pip/pip_internal.h		\
@@ -100,4 +101,4 @@ DEPINCS = $(PIP_INCDIR)/pip/pip_config.h		\
 
 DEPLIBS = $(PIP_LIBDIR)/libpip.so
 
-DEPS = $(DEPINCS) $(DEPLIBS)
+DEPS = $(DEPINCS) $(DEPLIBS) 
