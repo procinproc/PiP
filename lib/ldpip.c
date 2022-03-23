@@ -648,8 +648,6 @@ int __ldpip_load_prog( pip_root_t *root,
   extern char **environ;
   pip_clone_mostly_pthread_t libc_clone;
   char **envv = args->envvec.vec;
-  char *env_arena_max  = NULL;
-  char *env_arena_test = NULL;
   size_t stack_size;
   pid_t pid;
   int narena, i, err = 0;
@@ -659,14 +657,7 @@ int __ldpip_load_prog( pip_root_t *root,
 
   environ = NULL;
   for( i=0; envv[i]!=NULL; i++ ) putenv( envv[i] );
-  narena = ldpip_determin_narena();
-  asprintf( &env_arena_max,  "MALLOC_ARENA_MAX=%d",  narena );
-  asprintf( &env_arena_test, "MALLOC_ARENA_TEST=%d", narena );
-  ASSERTD( env_arena_max != NULL && env_arena_test != NULL );
-  putenv( env_arena_max  );
-  putenv( env_arena_test );
-  DBGF( "MALLOC_ARENA_TEST=%s", getenv( "MALLOC_ARENA_TEST" ) );
-  DBGF( "MALLOC_ARENA_MAX=%s",  getenv( "MALLOC_ARENA_MAX"  ) );
+  SETUP_MALLOC_ARENA_ENV( root->ntasks );
   /* from now on, getenv() can be called */
 
   ldpip_clone_orig = ldpip_dlsym( RTLD_NEXT, CLONE_SYSCALL );

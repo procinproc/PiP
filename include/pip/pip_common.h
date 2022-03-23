@@ -113,6 +113,39 @@
   }									\
   } while(0)
 
+
+/* workaround to avoid SEGV in glibc by increasing the    */
+/* number of arenas in malloc. Reasons;                   */
+/* 1) the defaul value is 8 and when the number of tasks  */
+/* is beyond this, glibc tries to read and parse /proc    */
+/* file when calling dlopen() and resulting the call to   */
+/* some ctype functions. But __ctype_init() is not yet    */
+/* called in the calls of dlopen() in ldpip.              */
+/* 2) the number of arena should be more than or equal to */
+/* the number of PiP tasks so that each PiP task may have */
+/* its own arena. */
+#define SETUP_MALLOC_ARENA_ENV(ntasks)					\
+    do {								\
+      char *env_arena_max  = NULL;					\
+      char *env_arena_test = NULL;					\
+      long narena = ntasks;						\
+      long nproc_conf   = (int) sysconf( _SC_NPROCESSORS_CONF );	\
+      long nproc_online = (int) sysconf( _SC_NPROCESSORS_ONLN );	\
+      narena = ( 8            > narena ) ? 8            : narena;	\
+      narena = ( nproc_conf   > narena ) ? nproc_conf   : narena;	\
+      narena = ( nproc_online > narena ) ? nproc_online : narena;	\
+      narena ++;							\
+      asprintf( &env_arena_max,  "MALLOC_ARENA_MAX=%d",  (int)narena );	\
+      asprintf( &env_arena_test, "MALLOC_ARENA_TEST=%d", (int)narena );	\
+      ASSERTD( env_arena_max != NULL && env_arena_test != NULL );	\
+      putenv( env_arena_max  );						\
+      putenv( env_arena_test );						\
+      DBGF( "MALLOC_ARENA_TEST=%s", getenv( "MALLOC_ARENA_TEST" ) );	\
+      DBGF( "MALLOC_ARENA_MAX=%s",  getenv( "MALLOC_ARENA_MAX"  ) );	\
+      mallopt( M_ARENA_TEST, narena );					\
+      mallopt( M_ARENA_MAX,  narena );					\
+    } while( 0 )
+
 #define CHECK_PIE( fd, path, msgp )					\
   do {									\
   } while(0)

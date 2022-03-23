@@ -155,14 +155,15 @@ void pip_debug_info( void ) {
   char *env, *prefix;
 
   ENTER;
-  env    = getenv( PIP_ENV_SHOW_MAPS );
+  env = getenv( PIP_ENV_SHOW_MAPS );
   if( env != NULL && strcasecmp( env, "on" ) == 0 ) {
     pip_show_maps();
   }
-  env    = getenv( PIP_ENV_SHOW_PIPS );
-  prefix = pip_root->prefixdir;
-  if( prefix                  != NULL &&
-      env                     != NULL && 
+
+  
+  if( pip_root                              != NULL &&
+      ( prefix = pip_root->prefixdir )      != NULL &&
+      ( env = getenv( PIP_ENV_SHOW_PIPS ) ) != NULL &&
       strcasecmp( env, "on" ) == 0 ) {
     pip_show_pips( prefix );
   }

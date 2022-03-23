@@ -224,6 +224,11 @@ typedef struct pip_libc_dso_syms {
   pip_libc_func_t	funcs[];
 } pip_libc_dso_syms_t;
 
+typedef struct pip_find_syms_arg {
+  pip_libc_dso_syms_t	**dsos;
+  pip_libc_ftab_t 	*ftab;
+} pip_find_syms_arg_t;
+
 static void pip_find_faddr( pip_libc_func_t *funcs, 
 			    off_t base, 
 			    ElfW(Sym) *symtab, 
@@ -275,6 +280,7 @@ static void pip_search_funcs( pip_libc_func_t *funcs,
   }
 }
 
+#ifdef AH
 /* Do not try to find a symbol which may not exsi in the DSO file !! */
 static void pip_find_dso_symbols( pip_libc_dso_syms_t *dsos[], 
 				  pip_libc_ftab_t *libc_ftab ) {
@@ -285,6 +291,7 @@ static void pip_find_dso_symbols( pip_libc_dso_syms_t *dsos[],
   void	*any_func = pip_find_dso_symbols;
   int   i;
 
+  /* we cannot call dlopen() here since it is already wrapped */
   ASSERT( dladdr1( any_func, &info, &loaded, RTLD_DL_LINKMAP ) > 0 );
   lm = (struct link_map*) loaded;
   while( lm != NULL ) {
@@ -299,7 +306,9 @@ static void pip_find_dso_symbols( pip_libc_dso_syms_t *dsos[],
       }
       for( i=0; dsos[i]!=NULL; i++ ) {
 	dso = dsos[i];
-	if( strncmp( dso->dso, bname, strlen(dso->dso) ) == 0 ) {
+	if( strncmp( dso->dso, bname, strlen(dso->dso) ) == 0 &&
+	    ( bname[strlen(dso->dso)] == '.' ||
+	      bname[strlen(dso->dso)] == '-' ) ) {
 	  pip_search_funcs( dso->funcs, 
 			    (off_t) lm->l_addr, 
 			    lm->l_ld, 
@@ -311,9 +320,51 @@ static void pip_find_dso_symbols( pip_libc_dso_syms_t *dsos[],
     lm = lm->l_next;
   }
 }
+#endif
+
+static int 
+pip_find_symbols( struct dl_phdr_info *info, size_t size, void *varg ) {
+  pip_find_syms_arg_t *arg = (pip_find_syms_arg_t*) varg;
+  pip_libc_dso_syms_t *dso;
+  const char *fname = info->dlpi_name;
+  const char *bname;
+  int i;
+
+  DBGF( "DSO: '%s' @ %p", fname, (void*) info->dlpi_addr );
+  if( fname != NULL && *fname != '\0' ) {
+    if( ( bname = strrchr( fname, '/' ) ) != NULL ) {
+      bname ++;		/* skp '/' */
+    } else {
+      bname = fname;
+    }
+    for( i=0; 
+	 ( dso=arg->dsos[i] ), ( dso != NULL && dso->dso != NULL ); 
+	 i++ ) {
+      DBGF( "DSO: %s  %s", bname, dso->dso );
+      if( strncmp( dso->dso, bname, strlen(dso->dso) ) == 0 &&
+	  ( bname[strlen(dso->dso)] == '.' ||
+	    bname[strlen(dso->dso)] == '-' ) ) {
+	DBG;
+	pip_search_funcs( dso->funcs, 
+			  (off_t) info->dlpi_addr, 
+			  pip_get_dynseg( info ), 
+			  arg->ftab );
+	DBG;
+	break;
+      }
+    }
+  }
+  return 0;
+}
+
+static void pip_find_dso_symbols( pip_libc_dso_syms_t **dsos, 
+				  pip_libc_ftab_t *libc_ftab ) {
+  pip_find_syms_arg_t arg = { dsos, libc_ftab };
+  dl_iterate_phdr( pip_find_symbols, (void*) &arg );
+}
 
 static pip_libc_dso_syms_t pip_dso_libc =
-  { "libc.so", 
+  { "libc", 
     {
       LIBC_FUNC( fflush ),
       LIBC_FUNC( exit ),
@@ -328,7 +379,7 @@ static pip_libc_dso_syms_t pip_dso_libc =
   };
 
 static pip_libc_dso_syms_t pip_dso_libpthread =
-  { "libpthread.so", 
+  { "libpthread", 
     {
       LIBC_FUNC( pthread_exit ),
       LIBC_FUNC_NULL
@@ -336,7 +387,7 @@ static pip_libc_dso_syms_t pip_dso_libpthread =
   };
 
 static pip_libc_dso_syms_t pip_dso_libdl =
-  { "libdl.so", 
+  { "libdl", 
     {
       LIBC_FUNC( dlsym ),
       LIBC_FUNC( dlopen ),
@@ -358,7 +409,6 @@ static void pip_setup_libc_ftab( pip_libc_ftab_t *libc_ftab ) {
   };
   int i, c = 0;
 
-  DBG;
   if( libc_ftab->fflush == NULL ) { /* check the first one */
     pip_find_dso_symbols( pip_libc_dsos, libc_ftab );
   }
