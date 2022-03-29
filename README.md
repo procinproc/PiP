@@ -400,7 +400,4 @@ In Proceedings of Supercomputing Asia 2022, Springer LNCS 13214 2022.
 
 # Author
 
-Atsushi Hori \n
-National Institute of Informatics \n
-(formerly Riken Center for Commputational Science) \n
-Japan \n
+Atsushi Hori
