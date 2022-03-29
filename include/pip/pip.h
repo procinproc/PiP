@@ -68,8 +68,8 @@
 #define PIP_ENV_MODE_PTHREAD		"pthread"
 #define PIP_ENV_MODE_PROCESS		"process"
 #define PIP_ENV_MODE_PROCESS_PRELOAD	"process:preload"
-#define PIP_ENV_MODE_PROCESS_GOT	"process:got"
 #define PIP_ENV_MODE_PROCESS_PIPCLONE	"process:pipclone"
+#define PIP_ENV_MODE_PROCESS_GOT	"process:got" /* obsolete from v2.4 */
 
 #define PIP_ENV_STOP_ON_START		"PIP_STOP_ON_START"
 

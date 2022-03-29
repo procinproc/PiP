@@ -76,14 +76,14 @@ for i; do
     case $i in
 	-p|-P|--process)
 	    pip_mode="process";;
-	-w|-W|--process:wrapclone)
-	    pip_mode="process:wrapclone";;
-	-l|-L|--process:libcclone)
+	-l|-L|--process:preload)
+	    pip_mode="process:preload";;
+	-c|-C|--process:pipclone)
 	    if ! ${HAVE_PIPGLIBC}; then
 		echo >&2 "${prog}: No PiP-glibc";
 		exit 1;
 	    fi;
-	    pip_mode="process:libcclone";;
+	    pip_mode="process:pipclone";;
 	-t|-T|--thread|--pthread)
 	    pip_mode="pthread";;
 	-u|--help)
