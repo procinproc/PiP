@@ -1,4 +1,4 @@
-.TH "PiP Initialization/Finalization" 3 "Wed Apr 28 2021" "Process-in-Process" \" -*- nroff -*-
+.TH "PiP Initialization/Finalization" 3 "Tue Mar 29 2022" "Process-in-Process" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
@@ -79,7 +79,7 @@ Users may explicitly specify the PiP execution mode\&. This execution mode can b
 .PP
 \fB\fP
 .RS 4
-To spawn a PiP task in the process mode, the PiP library modifies the \fBclone()\fP flag so that the created PiP task can exhibit the alomost same way with that of normal Linux process\&. There are three ways implmented; using LD_PRELOAD, modifying GLIBC, and modifying GIOT entry of the \fBclone()\fP systemcall\&. One of the option flag values; \fBPIP_MODE_PTHREAD\fP, \fBPIP_MODE_PROCESS\fP, \fBPIP_MODE_PROCESS_PRELOAD\fP, \fBPIP_MODE_PROCESS_PIPCLONE\fP, or \fBPIP_MODE_PROCESS_GOT\fP can be specified as the option flag\&. Or, users may specify the execution mode by the \fBPIP_MODE\fP environment described below\&.
+To spawn a PiP task in the process mode, the PiP library modifies the \fBclone()\fP flag so that the created PiP task can exhibit the alomost same way with that of normal Linux process\&. There are three ways implmented; using LD_PRELOAD, modifying GLIBC, and modifying GIOT entry of the \fBclone()\fP systemcall\&. One of the option flag values; \fBPIP_MODE_PTHREAD\fP, \fBPIP_MODE_PROCESS\fP, \fBPIP_MODE_PROCESS_PRELOAD\fP, or \fBPIP_MODE_PROCESS_LIBCCLONE\fP can be specified as the option flag\&. Or, users may specify the execution mode by the \fBPIP_MODE\fP environment described below\&.
 .RE
 .PP
 \fBReturns:\fP
@@ -106,9 +106,7 @@ Zero is returned if this function succeeds\&. Otherwise an error number is retur
 .PD 0
 
 .IP "\(bu" 2
-\fBPIP_MODE\fP Specifying the PiP execution mmode\&. Its value can be either \fCthread\fP, \fCpthread\fP, \fCprocess\fP, \fCprocess:preload\fP, \fCprocess:pipclone\fP, or \fCprocess:got\fP\&. 
-.IP "\(bu" 2
-\fBLD_PRELOAD\fP This is required to set appropriately to hold the path to the \fCpip_preload\&.so\fP file, if the PiP execution mode is \fCPIP_MODE_PROCESS_PRELOAD\fP (the \fCopts\fP in \fCpip_init\fP) and/or the PIP_MODE ennvironment is set to \fCprocess:preload\fP\&. See also the \fCpip-mode\fP command to set the environment variable appropriately and easily\&. 
+\fBPIP_MODE\fP Specifying the PiP execution mmode\&. Its value can be either \fCthread\fP, \fCpthread\fP, \fCprocess\fP, \fCprocess:preload\fP, \fCprocess:got\fP, or \fCprocess:pipclone\fP\&. 
 .IP "\(bu" 2
 \fBPIP_STACKSZ\fP Sepcifying the stack size (in bytes)\&. The \fBKMP_STACKSIZE\fP and \fBOMP_STACKSIZE\fP are also effective\&. The 't', 'g', 'm', 'k' and 'b' posfix character can be used\&. 
 .IP "\(bu" 2

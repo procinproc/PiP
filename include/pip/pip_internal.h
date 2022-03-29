@@ -430,7 +430,6 @@ extern void pip_pthread_exit( void* ) PIP_PRIVATE;
 
 extern int pip_debug_env( void ) PIP_PRIVATE;
 
-/* defined in libpip_init.so */
 extern pid_t pip_gettid( void );
 extern int  pip_is_threaded_( void );
 extern void pip_page_alloc( size_t, void** );

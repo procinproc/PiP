@@ -37,6 +37,7 @@ var searchData=
   ['pip_5fisa_5froot',['pip_isa_root',['../group__PiP-4-query.html#ga6f1045bdbf682cb2ac504f09b57b73e9',1,'pip.h']]],
   ['pip_5fisa_5ftask',['pip_isa_task',['../group__PiP-4-query.html#gaf0283e47ad2d415206d6a3fa61e8a0a9',1,'pip.h']]],
   ['pip_5fkill',['pip_kill',['../group__PiP-5-exit.html#ga4a396f38920d94b71dcfd3c898fbb82b',1,'pip.h']]],
+  ['pip_5fkill_5fall_5fchild_5ftasks',['pip_kill_all_child_tasks',['../group__PiP-5-exit.html#ga68c0222ca0af650990ad0ed7db8a8a55',1,'pip.h']]],
   ['pip_5fkill_5fall_5ftasks',['pip_kill_all_tasks',['../group__PiP-5-exit.html#gab7ba5cc62101240c68acf07905e36772',1,'pip.h']]],
   ['pip_5fnamed_5fexport',['pip_named_export',['../group__PiP-2-export.html#ga3613eaa34ad5a4985007ff9177eb6542',1,'pip.h']]],
   ['pip_5fnamed_5fimport',['pip_named_import',['../group__PiP-2-export.html#ga68bcfa436ddc6acaf25f67fc30430fc1',1,'pip.h']]],

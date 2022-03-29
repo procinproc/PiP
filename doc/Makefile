@@ -77,7 +77,7 @@ documents:
 		echo ""; \
 		) | doxygen - >> doxygen-man713.log 2>&1; \
 	done
-	-@grep -e "warning" -e "error" doxygen-man713.log && ( echo "Doxygen failed"; exit 1; )
+	-@(grep -e "warning" -e "error" doxygen-man713.log && ( echo "Doxygen failed"; exit 1; ) ) || echo -n
 	@echo ==== mandb =====; \
 	if which mandb; then mandb ./man -c -u; fi
 	@echo ==== README.md =====;
@@ -97,7 +97,7 @@ documents:
 		printf "INPUT = README-man.md"; \
 		echo ""; \
 	) | doxygen - >> doxygen-readme.log 2>&1
-	-@grep -e "warning" -e "error" doxygen-readme.log && ( echo "Doxygen failed"; exit 1; )
+	-@(grep -e "warning" -e "error" doxygen-readme.log && ( echo "Doxygen failed"; exit 1; ) ) || echo -n
 	$(MAKE) -C latex-inuse
 	$(CP) README.md $(top_srcdir)
 	@echo ==== html =====;
@@ -118,7 +118,9 @@ documents:
 		done <$$file; \
 	done | tr '\012' ' '; \
 	) | doxygen - >> doxygen-html.log 2>&1;
-	-@grep -e "warning" -e "error" doxygen-html.log && ( echo "Doxygen failed"; exit 1; )
+	-@(grep -e "warning" -e "error" doxygen-html.log && ( echo "Doxygen failed"; exit 1; ) ) || echo -n
+	-echo "Done"
+
 .PHONY: doxygen
 
 install:

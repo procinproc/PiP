@@ -77,13 +77,9 @@ above mentioned ULP can only work with the process mode.
 When the **PIP\_MODE** environment variable set to "thread"
 then
 the PiP library runs in the pthread mode, and if it is set to
-"process" then it runs in the process mode. There are also three
-implementations in the process mode; "process:preload,"
-"process:pipclone" and "process:got." The "process:preload" mode
-must be with the **LD\_PRELOAD** environment variable setting so that
-the clone() system call wrapper can work with. The
-"process:pipclone" mode is only effective with the PIP-patched
-glibc library (see below).
+"process" then it runs in the process mode. There are also two
+implementations in the process mode; "process:wrapclone,"
+"process:libcclone." 
 
 Several function are made available by the PiP library to absorb the
 functional differences due to the execution modes.
@@ -338,7 +334,15 @@ Kaiming Ouyang, Min Si, Atsushi Hori, Zizhong Chen, and Pavan
 Balaji. 2020. "CAB-MPI: exploring interprocess work-stealing towards
 balanced MPI communication," In Proceedings of the International
 Conference for High Performance Computing, Networking, Storage and
-Analysis (SC '20). IEEE Press, Article 36, 1–15.
+Analysis (SC '20). IEEE Press, Article 36.
+
+Kaiming Ouyang, Min Si, Atsushi Hori, Zizhong Chen, Pavan Balaji. 2021.
+"Daps: A dynamic asynchronous progress stealing model for mpi communication,"
+In Proceedings of 2021 IEEE International Conference on Cluster Computing (CLUSTER).
+
+Atsushi Hori, Kaiming Ouyang, Balazs Georfi, Yutaka Ishikawa. 2021. "On the 
+Difference between Shared Memory and Shared Address Space in HPC Communication,"
+In Proceedings of Supercomputing Asia 2022, Springer LNCS 13214 2022.
 
 # Commands
 - pipcc
@@ -374,6 +378,7 @@ Analysis (SC '20). IEEE Press, Article 36, 1–15.
 - pip\_is\_shared\_fd
 - pip\_is\_threaded
 - pip\_kill
+- pip\_kill\_all\_child\_tasks
 - pip\_kill\_all\_tasks
 - pip\_named\_export
 - pip\_named\_import

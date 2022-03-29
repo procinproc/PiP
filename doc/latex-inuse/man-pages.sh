@@ -26,7 +26,7 @@ for man1 in $man1_tex; do
     fi
 done
 
-man3_tex=`ls ../latex/group__PiP*.tex`
+man3_tex=`ls ../latex/group__PiP*.tex 2>/dev/null`
 for man3 in $man3_tex; do
     bn=`basename -s.tex $man3`;
     echo "\input{../latex/$bn}" >> $man3_input;

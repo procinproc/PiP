@@ -89,6 +89,9 @@ Functions</h2></td></tr>
 <tr class="memitem:gab7ba5cc62101240c68acf07905e36772"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__PiP-5-exit.html#gab7ba5cc62101240c68acf07905e36772">pip_kill_all_tasks</a> (void)</td></tr>
 <tr class="memdesc:gab7ba5cc62101240c68acf07905e36772"><td class="mdescLeft">&#160;</td><td class="mdescRight">kill all PiP tasks  <a href="#gab7ba5cc62101240c68acf07905e36772">More...</a><br/></td></tr>
 <tr class="separator:gab7ba5cc62101240c68acf07905e36772"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga68c0222ca0af650990ad0ed7db8a8a55"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__PiP-5-exit.html#ga68c0222ca0af650990ad0ed7db8a8a55">pip_kill_all_child_tasks</a> (void)</td></tr>
+<tr class="memdesc:ga68c0222ca0af650990ad0ed7db8a8a55"><td class="mdescLeft">&#160;</td><td class="mdescRight">kill all PiP tasks  <a href="#ga68c0222ca0af650990ad0ed7db8a8a55">More...</a><br/></td></tr>
+<tr class="separator:ga68c0222ca0af650990ad0ed7db8a8a55"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ga49a4a9ee014ffdaf0c26df18adf965ad"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__PiP-5-exit.html#ga49a4a9ee014ffdaf0c26df18adf965ad">pip_abort</a> (void)</td></tr>
 <tr class="memdesc:ga49a4a9ee014ffdaf0c26df18adf965ad"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kill all PiP tasks and then kill PiP root.  <a href="#ga49a4a9ee014ffdaf0c26df18adf965ad">More...</a><br/></td></tr>
 <tr class="separator:ga49a4a9ee014ffdaf0c26df18adf965ad"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -155,6 +158,34 @@ pthread_exit(Linux 3) </dd></dl>
 <dl class="section user"><dt>Name</dt><dd>pip_kill_all_tasks<a name="gab7ba5cc62101240c68acf07905e36772_pip_kill_all_tasks"></a></dd></dl>
 <dl class="section user"><dt>Synopsis</dt><dd>#include &lt;<a class="el" href="pip_8h_source.html">pip/pip.h</a>&gt; <br/>
 int <a class="el" href="group__PiP-5-exit.html#gab7ba5cc62101240c68acf07905e36772" title="kill all PiP tasks ">pip_kill_all_tasks( void )</a>;</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>This function must be called from PiP root. This function is deprecated and use <b><a class="el" href="group__PiP-5-exit.html#ga68c0222ca0af650990ad0ed7db8a8a55" title="kill all PiP tasks ">pip_kill_all_child_tasks()</a></b>.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Return 0 on success. Return an error code on error. </dd></dl>
+<dl class="retval"><dt>Return values</dt><dd>
+  <table class="retval">
+    <tr><td class="paramname">EPERM</td><td>The PiP library is not initialized yet </td></tr>
+    <tr><td class="paramname">EPERM</td><td>Not called from root </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a class="anchor" id="ga68c0222ca0af650990ad0ed7db8a8a55"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int pip_kill_all_child_tasks </td>
+          <td>(</td>
+          <td class="paramtype">void&#160;</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<dl class="section user"><dt>Name</dt><dd>pip_kill_all_child_tasks<a name="ga68c0222ca0af650990ad0ed7db8a8a55_pip_kill_all_child_tasks"></a></dd></dl>
+<dl class="section user"><dt>Synopsis</dt><dd>#include &lt;<a class="el" href="pip_8h_source.html">pip/pip.h</a>&gt; <br/>
+int <a class="el" href="group__PiP-5-exit.html#ga68c0222ca0af650990ad0ed7db8a8a55" title="kill all PiP tasks ">pip_kill_all_child_tasks( void )</a>;</dd></dl>
 <dl class="section note"><dt>Note</dt><dd>This function must be called from PiP root.</dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Return 0 on success. Return an error code on error. </dd></dl>
 <dl class="retval"><dt>Return values</dt><dd>

@@ -1,4 +1,4 @@
-.TH "libpip" 7 "Wed Apr 28 2021" "Process-in-Process" \" -*- nroff -*-
+.TH "libpip" 7 "Tue Mar 29 2022" "Process-in-Process" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
@@ -44,7 +44,7 @@ Process and
 .PP
 In the pthread mode, although each PiP task has its own static variables unlike thread, PiP task behaves more like PThread, having a TID, having the same file descriptor space, having the same signal delivery semantics as Pthread does, and so on\&. In the process mode, a PiP task behaves more like a process, having a PID, having an independent file descriptor space, having the same signal delivery semantics as Linux process does, and so on\&. The above mentioned ULP can only work with the process mode\&.
 .PP
-When the \fBPIP_MODE\fP environment variable set to 'thread' then the PiP library runs in the pthread mode, and if it is set to 'process' then it runs in the process mode\&. There are also three implementations in the process mode; 'process:preload,' 'process:pipclone' and 'process:got\&.' The 'process:preload' mode must be with the \fBLD_PRELOAD\fP environment variable setting so that the clone() system call wrapper can work with\&. The 'process:pipclone' mode is only effective with the PIP-patched glibc library (see below)\&.
+When the \fBPIP_MODE\fP environment variable set to 'thread' then the PiP library runs in the pthread mode, and if it is set to 'process' then it runs in the process mode\&. There are also two implementations in the process mode; 'process:wrapclone,' 'process:libcclone\&.'
 .PP
 Several function are made available by the PiP library to absorb the functional differences due to the execution modes\&.
 .PP
@@ -308,7 +308,12 @@ Atsushi Hori, Balazs Gerofi, and Yuataka Ishikawa\&. 'An Implementation
 of User-Level Processes using Address Space Sharing,' 2020 IEEE International Parallel and Distributed Processing Symposium Workshops (IPDPSW), New Orleans, LA, USA, 2020, pp\&. 976-984, DOI: https://doi.org/10.1109/IPDPSW50202.2020.00161\&.
 .PP
 Kaiming Ouyang, Min Si, Atsushi Hori, Zizhong Chen, and Pavan Balaji\&. 2020\&. 'CAB-MPI: exploring interprocess work-stealing towards
-balanced MPI communication,' In Proceedings of the International Conference for High Performance Computing, Networking, Storage and Analysis (SC '20)\&. IEEE Press, Article 36, 1–15\&.
+balanced MPI communication,' In Proceedings of the International Conference for High Performance Computing, Networking, Storage and Analysis (SC '20)\&. IEEE Press, Article 36\&.
+.PP
+Kaiming Ouyang, Min Si, Atsushi Hori, Zizhong Chen, Pavan Balaji\&. 2021\&. 'Daps: A dynamic asynchronous progress stealing model for mpi communication,' In Proceedings of 2021 IEEE International Conference on Cluster Computing (CLUSTER)\&.
+.PP
+Atsushi Hori, Kaiming Ouyang, Balazs Georfi, Yutaka Ishikawa\&. 2021\&. 'On the 
+Difference between Shared Memory and Shared Address Space in HPC Communication,' In Proceedings of Supercomputing Asia 2022, Springer LNCS 13214 2022\&.
 .PP
 .SH "Commands"
 .PP
@@ -380,6 +385,8 @@ pip_is_shared_fd
 pip_is_threaded 
 .PP
 pip_kill 
+.PP
+pip_kill_all_child_tasks 
 .PP
 pip_kill_all_tasks 
 .PP

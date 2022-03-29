@@ -1,4 +1,4 @@
-.TH "PiP task termination" 3 "Wed Apr 28 2021" "Process-in-Process" \" -*- nroff -*-
+.TH "PiP task termination" 3 "Tue Mar 29 2022" "Process-in-Process" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
@@ -12,6 +12,10 @@ PiP task termination \-
 .RI "\fIterminate the calling PiP task \fP"
 .ti -1c
 .RI "int \fBpip_kill_all_tasks\fP (void)"
+.br
+.RI "\fIkill all PiP tasks \fP"
+.ti -1c
+.RI "int \fBpip_kill_all_child_tasks\fP (void)"
 .br
 .RI "\fIkill all PiP tasks \fP"
 .ti -1c
@@ -95,6 +99,39 @@ pip_kill_all_tasks
 #include <\fBpip/pip\&.h\fP> 
 .br
 int \fBpip_kill_all_tasks( void )\fP;
+.RE
+.PP
+\fBNote:\fP
+.RS 4
+This function must be called from PiP root\&. This function is deprecated and use \fB\fBpip_kill_all_child_tasks()\fP\fP\&.
+.RE
+.PP
+\fBReturns:\fP
+.RS 4
+Return 0 on success\&. Return an error code on error\&. 
+.RE
+.PP
+\fBReturn values:\fP
+.RS 4
+\fIEPERM\fP The PiP library is not initialized yet 
+.br
+\fIEPERM\fP Not called from root 
+.RE
+.PP
+
+.SS "int pip_kill_all_child_tasks (void)"
+
+.PP
+\fBName\fP
+.RS 4
+pip_kill_all_child_tasks
+.RE
+.PP
+\fBSynopsis\fP
+.RS 4
+#include <\fBpip/pip\&.h\fP> 
+.br
+int \fBpip_kill_all_child_tasks( void )\fP;
 .RE
 .PP
 \fBNote:\fP

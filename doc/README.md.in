@@ -334,4 +334,12 @@ Kaiming Ouyang, Min Si, Atsushi Hori, Zizhong Chen, and Pavan
 Balaji. 2020. "CAB-MPI: exploring interprocess work-stealing towards
 balanced MPI communication," In Proceedings of the International
 Conference for High Performance Computing, Networking, Storage and
-Analysis (SC '20). IEEE Press, Article 36, 1–15.
+Analysis (SC '20). IEEE Press, Article 36.
+
+Kaiming Ouyang, Min Si, Atsushi Hori, Zizhong Chen, Pavan Balaji. 2021.
+"Daps: A dynamic asynchronous progress stealing model for mpi communication,"
+In Proceedings of 2021 IEEE International Conference on Cluster Computing (CLUSTER).
+
+Atsushi Hori, Kaiming Ouyang, Balazs Georfi, Yutaka Ishikawa. 2021. "On the 
+Difference between Shared Memory and Shared Address Space in HPC Communication,"
+In Proceedings of Supercomputing Asia 2022, Springer LNCS 13214 2022.
