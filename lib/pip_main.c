@@ -152,11 +152,13 @@ static int parse_cmdline( char ***argvp ) {
 }
 
 int pip_main( void ) {
+  extern void __ctype_init( void );
   extern char *pip_prefix_dir(void);
   char **argv;
   char *argv0;
   int   argc, extval = 0;
 
+  __ctype_init();
   if( ( argc = parse_cmdline( &argv ) ) < 0 ) {
     fprintf( stderr, "Error: Unable to get parameters\n" );
     print_item( ALL );

@@ -60,7 +60,7 @@ int main( int argc, char **argv ) {
   void *export = (void*) &data;
   int  i, ntasks, pipid;
 
-  ntasks = 8;
+  ntasks = 4;
   pip_init( &pipid, &ntasks, (void*) &export, 0 );
   if( pipid == PIP_PIPID_ROOT ) {
     /* initialize */
