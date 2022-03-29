@@ -3,7 +3,7 @@
 #
 AC_PREREQ([2.69])
 AC_INIT([Process-in-Processs],
-	[2.4.00],
+	[2.4.0],
 	[procinproc-info@googlegroups.com],
 	[PiP],
 	[https://github.com/procinproc/PiP/])
