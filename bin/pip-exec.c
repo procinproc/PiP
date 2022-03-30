@@ -423,7 +423,7 @@ int main( int argc, char **argv ) {
       err = pip_task_spawn( &prog, d, 0, &pipid, NULL );
       if( err ) {
 	(void) pip_kill_all_child_tasks();
-	pip_exit( 9 );
+	pip_exit( err );
       }
     }
     nt_start += spawn->ntasks;

@@ -233,12 +233,18 @@ void pip_do_exit( pip_task_t *task, int flag, uintptr_t extval ) {
     }
   }
  force_exit:
-  DBGF( "FORCE EXIT:%lu", extval );
-
   if( task != NULL ) {
     pip_set_exit_status( task, extval, 0 );
     extval = task->status;
+    if( extval != 0 ) {
+      if( WIFEXITED( extval ) ) {
+	extval = WEXITSTATUS( extval );
+      } else {
+	extval = WTERMSIG( extval );
+      }
+    }
   }
+  DBGF( "FORCE EXIT:%lu", extval );
   if( flag_pip && is_threaded && !PIP_ISA_ROOT( task ) ) {	
     /* child task in thread mode */
     libc_pthread_exit_t pthrd_exit = 
