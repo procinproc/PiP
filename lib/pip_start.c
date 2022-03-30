@@ -36,8 +36,6 @@
 #include <pip/pip_internal.h>
 #include <pip/pip_gdbif.h>
 
-extern pip_sem_t	*pip_universal_lockp;
-
 int pip_is_initialized( void ) {
   return pip_initialized;
 }
@@ -288,7 +286,6 @@ static int pip_init_task( pip_root_t *root, pip_task_t *task, char **envv ) {
 
   ENTER;
   if( ( err = pip_check_root_and_task( root, task ) ) == 0 ) {
-    pip_universal_lockp = &root->universal_lock;
     
     pip_set_signal_handlers();
     ASSERTD( pthread_atfork( NULL, NULL, pip_after_fork ) == 0 );

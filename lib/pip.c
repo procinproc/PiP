@@ -41,7 +41,6 @@
 int 			pip_dont_wrap_malloc PIP_PRIVATE = 1;
 int 			pip_initialized      PIP_PRIVATE = 0;
 int 			pip_finalized        PIP_PRIVATE = 1;
-pip_sem_t		*pip_universal_lockp PIP_PRIVATE;
 pip_root_t		*pip_root            PIP_PRIVATE;
 pip_task_t		*pip_task            PIP_PRIVATE;
 struct pip_gdbif_root	*pip_gdbif_root      PIP_PRIVATE;
@@ -332,8 +331,10 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     pip_sem_init( &root->lock_clone );
     pip_sem_post( &root->lock_clone );
     pip_sem_init( &root->sync_spawn );
-    pip_sem_init( &root->universal_lock );
-    pip_sem_post( &root->universal_lock );
+    pip_sem_init( &root->lock_sighand );
+    pip_sem_post( &root->lock_sighand );
+    pip_sem_init( &root->lock_universal );
+    pip_sem_post( &root->lock_universal );
 
     pip_max_cpuset( root );
     root->prefixdir    = pip_prefix_dir();
@@ -1225,12 +1226,12 @@ void pip_libc_unlock( void ) {
 
 void pip_universal_lock( void ) {
   if( pip_root != NULL ) {
-    pip_sem_wait( &pip_root->universal_lock );
+    pip_sem_wait( &pip_root->lock_universal );
   }
 }
 
 void pip_universal_unlock( void ) {
   if( pip_root != NULL ) {
-    pip_sem_post( &pip_root->universal_lock );
+    pip_sem_post( &pip_root->lock_universal );
   }
 }

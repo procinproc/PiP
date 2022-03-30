@@ -106,7 +106,9 @@ size_t malloc_usable_size( void *ptr ) {
 static int pip_get_pipid_curr( void ) {
   int pipid;
 
-  ASSERTD( pip_root != NULL && pip_task != NULL );
+  if( pip_root == NULL || pip_task == NULL ) {
+    return PIP_PIPID_NULL;
+  }
   pipid = pip_task->pipid;
   if( ( pipid < 0 || pipid > pip_root->ntasks ) &&
       pipid != PIP_PIPID_ROOT ) {
@@ -166,7 +168,7 @@ void pip_free( void *addr ) {
       __libc_free( addr );
     } else {
       self = pip_get_pipid_curr();
-      if( pipid == self ) {
+      if( self == PIP_PIPID_NULL || self == pipid ) {
 	__libc_free( addr );
       } else {
 	task = ( pipid == PIP_PIPID_ROOT ) ? 

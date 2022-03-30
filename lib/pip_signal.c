@@ -377,28 +377,35 @@ static void pip_sigchld_handler( int sig ) {
 static void pip_exception_handler( int sig ) {
   pip_task_t *task = NULL;
 
-  ENTERF( "Signal=%d", sig );
-  //fflush( stderr );
-  //fflush( stdout );
-  pip_err_mesg( "Exception signal: %s (%d) !!", 
-		strsignal(sig), sig );
   if( pip_is_threaded_() && pip_root != NULL ) {
-    /* we cannot rely on the pip_task variable 
-       since this handler code is shared among PiP tasks */
-    task = pip_current_task();
-  } else {
-    task = pip_task;
+    pip_sem_wait( &pip_root->lock_sighand );
   }
-  if( task != NULL                &&
-      task->debug_signals != NULL &&
-      sigismember( task->debug_signals, sig ) ) {
-    if( pip_root != NULL ) {
-      pip_spin_lock( &pip_root->lock_bt );
+  {
+    ENTERF( "Signal=%d", sig );
+    fflush( NULL );
+    pip_err_mesg( "Exception signal: %s (%d) !!", 
+		  strsignal(sig), sig );
+    if( pip_is_threaded_() && pip_root != NULL ) {
+      /* we cannot rely on the pip_task variable 
+	 since this handler code is shared among PiP tasks */
+      task = pip_current_task();
+    } else {
+      task = pip_task;
     }
-    pip_debug_info();
-    if( pip_root != NULL ) {
-      pip_spin_unlock( &pip_root->lock_bt );
+    if( task != NULL                &&
+	task->debug_signals != NULL &&
+	sigismember( task->debug_signals, sig ) ) {
+      if( pip_root != NULL ) {
+	pip_spin_lock( &pip_root->lock_bt );
+      }
+      pip_debug_info();
+      if( pip_root != NULL ) {
+	pip_spin_unlock( &pip_root->lock_bt );
+      }
     }
+  }
+  if( pip_is_threaded_() && pip_root != NULL ) {
+    pip_sem_post( &pip_root->lock_sighand );
   }
   pip_set_exit_status( task, 0, sig );
   pip_do_exit( task, PIP_EXIT_EXIT, 0 );

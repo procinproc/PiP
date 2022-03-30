@@ -358,7 +358,8 @@ typedef struct pip_root {
 
   int			flag_quiet;
 
-  pip_sem_t		universal_lock;
+  pip_sem_t		lock_sighand;
+  pip_sem_t		lock_universal;
   pip_recursive_lock_t	libc_lock; /* 5 64-bit words */
 
   cpu_set_t		maxset;
