@@ -96,7 +96,9 @@ $(LIBRARY): $(OBJS) $(DEPINCS) $(DEPCONFIG) Makefile
 $(LDPIP): $(SRC_LDPIP) $(DEPINCS) $(DEPCONFIG) Makefile
 	$(CC) $(CPPFLAGS) $(PIE_CFLAG) $(SRC_LDPIP) -o $@ \
 	$(PTHREAD_FLAG) $(GLIBC_LDFLAGS) -ldl \
-	$(PIE_LDFLAG) $(RDYNAMIC_FLAG) 
+	$(PIE_LDFLAG) $(RDYNAMIC_FLAG)
+	make -C ../bin pip-unpie
+	../bin/pip-unpie $(LDPIP)
 
 $(LIBRARY_PRELOAD): $(OBJS_PRELOAD) $(DEPINCS) $(DEPCONFIG) Makefile
 	$(CC) $(LDFLAGS_PRELOAD) $(OBJS_PRELOAD) -o $@

@@ -417,25 +417,6 @@ static int ldpip_replace_got_itr( struct dl_phdr_info *info,
   return 0;
 }
 
-#ifdef OBSOLETE
-static int ldpip_patch_GOT( char *dsoname, 
-			    char **exclude, 
-			    ldpip_got_patch_list_t *patch_list ) {
-  ldpip_got_patch_args got_args;
-  int rv;
-
-  ENTER;
-  got_args.dsoname    = dsoname;
-  got_args.exclude    = exclude;
-  got_args.patch_list = patch_list;
-
-  ldpip_libc_lock();
-  rv = dl_iterate_phdr( ldpip_replace_got_itr, (void*) &got_args );
-  ldpip_libc_unlock();
-  RETURN_NE( rv );
-}
-#endif
-
 static void 
 ldpip_colon_sep_path( char *colon_sep_path,
 		      int(*for_each_path)(char*,void**,int,char**,int*),

@@ -331,6 +331,7 @@ void *__pip_start_task( pip_root_t *root,
   pip_task = task;
 
   pip_set_libc_ftab( task->libc_ftabp );
+  pip_dont_wrap_malloc = 0;
     
   if( root->opts & PIP_MODE_PTHREAD ) {
     pip_initialized = PIP_MODE_PTHREAD;

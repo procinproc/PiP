@@ -153,7 +153,7 @@ static int parse_cmdline( char ***argvp ) {
 
 int pip_main( void ) {
   extern void __ctype_init( void );
-  extern char *pip_prefix_dir(void);
+  extern char *pip_prefix_dir( void );
   char **argv;
   char *argv0;
   int   argc, extval = 0;

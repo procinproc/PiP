@@ -47,7 +47,7 @@
 #define SET_NAME_BODY(R,T)					\
   do {								\
   char *progname = NULL;					\
-  char nam[16];							\
+  char nam[18];							\
   char sym[] = "0*";						\
   char fname[sizeof(SET_NAME_FMT)+8];				\
   int  fd;							\
@@ -74,15 +74,16 @@
   if( progname == NULL ) {					\
     char prg[16];						\
     prctl( PR_GET_NAME, prg, 0, 0, 0 );				\
-    snprintf( nam, 16, "%s%s", sym, prg );			\
+    snprintf( nam, sizeof(nam), "%s%s", sym, prg );		\
   } else {							\
     char *p;							\
     if( ( p = strrchr( progname, '/' ) ) != NULL) {		\
       progname = p + 1;						\
     }								\
-    snprintf( nam, 16, "%s%s", sym, progname );			\
+    snprintf( nam, sizeof(nam), "%s%s", sym, progname );	\
   }								\
-  if( sym[1] != '|' ) {					\
+  nam[15] = '\0';						\
+  if( sym[1] != '|' ) {						\
     (void) prctl( PR_SET_NAME, nam, 0, 0, 0 );			\
   } else {							\
     (void) pthread_setname_np( pthread_self(), nam );		\

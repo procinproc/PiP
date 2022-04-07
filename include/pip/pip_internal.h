@@ -310,6 +310,11 @@ INLINE void
 pip_recursive_lock_unlock( pid_t tid, pip_recursive_lock_t *lock ) {
   int		nrec;
   pip_atomic_t 	count;
+  #ifdef DEBUG
+  if( tid != lock->owner ) {
+    DBGF( "tid:%d  lock_owner:%d", tid, lock->owner );
+  }
+  #endif
   ASSERTD( tid == lock->owner );
   nrec = --lock->nrecursive;
   if( nrec == 0 ) lock->owner = 0;
@@ -390,7 +395,6 @@ typedef void*(*pip_start_task_t)( pip_root_t*,
 
 extern void pip_set_libc_ftab( pip_libc_ftab_t* ) PIP_PRIVATE;
 extern pip_libc_ftab_t *pip_libc_ftab( pip_task_t* ) PIP_PRIVATE;
-extern void pip_libc_free( void* ) PIP_PRIVATE;
 extern void pip_finalize_root( pip_root_t* ) PIP_PRIVATE;
 extern void pip_after_fork( void ) PIP_PRIVATE;
 extern int  pip_is_effective( void ) PIP_PRIVATE;

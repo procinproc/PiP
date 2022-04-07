@@ -467,7 +467,7 @@ void pip_abort_handler( int unused ) {
   ENTERF( "sig:%d", unused );
   if( pip_task != NULL && pip_root != NULL ) {
     if( PIP_ISA_ROOT( pip_task ) ) {
-      (void) pip_kill_all_children_( SIGABRT );
+      (void) pip_kill_all_children_( SIGKILL );
       pip_unset_abort_handler();
       abort();
     } else {

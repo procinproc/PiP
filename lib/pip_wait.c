@@ -119,6 +119,7 @@ static int pip_wait_thread( pip_task_t *task, int flag_blk ) {
   RETURN( err );
 }
 
+#ifdef AH
 static int pip_wait_proc( pip_task_t *task, int flag_blk ) {
   pid_t tid;
   int   status  = 0;
@@ -126,14 +127,15 @@ static int pip_wait_proc( pip_task_t *task, int flag_blk ) {
   int   err     = 0;
 
   ENTER;
-#ifdef __WALL
-  /* __WALL: Wait for all children, regardless of type */
-  /* ("clone" or "non-clone") [from the man page]      */
-  options |= __WALL;
-#endif
 #ifdef __WCLONE
   /* __WALL: Wait for any processes/threads */
   options |= __WCLONE;
+#else
+  #ifdef __WALL
+  /* __WALL: Wait for all children, regardless of type */
+  /* ("clone" or "non-clone") [from the man page]      */
+  options |= __WALL;
+  #endif
 #endif
   if( !flag_blk ) options |= WNOHANG;
 
@@ -155,6 +157,33 @@ static int pip_wait_proc( pip_task_t *task, int flag_blk ) {
   }
   if( !err ) {
     pip_set_exit_status( task, status, 0 );
+  }
+  RETURN( err );
+}
+#endif
+
+static int pip_wait_proc( pip_task_t *task, int flag_blk ) {
+  pid_t tid = task->tid;
+  siginfo_t 	info;
+  int   status  = 0;
+  int   options = WEXITED;
+  int   err     = 0;
+
+  ENTER;
+  if( !flag_blk ) options |= WNOHANG;
+
+  DBGF( "calling waitid()  task:%p  tid:%d  pipid:%d",
+	task, tid, task->pipid );
+  while( 1 ) {
+    memset( (void*) &info, 0, sizeof(info) );
+    if( waitid( P_PID, task->tid, &info, options ) != 0 ) {
+      if( errno == EINTR ) continue;
+      err = errno;
+    } else if( !flag_blk && info.si_pid == 0 ) {
+      err = ECHILD;
+    }
+    DBGF( "waitid(tid=%d,status=0x%x) (err=%d)", task->tid, status, err );
+    break;
   }
   RETURN( err );
 }

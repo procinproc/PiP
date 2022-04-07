@@ -38,7 +38,6 @@
 #include <pip/pip_util.h>
 #include <pip/pip_gdbif.h>
 
-int 			pip_dont_wrap_malloc PIP_PRIVATE = 1;
 int 			pip_initialized      PIP_PRIVATE = 0;
 int 			pip_finalized        PIP_PRIVATE = 1;
 pip_root_t		*pip_root            PIP_PRIVATE;
@@ -222,48 +221,49 @@ static int pip_check_opt_and_env( int *optsp ) {
 }
 
 char *pip_prefix_dir( void ) {
+  /* 7f6d00819000-7f6d0081a000 r--p 0002c000 fe:01 662917   /usr/lib64/ld-2.28.so */
   FILE	 *fp_maps = NULL;
   size_t  sz = 0;
   ssize_t l;
   char	 *line = NULL;
-  char	 *libpip, *prefix, *p;
-  char	 *updir = "/..";
+  char	 *p, *prefix = NULL;
   void	 *sta, *end;
-  void	 *faddr = (void*) pip_prefix_dir;
+  void	 *self = (void*) pip_prefix_dir;
 
   ASSERTD( ( fp_maps = fopen( PIP_MAPS_PATH, "r" ) ) != NULL );
-  //DBGF( "faddr:%p", faddr );
   while( ( l = getline( &line, &sz, fp_maps ) ) > 0 ) {
     line[l] = '\0';
-    //DBGF( "l:%d sz:%d line(%p)\n\t%s", (int)l, (int)sz, line, line );
-    prefix = NULL;
-    int n = sscanf( line, "%p-%p %*4s %*x %*x:%*x %*d %ms", &sta, &end, &libpip );
-    //DBGF( "%d: %p-%p %p %s", n, sta, end, faddr, prefix );
-    if( n == 3             && 
-	libpip    != NULL  && 
-	libpip[0] != '\0'  &&
-	sta       <= faddr && 
-	faddr     <  end ) {
-      ASSERTD( ( p = strrchr( libpip, '/' ) ) != NULL );
-      *p = '\0';
-      ASSERTD( ( prefix = (char*) pip_malloc( strlen( libpip ) + 
-					      strlen( updir ) + 1 ) )
-	      != NULL );
-      p = prefix;
-      p = stpcpy( p, libpip );
-      p = stpcpy( p, updir  );
-      ASSERTD( ( p = realpath( prefix, NULL ) ) != NULL );
-      free( libpip );
-      free( prefix );
-      fclose( fp_maps );
-      prefix = p;
-      DBGF( "prefix: %s", prefix );
-      return prefix;
+    sta = (void*) strtoul( line, &p, 16 );
+    ASSERTD( *p == '-' );
+    end = (void*) strtoul( p+1,  &p, 16 );
+
+    if( sta > self || self >= end ) continue;
+
+    p += 6;			/* skip perms field */
+    strtoul( p, &p, 16 ); 	/* skip offset field */
+    strtoul( p+1, &p, 10 ); 	/* skip dev major field */
+    ASSERTD( *p == ':' );
+    strtoul( p+1, &p, 10 ); 	/* skip dev minor field */
+    strtoul( p+1, &p, 10 ); 	/* skip dev inode field */
+    ASSERTD( *p == ' ' );
+    for( ; *p==' '||*p=='\t'; p++ ) { /* skip white spaces */
+      if( *p == '\0' || *p == '\n' ) break;
     }
-    free( libpip );
+    if( *p == '\0' || *p == '\n' ) continue;
+    
+    prefix = p;
+    ASSERTD( ( p = strrchr( prefix, '/' ) ) != NULL ); /* skip basename */
+    *p = '\0';
+    ASSERTD( ( p = strrchr( prefix, '/' ) ) != NULL ); /* one-level upper */
+    *p = '\0';
+    ASSERTD( ( prefix = strdup( prefix ) ) != NULL );
+    goto done;
   }
-  NEVER_REACH_HERE;
-  return NULL;			/* dummy */
+ done:
+  free( line );
+  fclose( fp_maps );
+  DBGF( "prefix: %s", prefix );
+  return prefix;
 }
 
 static void pip_set_name( pip_root_t *root, pip_task_t *task ) {
@@ -584,8 +584,7 @@ void pip_finalize_root( pip_root_t *root ) {
   }
   pip_unset_signal_handlers();
 
-  memset( root, 0, sizeof(pip_root_t) );
-  pip_libc_free( root );
+  pip_free( root );
   pip_root = NULL;
   pip_task = NULL;
 }

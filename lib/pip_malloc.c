@@ -40,7 +40,9 @@
 #undef DEBUG
 #endif
 
-#define PIP_MALLOC
+int	pip_dont_wrap_malloc PIP_PRIVATE = 1;
+
+//#define PIP_MALLOC
 #ifdef PIP_MALLOC
 
 typedef struct pip_malloc_info {
@@ -48,7 +50,6 @@ typedef struct pip_malloc_info {
   int		pipid;
 } pip_malloc_info_t;
 
-void  __libc_free(void*);
 void *__libc_malloc(size_t);
 void *__libc_calloc(size_t nmemb, size_t size);
 void *__libc_realloc(void *ptr, size_t size);
@@ -144,10 +145,6 @@ void pip_free_all( void ) {
     }
     RETURNV;
   }
-}
-
-void pip_libc_free( void *addr ) {
-  __libc_free( addr );
 }
 
 void pip_free( void *addr ) {
