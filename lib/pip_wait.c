@@ -163,17 +163,16 @@ static int pip_wait_proc( pip_task_t *task, int flag_blk ) {
 #endif
 
 static int pip_wait_proc( pip_task_t *task, int flag_blk ) {
-  pid_t tid = task->tid;
   siginfo_t 	info;
-  int   status  = 0;
-  int   options = WEXITED;
-  int   err     = 0;
+  int   	options = WEXITED;
+  int		status  = 0;
+  int   	err     = 0;
 
   ENTER;
   if( !flag_blk ) options |= WNOHANG;
 
-  DBGF( "calling waitid()  task:%p  tid:%d  pipid:%d",
-	task, tid, task->pipid );
+  DBGF( "calling waitid()  task:%p  pipid:%d  tid:%d",
+	task, task->pipid, task->tid );
   while( 1 ) {
     memset( (void*) &info, 0, sizeof(info) );
     if( waitid( P_PID, task->tid, &info, options ) != 0 ) {
@@ -181,6 +180,14 @@ static int pip_wait_proc( pip_task_t *task, int flag_blk ) {
       err = errno;
     } else if( !flag_blk && info.si_pid == 0 ) {
       err = ECHILD;
+    }
+    if( !err ) {
+      status = info.si_status;
+      if( WIFEXITED( status ) ) {
+	pip_set_exit_status( task, WEXITSTATUS(status), 0 );
+      } else if( WIFSIGNALED( status ) ) {
+	pip_set_exit_status( task, 0, WTERMSIG(status) );
+      }
     }
     DBGF( "waitid(tid=%d,status=0x%x) (err=%d)", task->tid, status, err );
     break;

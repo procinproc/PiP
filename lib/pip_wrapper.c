@@ -123,7 +123,7 @@ char *dlerror( void ) {
 }
 
 char *pip_dlerror( void ) {
-  return pip_dlerror();
+  return dlerror();
 }
 
 int pip_dladdr(const void *addr, Dl_info *info) {

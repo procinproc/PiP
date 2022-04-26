@@ -115,16 +115,14 @@
   } while(0)
 
 
-/* workaround to avoid SEGV in glibc by increasing the    */
-/* number of arenas in malloc. Reasons;                   */
-/* 1) the defaul value is 8 and when the number of tasks  */
-/* is beyond this, glibc tries to read and parse /proc    */
-/* file when calling dlopen() and resulting the call to   */
-/* some ctype functions. But __ctype_init() is not yet    */
-/* called in the calls of dlopen() in ldpip.              */
-/* 2) the number of arena should be more than or equal to */
-/* the number of PiP tasks so that each PiP task may have */
-/* its own arena. */
+/* workaround to avoid SEGV in glibc by increasing the number of arenas  */
+/* in malloc. Reasons;                                                   */
+/* 1) the defaul value is 8 and when the number of tasks is beyond this, */
+/* glibc tries to read and parse /proc file when calling dlopen() and    */
+/* resulting the call to some ctype functions. But __ctype_init() is not */
+/* yet called in the calls of dlopen() in ldpip, resulting SUGSEGV       */
+/* 2) the number of arena should be more than or equal to the number of  */
+/* PiP tasks so that each PiP task may have its own arena.               */
 #define SETUP_MALLOC_ARENA_ENV(ntasks)					\
     do {								\
       char *env_arena_max  = NULL;					\
@@ -146,10 +144,6 @@
       mallopt( M_ARENA_TEST, narena );					\
       mallopt( M_ARENA_MAX,  narena );					\
     } while( 0 )
-
-#define CHECK_PIE( fd, path, msgp )					\
-  do {									\
-  } while(0)
    
 #endif	/* DOXYGEN */
 #endif

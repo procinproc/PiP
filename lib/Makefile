@@ -46,14 +46,11 @@ LDPIP    = ldpip.so
 
 LDFLAGS_PIP = -shared -Wl,-soname -Wl,$(LIBRARY) $(PTHREAD_FLAG)
 
-LIBRARY_PRELOAD = pip_preload.so
-LDFLAGS_PRELOAD = -shared -ldl
-
 SO_MAJOR_XPMEM = 0
 LIBNAME_XPMEM = libxpmem.so
 LIBRARY_XPMEM = $(LIBNAME_XPMEM).$(SO_MAJOR_XPMEM)
 
-LIBRARIES = $(LIBRARY) $(LIBRARY_PRELOAD) $(LDPIP) $(LIBRARY_XPMEM)
+LIBRARIES = $(LIBRARY) $(LDPIP) $(LIBRARY_XPMEM)
 
 CPPFLAGS += $(PIP_CPPFLAGS) \
 	-DLDPIP_NAME=\"$(LDPIP)\" \
@@ -66,17 +63,16 @@ CFLAGS   += $(PIC_CFLAG) $(PTHREAD_FLAG)
 MAINFLAGS = -Wl,-e,pip_main -ldl
 
 SRCS  = pip.c pip_start.c pip_main.c pip_2_backport.c pip_wait.c \
-	pip_namexp.c pip_clone.c pip_signal.c pip_util.c pip_mesg.c \
+	pip_namexp.c pip_signal.c pip_util.c pip_mesg.c \
 	pip_elf.c pip_pip_onstart.c pip_gdbif.c pip_wrapper.c pip_malloc.c \
-	pip_preload.c xpmem.c
+	xpmem.c
 
 SRC_LDPIP = ldpip.c
 
 OBJS  = pip.o pip_start.o pip_main.o pip_2_backport.o pip_wait.o \
-	pip_namexp.o pip_clone.o pip_signal.o pip_util.o pip_mesg.o \
+	pip_namexp.o pip_signal.o pip_util.o pip_mesg.o \
 	pip_elf.o pip_onstart.o pip_gdbif.o pip_wrapper.o pip_malloc.o
 
-OBJS_PRELOAD = pip_preload.o
 OBJS_XPMEM   = xpmem.o
 
 include $(top_srcdir)/build/rule.mk
@@ -100,9 +96,6 @@ $(LDPIP): $(SRC_LDPIP) $(DEPINCS) $(DEPCONFIG) Makefile
 	make -C ../bin pip-unpie
 	../bin/pip-unpie $(LDPIP)
 
-$(LIBRARY_PRELOAD): $(OBJS_PRELOAD) $(DEPINCS) $(DEPCONFIG) Makefile
-	$(CC) $(LDFLAGS_PRELOAD) $(OBJS_PRELOAD) -o $@
-
 $(LIBRARY_XPMEM): $(OBJS_XPMEM) $(DEPINCS) $(DEPCONFIG) Makefile
 	$(CC) $(OBJS_XPMEM) -shared -o $@
 	$(RM) $(LIBNAME_XPMEM)
@@ -111,7 +104,6 @@ $(LIBRARY_XPMEM): $(OBJS_XPMEM) $(DEPINCS) $(DEPCONFIG) Makefile
 # chmod is to make rpmbuild happy
 install:
 	chmod 0755 $(DESTDIR)$(libdir)/$(LIBRARY) \
-		$(DESTDIR)$(libdir)/$(LIBRARY_PRELOAD) \
 		$(DESTDIR)$(libdir)/$(LDPIP) \
 		$(DESTDIR)$(libdir)/$(LIBRARY_XPMEM)
 	$(RM) $(DESTDIR)$(libdir)/$(LIBNAME) \

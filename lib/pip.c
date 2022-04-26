@@ -231,6 +231,7 @@ char *pip_prefix_dir( void ) {
   void	 *self = (void*) pip_prefix_dir;
 
   ASSERTD( ( fp_maps = fopen( PIP_MAPS_PATH, "r" ) ) != NULL );
+  /* here, we cannot use *scanf() because this is also called from pip_main */
   while( ( l = getline( &line, &sz, fp_maps ) ) > 0 ) {
     line[l] = '\0';
     sta = (void*) strtoul( line, &p, 16 );
@@ -239,30 +240,25 @@ char *pip_prefix_dir( void ) {
 
     if( sta > self || self >= end ) continue;
 
-    p += 6;			/* skip perms field */
-    strtoul( p, &p, 16 ); 	/* skip offset field */
-    strtoul( p+1, &p, 10 ); 	/* skip dev major field */
+    p += 6;			/* skip perm field      */
+    strtoul( p, &p, 16 ); 	/* skip offset field    */
+    strtoul( p+1, &p, 16 ); 	/* skip dev major field */
     ASSERTD( *p == ':' );
-    strtoul( p+1, &p, 10 ); 	/* skip dev minor field */
+    strtoul( p+1, &p, 16 ); 	/* skip dev minor field */
     strtoul( p+1, &p, 10 ); 	/* skip dev inode field */
     ASSERTD( *p == ' ' );
-    for( ; *p==' '||*p=='\t'; p++ ) { /* skip white spaces */
-      if( *p == '\0' || *p == '\n' ) break;
-    }
-    if( *p == '\0' || *p == '\n' ) continue;
-    
-    prefix = p;
+    prefix = strchr( p, '/' );
+    ASSERTD( prefix != NULL );
     ASSERTD( ( p = strrchr( prefix, '/' ) ) != NULL ); /* skip basename */
     *p = '\0';
     ASSERTD( ( p = strrchr( prefix, '/' ) ) != NULL ); /* one-level upper */
     *p = '\0';
-    ASSERTD( ( prefix = strdup( prefix ) ) != NULL );
-    goto done;
+    ASSERTD( ( prefix = strdup( prefix  ) ) != NULL );
+    break;
   }
- done:
   free( line );
   fclose( fp_maps );
-  DBGF( "prefix: %s", prefix );
+
   return prefix;
 }
 
@@ -808,7 +804,7 @@ static int pip_check_user_prog( pip_spawn_program_t *progp,
     char *p;
     args->prog_full = path;	/* malloec()ed by realpath() */
     if( ( p = strrchr( path, '/' ) ) != NULL ) {
-      args->prog = strdup( p );
+      args->prog = strdup( p+1 );
     } else {
       args->prog = strdup( path );
     }

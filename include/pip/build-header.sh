@@ -41,9 +41,9 @@ commit_hash=`git rev-parse HEAD`
 build_os=`uname -s -r -v`
 
 if [ "x$cc" == "x" ]; then
-    cc=`/bin/which gcc 2> /dev/null`
+    cc=`type -P gcc 2> /dev/null`
 else
-    cc=`/bin/which ${cc} 2> /dev/null`
+    cc=`type -P ${cc} 2> /dev/null`
 fi
 if [ $? != 0 ]; then
     echo >&2 "Unable to find a C compiler"

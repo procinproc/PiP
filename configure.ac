@@ -127,7 +127,7 @@ AC_CHECK_PROGS([PYTHON],[python3 python36 python38 python2 python],[false])
 if test x"${PYTHON}" == x"false" ; then
   AC_MSG_ERROR([can't find python.])
 fi
-python=`which ${PYTHON}`
+python=`type -P ${PYTHON} 2>/dev/null`
 AC_SUBST(python)
 
 AC_ARG_VAR([CFLAG_PIC], [PIC compiler flag (default -fPIC)])

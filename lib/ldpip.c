@@ -550,9 +550,6 @@ static void *ldpip_load( void *vargs ) {
   ldpip_print_maps( "dlopen", loaded );
   ldpip_task->loaded = loaded;
 
-  environ = NULL;
-  for( i=0; envv[i]!=NULL; i++ ) putenv( envv[i] );
-
   if( ( start_task = (pip_start_task_t) 
 	ldpip_dlsym( loaded, "__pip_start_task" ) ) == NULL ) {
     loaded_libpip = ldpip_load_libpip();
@@ -641,10 +638,10 @@ int __ldpip_load_prog( pip_root_t *root,
   SETUP_MALLOC_ARENA_ENV( root->ntasks );
   /* from now on, getenv() can be called */
 
+  stack_size = ldpip_stack_size();
+
   ldpip_clone_orig = ldpip_dlsym( RTLD_NEXT, CLONE_SYSCALL );
   ASSERT( ldpip_clone_orig != NULL );
-
-  stack_size = ldpip_stack_size();
 
   if( ( root->opts & PIP_MODE_MASK ) == PIP_MODE_PROCESS_PIPCLONE ) {
     int flags = pip_clone_flags( CLONE_PARENT_SETTID |
@@ -670,8 +667,7 @@ int __ldpip_load_prog( pip_root_t *root,
     ASSERTD( pthread_attr_setstacksize( &attr, stack_size )         == 0 );
 
     DBGF( "tid=%d", tid );
-    
-    ldpip_clone_orig = ldpip_dlsym( RTLD_NEXT, CLONE_SYSCALL );
+
     if( root->opts & PIP_MODE_PROCESS_PRELOAD ) {
       flag_wrap_clone = 1;
       /* another lock is needed, because the pip_clone()

@@ -33,6 +33,8 @@
  * $
  */
 
+#define USE_TGKILL
+
 #include <pip/pip_internal.h>
 #include <pip/pip_gdbif.h>
 
@@ -326,10 +328,11 @@ void *__pip_start_task( pip_root_t *root,
   int  extval;
 
   pip_libc_init();
-  ENTER;
+  ENTERF( "err:%d  err_mesg:%s  warn_mesg:%s", err, err_mesg, warn_mesg );
   pip_root = root;
   pip_task = task;
 
+  DBG;
   pip_set_libc_ftab( task->libc_ftabp );
   pip_dont_wrap_malloc = 0;
     
@@ -340,6 +343,7 @@ void *__pip_start_task( pip_root_t *root,
   }
   pip_finalized = 0;
 
+  DBG;
   if( warn_mesg != NULL ) {
     pip_warn_mesg( "%s", warn_mesg );
     free( warn_mesg );
@@ -350,24 +354,34 @@ void *__pip_start_task( pip_root_t *root,
     free( err_mesg );
     err_mesg = NULL;
   }
+  DBG;
   if( err ) {
+  DBG;
     extval = err;
 
   } else {
+  DBG;
+    (void) pip_dlerror();	/* reset error string */
+    DBG;
     if( args->funcname == NULL ) {
+    DBG;
       if( ( start = pip_dlsym( task->loaded, "main" ) ) == NULL ) {
+    DBG;
 	pip_err_mesg( "'%s': Unable to find main "	
 		      "(possibly not linked with '-rdynamic' option)",
 		      args->prog );
 	err = ENOEXEC;
       }
     } else {
+    DBG;
       if( ( start = pip_dlsym( task->loaded, args->funcname ) ) == NULL ) {
+    DBG;
 	pip_err_mesg( "'%s': Unable to find start function (%s)",
 		      args->prog, args->funcname );
 	err = ENOEXEC;
       }
     }
+    DBG;
     if( !err && ( err = pip_init_task( root, task, envv ) ) == 0 ) {
       if( pip_task->onstart_script != NULL ) {
 	/* PIP_STOP_ON_START (process mode only) */
