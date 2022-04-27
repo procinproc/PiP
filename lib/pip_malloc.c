@@ -301,36 +301,6 @@ void *memalign( size_t alignment, size_t size ) {
   return aligned_alloc( alignment, size );
 }
 
-char *pip_strdup( const char *s ) {
-  size_t len = strlen( s );
-  char   *p = pip_malloc( len + 1 );
-  if( p != NULL ) strcpy( p, s );
-  return p;
-}
-
-#if !defined( strdup ) && !defined( __strdup )
-char *strdup( const char *s ) {
-  return pip_strdup( s );
-}
-#endif
-
-char *pip_strndup( const char *s, size_t n ) {
-  size_t m = strlen( s );
-  m = ( m > n ) ? n : m;
-  char *p  = pip_malloc( m + 1 );
-  if( p != NULL ) {
-    p = strncpy( p, s, m );
-    p[m] = '\0';
-  }
-  return p;
-}
-
-#if !defined( strndup ) && !defined( __strndup )
-char *strndup( const char *s, size_t n ) {
-  return pip_strndup( s, n );
-}
-#endif
-
 #else  /* PIP_MALLOC */
 
 size_t pip_malloc_usable_size( void *ptr ) {
@@ -355,14 +325,6 @@ void *pip_realloc( void *ptr, size_t size ) {
 
 int pip_posix_memalign( void **memptr, size_t alignment, size_t size ) {
   return posix_memalign( memptr, alignment, size );
-}
-
-char *pip_strdup( const char *s ) {
-  return strdup( s );
-}
-
-char *pip_strndup( const char *s, size_t n ) {
-  return strndup( s, n );
 }
 
 void pip_free_all( void ) { return; }

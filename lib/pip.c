@@ -590,7 +590,7 @@ static char *pip_onstart_script( char *env, size_t len ) {
   char *script;
 
   ENTERF( "env:%s", env );
-  script = pip_strndup( env, len );
+  script = strndup( env, len );
   if( stat( script, &stbuf ) != 0 ) {
     pip_warn_mesg( "Unable to find file: %s (%s=%s)", 
 		   script, PIP_ENV_STOP_ON_START, env );
@@ -615,10 +615,10 @@ static char *pip_onstart_target( pip_task_t *task, char *env ) {
     return pip_onstart_script( env, strlen( env ) );
   } else if( env[0] == '@' ) {		/* no script */
     p = &env[1];
-    if( *p == '\0' ) return pip_strdup( "" );
+    if( *p == '\0' ) return strdup( "" );
     pipid = strtol( p, NULL, 10 );
     if( pipid < 0 || pipid == task->pipid ) {
-      return pip_strdup( "" );
+      return strdup( "" );
     }
   } else {
     q = p ++;			/* skip '@' */
@@ -919,7 +919,7 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
     if( err ) ERRJ_ERR( err );
     args->argc = pip_count_vec( args->argvec.vec );
   } else {
-    if( ( args->funcname = pip_strdup( progp->funcname ) ) == NULL ) {
+    if( ( args->funcname = strdup( progp->funcname ) ) == NULL ) {
       ERRJ_ERR( ENOMEM );
     }
     args->start_arg = progp->arg;

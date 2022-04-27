@@ -40,6 +40,11 @@
 
 #define CLONE_SYSCALL	"__clone"
 
+#define LDPIP_MCHECK
+#ifdef LDPIP_MCHECK
+#include <mcheck.h>
+#endif
+
 static pip_root_t	*ldpip_root;
 static pip_task_t	*ldpip_task;
 static char		*ldpip_err_mesg     = NULL;
@@ -283,19 +288,15 @@ int __clone( int(*fn)(void*), void *child_stack, int flags, void *args, ... ) {
   int 		retval = -1;
 
   ENTER;
-  if( !flag_wrap_clone ) {
-    /* thread mode */
-    retval = ldpip_clone_orig( fn, child_stack, flags, args, ptid, tls, ctid );
+  if( ldpip_lock_clone_lock( tid ) == tid && flag_wrap_clone ) {
+    /* __clone is called from ldpip */
+    flags = pip_clone_flags( flags );
   } else {
-    if( ldpip_lock_clone_lock( tid ) == tid ) {
-      /* __clone is called from ldpip */
-      flags = pip_clone_flags( flags );
-    } else {
-      /* __clone is called outside of ldpip (and pip) */
-    }
-    retval = ldpip_clone_orig( fn, child_stack, flags, args, ptid, tls, ctid );
-    pip_spin_unlock( &pip_lock_clone );
+    /* __clone is called outside of ldpip (and pip) */
   }
+  retval = ldpip_clone_orig( fn, child_stack, flags, args, ptid, tls, ctid );
+  pip_spin_unlock( &pip_lock_clone );
+
   va_end( ap );
   RETURN_NE( retval );
 }
@@ -509,10 +510,38 @@ static void *ldpip_load_libpip( void ) {
   return loaded;
 }
 
+static int ldpip_search_libpip_itr( struct dl_phdr_info *info, 
+				    size_t size, 
+				    void *arg ) {
+  int *flag = (int*) arg;
+  char *fullname = (char*) info->dlpi_name;
+  char *basename;
+
+  if( fullname != NULL ) {
+    basename = strrchr( fullname, '/' );
+    if( basename != NULL ) {
+      basename ++;
+    } else {
+      basename = fullname;
+    }
+    if( strncmp( basename, PIPLIB_NAME, strlen(PIPLIB_NAME) ) == 0 ) {
+      *flag = 1;
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int ldpip_linked_with_libpip( void ) {
+  int found = 0;
+  dl_iterate_phdr( ldpip_search_libpip_itr, (void*) &found );
+  return found;
+}
+
 static void *ldpip_load( void *vargs ) {
   pip_spawn_args_t *args = vargs;
   pip_start_task_t start_task;
-  void	*loaded, *loaded_libpip;
+  void	*loaded, *loaded_libpip, *retv;
   char  **envv = args->envvec.vec;
   int	coreno = args->coreno;
   int	i, err = 0;
@@ -527,6 +556,11 @@ static void *ldpip_load( void *vargs ) {
   pip_sem_post( &ldpip_root->sync_spawn );
 
   ldpip_libc_setup( args );
+
+#ifdef LDPIP_MCHECK
+  DBGF( "calling mcheck_all (before)" );
+  mcheck_check_all();
+#endif
   {
     /* here, do not call pthread_setaffinity(). This MAY fail */
     /* because pd->tid is NOT set yet.  I do not know why.    */
@@ -544,25 +578,33 @@ static void *ldpip_load( void *vargs ) {
   /* eventually load the user program */
   DBGF( "%s", args->prog_full );
   loaded = ldpip_dlopen( args->prog_full, DLOPEN_FLAGS );
+  DBG;
   if( loaded == NULL ) {
     ldpip_error( "Unable to load %s: %s", args->prog_full, dlerror() );
   }
   ldpip_print_maps( "dlopen", loaded );
   ldpip_task->loaded = loaded;
 
-  if( ( start_task = (pip_start_task_t) 
-	ldpip_dlsym( loaded, "__pip_start_task" ) ) == NULL ) {
-    loaded_libpip = ldpip_load_libpip();
-    ASSERT( ( start_task = (pip_start_task_t) 
-	      ldpip_dlsym( loaded_libpip, "__pip_start_task" ) ) != NULL );
+  /* here, we cannot call dlsym() to check if the already loaded */
+  /* loaded DSO already includes the start function or not.      */
+  if( !ldpip_linked_with_libpip() ) {
+    loaded = ldpip_load_libpip();
   }
+  ASSERT( ( start_task = (pip_start_task_t) 
+	    ldpip_dlsym( loaded, "__pip_start_task" ) ) != NULL );
 
-  return start_task( ldpip_root, 
+  retv = start_task( ldpip_root, 
 		     ldpip_task, 
 		     args, 
 		     err, 
 		     ldpip_err_mesg, 
 		     ldpip_warn_mesg );
+
+#ifdef LDPIP_MCHECK
+  DBGF( "calling mcheck_all (after)" );
+  mcheck_check_all();
+#endif
+  return retv;
 }
 
 static size_t ldpip_stack_size( void ) {
@@ -633,6 +675,11 @@ int __ldpip_load_prog( pip_root_t *root,
   ldpip_root = root;
   ldpip_task = task;
 
+#ifdef LDPIP_MCHECK
+  DBGF( "calling mcheck_all (before)" );
+  mcheck_check_all();
+#endif
+
   environ = NULL;
   for( i=0; envv[i]!=NULL; i++ ) putenv( envv[i] );
   SETUP_MALLOC_ARENA_ENV( root->ntasks );
@@ -672,9 +719,9 @@ int __ldpip_load_prog( pip_root_t *root,
       flag_wrap_clone = 1;
       /* another lock is needed, because the pip_clone()
 	 might also be called from outside of PiP lib. */
-      pip_spin_lock_wv( &pip_lock_clone, tid );
-      /* unlock is done in the wrapper function */
     }
+    pip_spin_lock_wv( &pip_lock_clone, tid );
+    /* unlock is done in the wrapper function of __clone */
     err = pthread_create( &task->thread,
 			  &attr,
 			  (void*(*)(void*)) ldpip_load,
@@ -683,6 +730,12 @@ int __ldpip_load_prog( pip_root_t *root,
   }
   /* for synching */
   pip_sem_wait( &ldpip_root->sync_spawn );
+  
+#ifdef LDPIP_MCHECK
+  DBGF( "calling mcheck_all (after)" );
+  mcheck_check_all();
+#endif
+
   return err;
 }
 
