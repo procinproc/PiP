@@ -40,11 +40,6 @@
 
 #define CLONE_SYSCALL	"__clone"
 
-#define LDPIP_MCHECK
-#ifdef LDPIP_MCHECK
-#include <mcheck.h>
-#endif
-
 static pip_root_t	*ldpip_root;
 static pip_task_t	*ldpip_task;
 static char		*ldpip_err_mesg     = NULL;
@@ -505,6 +500,7 @@ static void *ldpip_load_libpip( void ) {
   q = stpcpy( q, libdir );
   q = stpcpy( q, PIPLIB_NAME );
 
+  DBGF( "%s", path );
   ASSERT( ( loaded = ldpip_dlopen( path, DLOPEN_FLAGS ) ) != NULL );
   ldpip_print_maps( "libpip", loaded );
   return loaded;
@@ -532,16 +528,10 @@ static int ldpip_search_libpip_itr( struct dl_phdr_info *info,
   return 0;
 }
 
-static int ldpip_linked_with_libpip( void ) {
-  int found = 0;
-  dl_iterate_phdr( ldpip_search_libpip_itr, (void*) &found );
-  return found;
-}
-
 static void *ldpip_load( void *vargs ) {
   pip_spawn_args_t *args = vargs;
   pip_start_task_t start_task;
-  void	*loaded, *loaded_libpip, *retv;
+  void	*retv;
   char  **envv = args->envvec.vec;
   int	coreno = args->coreno;
   int	i, err = 0;
@@ -554,13 +544,6 @@ static void *ldpip_load( void *vargs ) {
   ldpip_set_name( ldpip_root, ldpip_task );
   /* resume root after setting above variables */
   pip_sem_post( &ldpip_root->sync_spawn );
-
-  ldpip_libc_setup( args );
-
-#ifdef LDPIP_MCHECK
-  DBGF( "calling mcheck_all (before)" );
-  mcheck_check_all();
-#endif
   {
     /* here, do not call pthread_setaffinity(). This MAY fail */
     /* because pd->tid is NOT set yet.  I do not know why.    */
@@ -572,26 +555,9 @@ static void *ldpip_load( void *vargs ) {
     }
   }
   if( !( ldpip_root->opts & PIP_MODE_PTHREAD ) ) ldpip_close_on_exec();
-  ldpip_print_maps( "LDPIP", ldpip_task->loaded );
-  ldpip_set_libc_ftab( ldpip_task );
-  ldpip_preload( getenv( PIP_ENV_PRELOAD ) );
-  /* eventually load the user program */
-  DBGF( "%s", args->prog_full );
-  loaded = ldpip_dlopen( args->prog_full, DLOPEN_FLAGS );
-  DBG;
-  if( loaded == NULL ) {
-    ldpip_error( "Unable to load %s: %s", args->prog_full, dlerror() );
-  }
-  ldpip_print_maps( "dlopen", loaded );
-  ldpip_task->loaded = loaded;
 
-  /* here, we cannot call dlsym() to check if the already loaded */
-  /* loaded DSO already includes the start function or not.      */
-  if( !ldpip_linked_with_libpip() ) {
-    loaded = ldpip_load_libpip();
-  }
   ASSERT( ( start_task = (pip_start_task_t) 
-	    ldpip_dlsym( loaded, "__pip_start_task" ) ) != NULL );
+	    ldpip_dlsym( ldpip_task->loaded, "__pip_start_task" ) ) != NULL );
 
   retv = start_task( ldpip_root, 
 		     ldpip_task, 
@@ -599,11 +565,6 @@ static void *ldpip_load( void *vargs ) {
 		     err, 
 		     ldpip_err_mesg, 
 		     ldpip_warn_mesg );
-
-#ifdef LDPIP_MCHECK
-  DBGF( "calling mcheck_all (after)" );
-  mcheck_check_all();
-#endif
   return retv;
 }
 
@@ -664,10 +625,14 @@ static size_t ldpip_stack_size( void ) {
 
 int __ldpip_load_prog( pip_root_t *root, 
 		       pip_task_t *task, 
-		       pip_spawn_args_t *args ) {
+		       pip_spawn_args_t *args,
+		       char **warn_mesg,
+		       char **err_mesg ) {
   extern char **environ;
   pip_clone_mostly_pthread_t libc_clone;
   char **envv = args->envvec.vec;
+  void *loaded;
+  void *start;
   size_t stack_size;
   pid_t pid;
   int narena, i, err = 0;
@@ -675,46 +640,75 @@ int __ldpip_load_prog( pip_root_t *root,
   ldpip_root = root;
   ldpip_task = task;
 
-#ifdef LDPIP_MCHECK
-  DBGF( "calling mcheck_all (before)" );
-  mcheck_check_all();
-#endif
-
   environ = NULL;
   for( i=0; envv[i]!=NULL; i++ ) putenv( envv[i] );
-  SETUP_MALLOC_ARENA_ENV( root->ntasks );
   /* from now on, getenv() can be called */
-
-  stack_size = ldpip_stack_size();
+  SETUP_MALLOC_ARENA_ENV( root->ntasks );
+  /* from now on, malloc() can be called */
+  
+  ldpip_libc_setup( args );
+  ldpip_print_maps( "LDPIP", ldpip_task->loaded );
+  ldpip_set_libc_ftab( ldpip_task );
+  ldpip_preload( getenv( PIP_ENV_PRELOAD ) );
+  ASSERT( ( loaded = ldpip_load_libpip() ) != NULL );
+  ldpip_task->loaded = loaded;
+  if( ( loaded =
+	ldpip_dlopen( args->prog_full, DLOPEN_FLAGS ) ) == NULL ) {
+    err = ELIBEXEC;
+    goto error;
+  }
+  ldpip_print_maps( "dlopen", loaded );
+  if( args->funcname == NULL ) {
+    if( ( start = ldpip_dlsym( loaded, "main" ) ) == NULL ) {
+      ldpip_error( "'%s': Unable to find main "	
+		   "(possibly not linked with '-rdynamic' option)",
+		   args->prog );
+      *err_mesg = ldpip_err_mesg;
+      err = ENOEXEC;
+    } else {
+      args->func_main = start;
+    }
+  } else {
+    if( ( start = ldpip_dlsym( loaded, args->funcname ) ) == NULL ) {
+      ldpip_error( "'%s': Unable to find start function (%s)",
+		   args->prog, args->funcname );
+      *err_mesg = ldpip_err_mesg;
+      err = ENOEXEC;
+    } else {
+      args->func_user = start;
+    }
+  }
+  if( err ) goto error;
 
   ldpip_clone_orig = ldpip_dlsym( RTLD_NEXT, CLONE_SYSCALL );
   ASSERT( ldpip_clone_orig != NULL );
 
+  stack_size = ldpip_stack_size();
   if( ( root->opts & PIP_MODE_MASK ) == PIP_MODE_PROCESS_PIPCLONE ) {
     int flags = pip_clone_flags( CLONE_PARENT_SETTID |
 				 CLONE_CHILD_CLEARTID );
     libc_clone = ldpip_dlsym( RTLD_DEFAULT, "pip_clone_mostly_pthread" );
     ASSERT( libc_clone != NULL );
     err = libc_clone( &task->thread,
-		       flags,
-		       -1,
-		       stack_size,
-		       (void*(*)(void*)) ldpip_load,
-		       args,
-		       &pid );
+		      flags,
+		      -1,
+		      stack_size,
+		      (void*(*)(void*)) ldpip_load,
+		      args,
+		      &pid );
     DBGF( "pip_clone_mostly_pthread()=%d", err );
-
+      
   } else {
     pthread_attr_t 	attr;
     pid_t 		tid = ldpip_gettid();
-
+      
     ASSERTD( pthread_attr_init( &attr )                             == 0 );
     ASSERTD( pthread_attr_setdetachstate( &attr, 
 					  PTHREAD_CREATE_JOINABLE ) == 0 );
     ASSERTD( pthread_attr_setstacksize( &attr, stack_size )         == 0 );
-
+      
     DBGF( "tid=%d", tid );
-
+      
     if( root->opts & PIP_MODE_PROCESS_PRELOAD ) {
       flag_wrap_clone = 1;
       /* another lock is needed, because the pip_clone()
@@ -730,16 +724,11 @@ int __ldpip_load_prog( pip_root_t *root,
   }
   /* for synching */
   pip_sem_wait( &ldpip_root->sync_spawn );
-  
-#ifdef LDPIP_MCHECK
-  DBGF( "calling mcheck_all (after)" );
-  mcheck_check_all();
-#endif
 
+ error:
   return err;
 }
 
-int main( int argc, char **argv ) {
-  fprintf( stderr, "%s: DO NOT RUN THIS PROGRAM\n", argv[0] );
+int main() {
   return 1;
 }

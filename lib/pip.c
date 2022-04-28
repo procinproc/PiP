@@ -959,11 +959,13 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
     int l = strlen( pip_root->prefixdir ) + strlen( libdir ) +
       strlen( LDPIP_NAME ) + 1;
     char *p = alloca( l );
-    char *q;
+    char *q, *warn_mesg = NULL, *err_mesg = NULL;
     Lmid_t lmid;
     int(*ldpip_load)( pip_root_t*, 
 		      pip_task_t*, 
-		      pip_spawn_args_t *arg );
+		      pip_spawn_args_t *arg,
+		      char **,
+		      char **);
     q = p;
     q = stpcpy( q, pip_root->prefixdir );
     q = stpcpy( q, "/lib/" );
@@ -986,7 +988,21 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
 #endif
 
     ASSERT( ( ldpip_load = pip_dlsym( loaded, "__ldpip_load_prog" ) ) != NULL );
-    if( ( err = ldpip_load( pip_root, task, args ) ) != 0 ) goto error;
+    if( ( err = ldpip_load( pip_root,
+			    task,
+			    args,
+			    &warn_mesg,
+			    &err_mesg ) ) != 0 ) {
+      if( warn_mesg != NULL ) {
+	pip_warn_mesg( "%s", warn_mesg );
+	free( warn_mesg );
+      }
+      if( err_mesg != NULL ) {
+	pip_err_mesg( "%s", err_mesg );
+	free( err_mesg );
+      }
+      goto error;
+    }
   }
   if( err == 0 ) {
     pip_root->ntasks_count ++;

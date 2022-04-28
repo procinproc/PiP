@@ -324,7 +324,6 @@ void *__pip_start_task( pip_root_t *root,
   void *start_arg  = args->start_arg;
   pip_spawnhook_t before = task->hook_before;
   void *hook_arg         = task->hook_arg;
-  void *start;
   int  extval;
 
   pip_libc_init();
@@ -343,7 +342,6 @@ void *__pip_start_task( pip_root_t *root,
   }
   pip_finalized = 0;
 
-  DBG;
   if( warn_mesg != NULL ) {
     pip_warn_mesg( "%s", warn_mesg );
     free( warn_mesg );
@@ -354,34 +352,11 @@ void *__pip_start_task( pip_root_t *root,
     free( err_mesg );
     err_mesg = NULL;
   }
-  DBG;
   if( err ) {
-  DBG;
     extval = err;
 
   } else {
-  DBG;
     (void) pip_dlerror();	/* reset error string */
-    DBG;
-    if( args->funcname == NULL ) {
-    DBG;
-      if( ( start = pip_dlsym( task->loaded, "main" ) ) == NULL ) {
-    DBG;
-	pip_err_mesg( "'%s': Unable to find main "	
-		      "(possibly not linked with '-rdynamic' option)",
-		      args->prog );
-	err = ENOEXEC;
-      }
-    } else {
-    DBG;
-      if( ( start = pip_dlsym( task->loaded, args->funcname ) ) == NULL ) {
-    DBG;
-	pip_err_mesg( "'%s': Unable to find start function (%s)",
-		      args->prog, args->funcname );
-	err = ENOEXEC;
-      }
-    }
-    DBG;
     if( !err && ( err = pip_init_task( root, task, envv ) ) == 0 ) {
       if( pip_task->onstart_script != NULL ) {
 	/* PIP_STOP_ON_START (process mode only) */
@@ -401,15 +376,19 @@ void *__pip_start_task( pip_root_t *root,
       
     } else if( args->funcname == NULL ) {
       extern char **environ;
-      main_func_t start_main = start;
-      DBGF( ">> main@%p(%d,%s,%s,...)", start, args->argc, argv[0], argv[1] );
+      main_func_t start_main = args->func_main;
+      DBGF( ">> main@%p(%d,%s,%s,...)",
+	    start_main, args->argc, argv[0], argv[1] );
       extval = start_main( args->argc, argv, environ );
-      DBGF( "<< main@%p(%d,%s,%s,...) = %d", start, args->argc, argv[0], argv[1], extval );
+      DBGF( "<< main@%p(%d,%s,%s,...) = %d",
+	    start_main, args->argc, argv[0], argv[1], extval );
     } else {
-      start_func_t start_func = start;
-      DBGF( ">> %s@%p(%p)", args->funcname, start, start_arg );
+      start_func_t start_func = args->func_user;
+      DBGF( ">> %s@%p(%p)",
+	    args->funcname, start_func, start_arg );
       extval = start_func( start_arg );
-      DBGF( "<< %s@%p(%p) = %d", args->funcname, start, start_arg, extval );
+      DBGF( "<< %s@%p(%p) = %d",
+	    args->funcname, start_func, start_arg, extval );
     }
   }
   pip_do_exit( pip_task, PIP_EXIT_RETURN, extval );

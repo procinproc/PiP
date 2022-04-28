@@ -181,7 +181,9 @@ typedef struct pip_spawn_args {
   int			argc;
   char			*prog;
   char			*prog_full;
+  void			*func_main;
   char			*funcname;
+  void			*func_user;
   void			*start_arg;
   pip_char_vec_t	argvec;
   pip_char_vec_t	envvec;
@@ -199,7 +201,7 @@ typedef struct pip_env {
   char	*show_pips;
   char	*paths;
   char	*preloads;
-  char	*__reserved__[14];
+  char	*__reserved__[8];
 } pip_env_t;
 
 #define PIP_TYPE_NULL	(0)
