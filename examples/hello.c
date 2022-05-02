@@ -50,7 +50,7 @@ int main( int argc, char **argv ) {
 		 NULL, NULL, NULL );
     }
     for( i=0; i<ntasks; i++ ) {
-      pip_wait( pipid, NULL );
+      pip_wait( i, NULL );
     }
 
   } else {			// PIP child task
