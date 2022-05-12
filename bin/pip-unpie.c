@@ -33,6 +33,10 @@
  * $
  */
 
+/* glibc associated with CentOS8 (possibly newer ones too) is not */
+/* allowed to load PIE programs by using dlmopen(). This program  */
+/* is the workaround for this by resetting the PIE bit.           */
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <elf.h>
