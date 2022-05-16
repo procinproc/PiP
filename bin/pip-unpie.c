@@ -124,7 +124,8 @@ static int unpie( char *path, int flag_check ) {
   int 		flag_dyn = 0, flag_pie = 0, retval = 0;
 
   if( ( fd = open( path, O_RDWR ) ) < 0 ) {
-    fprintf( stderr, "%s: open(%s) fails (%s)\n", cmd, path, strerror( errno ) );
+    fprintf( stderr, "%s: open(%s) fails (%s)\n", cmd, path, 
+	     strerror( errno ) );
     return 2;
   }
   read_elf64_header( fd, &ehdr );

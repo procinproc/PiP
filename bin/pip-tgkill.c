@@ -126,7 +126,8 @@ int main( int argc, char **argv ) {
     if( argc == 4 || 		/* when this is called from pips */
 	errno != ESRCH ) {	/* ESRCH may happen */
       err = errno;
-      fprintf( stderr, "%s %d %d %d: %s\n", prog, signo, pid, tid, strerror( err ) );
+      fprintf( stderr, "%s %d %d %d: %s\n", prog, signo, pid, tid, 
+	       strerror( err ) );
     }
   }
   return err;

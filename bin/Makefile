@@ -70,7 +70,7 @@ printpipmode: printpipmode.c $(DEPS) Makefile
 printpipmode.to-install: printpipmode.c $(DEPS) Makefile
 	$(CC) -g -O2 $(CPPFLAGS) $(PIP_CFLAGS_BOTH) $(PIP_LDFLAGS_BOTH_TO_INSTALL) $< -o $@
 
-install:
+install: $(PROGRAMS_TO_INSTALL)
 	$(MKDIR_P) $(DESTDIR)$(bindir)
 	$(INSTALL_PROGRAM) pip-exec.to-install $(DESTDIR)$(bindir)/pip-exec
 	$(INSTALL_PROGRAM) printpipmode.to-install $(DESTDIR)$(bindir)/printpipmode
