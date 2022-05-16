@@ -456,6 +456,9 @@ int pip_kill_all_children_( int killsig ) {
 	    }
 	    (void) pip_raise_signal( task, killsig );
 	  }
+	  if( task->pid_onstart > 0 ) {
+	    (void) kill( task->pid_onstart, killsig );
+	  }
 	}
       }
     } 

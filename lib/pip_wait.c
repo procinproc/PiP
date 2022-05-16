@@ -80,10 +80,10 @@ static int pip_wait_thread( pip_task_t *task, int flag_blk ) {
     err = ECHILD;
   } else if( flag_blk ) {
     err = pthread_join( task->thread, &retval );
-    DBGF( "pthread_join(): %s", strerror(err) );
+    DBGF( "pthread_join(): %s", pip_errname(err) );
   } else {
     err = pthread_tryjoin_np( task->thread, &retval );
-    DBGF( "pthread_tryjoin_np(): %s", strerror(err) );
+    DBGF( "pthread_tryjoin_np(): %s", pip_errname(err) );
   }
   if( err ) {
     err = ECHILD;
@@ -105,7 +105,7 @@ static int pip_wait_thread( pip_task_t *task, int flag_blk ) {
       errno = 0;
       (void) stat( path, &stbuf );
       err = errno;
-      DBGF( "stat(%s): %s", path, strerror( err ) );
+      DBGF( "stat(%s): %s", path, pip_errname( err ) );
       if( err == ENOENT ) {
 	err = 0;
 	break;
@@ -187,6 +187,24 @@ static int pip_wait_proc( pip_task_t *task, int flag_blk ) {
 	pip_set_exit_status( task, WEXITSTATUS(status), 0 );
       } else if( WIFSIGNALED( status ) ) {
 	pip_set_exit_status( task, 0, WTERMSIG(status) );
+      }
+      if( task->pid_onstart > 0 ) {
+	while( 1 ) {
+	  if( waitpid( task->pid_onstart, NULL, 0 ) > 0 ) break;
+	  switch( errno ) {
+	  case EINTR:
+	    continue;
+	  case EINVAL:
+	    DBGF( "waipid(onstart) failed !!!!" );
+	  case ECHILD:
+	    goto done;
+	  default:
+	    (void) kill( task->pid_onstart, SIGKILL );
+	    continue;
+	  }
+	}
+      done:
+	task->pid_onstart = 0;
       }
     }
     DBGF( "waitid(tid=%d,status=0x%x) (err=%d)", task->tid, status, err );

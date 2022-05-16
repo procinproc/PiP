@@ -46,6 +46,23 @@ struct pip_gdbif_root	*pip_gdbif_root      PIP_PRIVATE;
 
 struct pip_gdbif_root	*pip_gdbif_root;
 
+#ifdef AH
+static void *pip_morecore( ptrdiff_t size ) {
+  return mmap( NULL,
+	       size,
+	       PROT_READ | PROT_WRITE,
+	       MAP_ANONYMOUS | MAP_PRIVATE,
+	       -1,
+	       0 );
+}
+
+__attribute__((constructor))
+static void pip_init_section( void ) {
+  /* setting to use mmap in malloc, instead of sbrk */
+  __morecore = pip_morecore;
+}
+#endif
+
 #define ROUNDUP(X,Y)		((((X)+(Y)-1)/(Y))*(Y))
 void pip_page_alloc( size_t sz, void **allocp ) {
   size_t pgsz;
@@ -610,24 +627,28 @@ static char *pip_onstart_target( pip_task_t *task, char *env ) {
   char *p, *q;
   int pipid;
 
-  p = strchr( env, '@' );
-  if( p == NULL ) {
-    return pip_onstart_script( env, strlen( env ) );
-  } else if( env[0] == '@' ) {		/* no script */
-    p = &env[1];
-    if( *p == '\0' ) return strdup( "" );
-    pipid = strtol( p, NULL, 10 );
-    if( pipid < 0 || pipid == task->pipid ) {
-      return strdup( "" );
-    }
+  if( *env == '\0' ) {
+    return strdup( "" );
   } else {
-    q = p ++;			/* skip '@' */
-    if( *p == '\0' ) {		/* no target */
-      return pip_onstart_script( env, q - env );
-    }
-    pipid = strtol( p, NULL, 10 );
-    if( pipid < 0 || pipid == task->pipid ) {
-      return pip_onstart_script( env, q - env );
+    p = strchr( env, '@' );
+    if( p == NULL ) {
+      return pip_onstart_script( env, strlen( env ) );
+    } else if( env[0] == '@' ) {		/* no script */
+      p = &env[1];
+      if( *p == '\0' ) return strdup( "" );
+      pipid = strtol( p, NULL, 10 );
+      if( pipid < 0 || pipid == task->pipid ) {
+	return strdup( "" );
+      }
+    } else {
+      q = p ++;			/* skip '@' */
+      if( *p == '\0' ) {		/* no target */
+	return pip_onstart_script( env, q - env );
+      }
+      pipid = strtol( p, NULL, 10 );
+      if( pipid < 0 || pipid == task->pipid ) {
+	return pip_onstart_script( env, q - env );
+      }
     }
   }
   return NULL;
@@ -698,7 +719,7 @@ pip_check_prog( char *rprog, pip_spawn_args_t *args, char **pathp, int verbose )
 	pip_err_mesg( "'%s': permission denied", rprog );
 	break;
       default:
-	pip_err_mesg( "'%s': unable to open (%s)", rprog, strerror( err ) );
+	pip_err_mesg( "'%s': unable to open (%s)", rprog, pip_errname( err ) );
 	break;
       }
     }
@@ -707,7 +728,7 @@ pip_check_prog( char *rprog, pip_spawn_args_t *args, char **pathp, int verbose )
     if( stat( prog, &stbuf ) < 0 ) {
       err = errno;
       if( verbose ) {
-	pip_err_mesg( "'%s': stat() fails (%s)", prog, strerror( errno ) );
+	pip_err_mesg( "'%s': stat() fails (%s)", prog, pip_errname( err ) );
       }
     } else {
       /* check file attributes */
@@ -761,22 +782,34 @@ static void pip_colon_sep_path( char *colon_sep_path,
 
 static int pip_check_pie( char *prog ) {
   Elf64_Ehdr elfh;
+  char *magic;
+  ssize_t sz;
   int fd, err = 0;
 	/* check ELF header */
   if( ( fd = open( prog, O_RDONLY ) ) < 0 ) {
     err = errno;
-  } else if( read( fd, &elfh, sizeof(elfh) ) != sizeof(elfh) ) {
+  } else {
+    sz = read( fd, &elfh, sizeof(elfh) );
+    close( fd );
+    
+    if( sz != sizeof(elfh) ) {
       err = EUNATCH;
       pip_err_mesg( "Unable to read ELF header (%s)", prog );
     } else if( elfh.e_ident[EI_MAG0] != ELFMAG0 ||
 	       elfh.e_ident[EI_MAG1] != ELFMAG1 ||
 	       elfh.e_ident[EI_MAG2] != ELFMAG2 ||
 	       elfh.e_ident[EI_MAG3] != ELFMAG3 ) {
-    err = ELIBBAD;
-    pip_err_mesg( "'%s' is not ELF", prog );
-  } else if( elfh.e_type != ET_DYN ) {
-    err = ELIBEXEC;
-    pip_err_mesg( "'%s' is not PIE", prog );
+      err = ELIBBAD;
+      magic = (char*)((void*) &elfh);
+      if( strcmp( magic, "#!" ) == 0 ) {
+	pip_err_mesg( "'%s' is a script (shebang, starting with '#!')", prog );
+      } else {
+	pip_err_mesg( "'%s' is not ELF", prog );
+      }
+    } else if( elfh.e_type != ET_DYN ) {
+      err = ELIBEXEC;
+      pip_err_mesg( "'%s' is not PIE", prog );
+    }
   }
   return err;
 }
@@ -834,14 +867,12 @@ static int pip_corebind( pip_task_t *task, uint32_t coreno ) {
     CPU_ZERO( cpuset );
     coreno &= PIP_CPUCORE_CORENO_MASK;
     if( flags & PIP_CPUCORE_ABS ) { /* absolute */
-    DBG;
       CPU_SET( coreno, cpuset );
     } else {			/* n-th coreno */
       cpu_set_t	*maxset = &pip_root->maxset;
       int ncores;
 
       ncores = CPU_COUNT( maxset );
-    DBG;
       coreno %= ncores;
       for( i=0; ; i++ ) {
 	DBGF( "i:%d", i );
@@ -937,14 +968,9 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
     task->hook_after  = hookp->after;
     task->hook_arg    = hookp->hookarg;
   }
-  if( ( env_stop = getenv( PIP_ENV_STOP_ON_START ) ) != NULL &&
-      *env_stop != '\0' ) {
+  if( ( env_stop = getenv( PIP_ENV_STOP_ON_START ) ) != NULL ) {
     if( !pip_is_threaded_() ) {
       task->onstart_script = pip_onstart_target( task, env_stop );
-      if( task->onstart_script != NULL ) {
-	pip_info_mesg( "PiP task[%d] will be SIGSTOPed (%s)",
-		       task->pipid, PIP_ENV_STOP_ON_START );
-      }
     } else {
       pip_warn_mesg( "%s=%s is NOT effective with (p)thread mode",
 		     PIP_ENV_STOP_ON_START, env_stop );
@@ -953,7 +979,6 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
   DBGF( "ONSTART: '%s'", task->onstart_script );
 
   pip_gdbif_task_new( task );
-    DBG;
   {
     char *libdir = "/lib/";
     int l = strlen( pip_root->prefixdir ) + strlen( libdir ) +
@@ -1007,11 +1032,9 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
   if( err == 0 ) {
     pip_root->ntasks_count ++;
     pip_root->ntasks_curr  ++;
-
-    if( task->onstart_script != NULL && task->onstart_script[0] != '\0' ) {
-      pip_onstart( task );
-    }
     *tskp = task;
+
+    if( task->onstart_script != NULL ) pip_onstart( task );
 
   } else {
   error:			/* undo */

@@ -40,6 +40,11 @@
 
 #define CLONE_SYSCALL	"__clone"
 
+#define LDPIP_ELF_GLOBAL		(1)
+#define LDPIP_ELF_LOCAL			(2)
+#define LDPIP_ELF_MULTI_LOCAL		(-1)
+#define LDPIP_ELF_ERROR			(-2)
+
 static pip_root_t	*ldpip_root;
 static pip_task_t	*ldpip_task;
 static char		*ldpip_err_mesg     = NULL;
@@ -55,6 +60,7 @@ static int ldpip_iterate_phdr( struct dl_phdr_info *info,
 }
 
 static void ldpip_print_maps( char *title, void *loaded ) {
+  //#define DEBUG_AHAH
 #ifdef DEBUG_AHAH
 #define LDPIP_BUFSZ		(4096)
   int fd = open( "/proc/self/maps", O_RDONLY );
@@ -296,123 +302,6 @@ int __clone( int(*fn)(void*), void *child_stack, int flags, void *args, ... ) {
   RETURN_NE( retval );
 }
 
-typedef struct {
-  char		*name;
-  void		*oldaddr;
-  void		*newaddr;
-} ldpip_got_patch_list_t;
-
-typedef struct {
-  char				*dsoname;
-  char				**exclude;
-  ldpip_got_patch_list_t	*patch_list;
-} ldpip_got_patch_args;
-
-static void ldpip_unprotect_page( void *addr ) {
-  ssize_t pgsz = sysconf( _SC_PAGESIZE );
-  void   *page;
-
-  ASSERT( pgsz > 0 );
-  page = (void*) ( (uintptr_t)addr & ~( pgsz - 1 ) );
-  ASSERT( mprotect( page, (size_t) pgsz, PROT_READ | PROT_WRITE ) == 0 );
-}
-
-static ElfW(Dyn) *ldpip_get_dynseg( struct dl_phdr_info *info ) {
-  int i;
-  for( i=0; i<info->dlpi_phnum; i++ ) {
-    /* search DYNAMIC ELF section */
-    if( info->dlpi_phdr[i].p_type == PT_DYNAMIC ) {
-      return (ElfW(Dyn)*) ( info->dlpi_addr + info->dlpi_phdr[i].p_vaddr );
-    }
-  }
-  return NULL;
-}
-
-static int ldpip_get_dynent_val( ElfW(Dyn) *dyn, int type ) {
-  int i;
-  for( i=0; dyn[i].d_tag!=0||dyn[i].d_un.d_val!=0; i++ ) {
-    if( dyn[i].d_tag == type ) return dyn[i].d_un.d_val;
-  }
-  return 0;
-}
-
-static void *ldpip_get_dynent_ptr( ElfW(Dyn) *dyn, int type ) {
-  int i;
-  for( i=0; dyn[i].d_tag!=0||dyn[i].d_un.d_val!=0; i++ ) {
-    if( dyn[i].d_tag == type ) return (void*) dyn[i].d_un.d_ptr;
-  }
-  return NULL;
-}
-
-static int ldpip_replace_got_itr( struct dl_phdr_info *info,
-				  size_t size,
-				  void *got_args ) {
-  ldpip_got_patch_args *args = (ldpip_got_patch_args*) got_args;
-  char	       *dsoname = args->dsoname;
-  char        **exclude = args->exclude;
-  ldpip_got_patch_list_t *list = args->patch_list;
-  ldpip_got_patch_list_t *patch;
-  char	*fname, *bname, *symname;
-  void	*newaddr;
-  int	i, j;
-
-  fname = (char*) info->dlpi_name;
-  if( fname == NULL ) return 0;
-
-  if( ( bname = strrchr( fname, '/' ) ) != NULL ) {
-    bname ++;		/* skp '/' */
-  } else {
-    bname = fname;
-  }
-
-  if( exclude != NULL && *bname != '\0' ) {
-    for( i=0; exclude[i]!=NULL; i++ ) {
-      if( strncmp( exclude[i], bname, strlen(exclude[i]) ) == 0 ) {
-	return 0;
-      }
-    }
-  }
-  if( dsoname == NULL || *dsoname == '\0' ||
-      strncmp( dsoname, bname, strlen(dsoname) ) == 0 ) {
-    ElfW(Dyn) 	*dynseg = ldpip_get_dynseg( info );
-    ElfW(Rela) 	*rela   = (ElfW(Rela)*) ldpip_get_dynent_ptr( dynseg, DT_JMPREL );
-    ElfW(Rela) 	*irela;
-    ElfW(Sym)	*symtab = (ElfW(Sym)*)  ldpip_get_dynent_ptr( dynseg, DT_SYMTAB );
-    char	*strtab = (char*)       ldpip_get_dynent_ptr( dynseg, DT_STRTAB );
-    int		nrela   = ldpip_get_dynent_val(dynseg,DT_PLTRELSZ)/sizeof(ElfW(Rela));
-
-    for( i=0; ; i++ ) {
-      patch = &list[i];
-      symname  = patch->name;
-      newaddr = patch->newaddr;
-      DBGF( "symname: '%s'  addr: %p", symname, newaddr );
-      if( symname == NULL ) break;
-
-      irela = rela;
-      for( j=0; j<nrela; j++,irela++ ) {
-	int symidx;
-	if( sizeof(void*) == 8 ) {
-	  symidx = ELF64_R_SYM(irela->r_info);
-	} else {
-	  symidx = ELF32_R_SYM(irela->r_info);
-	}
-	char *sym = strtab + symtab[symidx].st_name;
-	if( strcmp( sym, symname ) == 0 ) {
-	  void	*secbase    = (void*) info->dlpi_addr;
-	  void	**got_entry = (void**) ( secbase + irela->r_offset );
-	  
-	  DBGF( "%s:GOT[%d] '%s'  GOT:%p", bname, j, sym, got_entry );
-	  ldpip_unprotect_page( (void*) got_entry );
-	  patch->oldaddr = *got_entry;
-	  *got_entry = newaddr;
-	  break;
-	}
-      }
-    }
-  }
-  return 0;
-}
-
 static void 
 ldpip_colon_sep_path( char *colon_sep_path,
 		      int(*for_each_path)(char*,void**,int,char**,int*),
@@ -459,10 +348,26 @@ static void ldpip_libc_init( void ) {
   __ctype_init();
 }
 
+static void *ldpip_morecore( ptrdiff_t size ) {
+  return mmap( NULL,
+	       size,
+	       PROT_READ | PROT_WRITE,
+	       MAP_ANONYMOUS | MAP_PRIVATE,
+	       -1,
+	       0 );
+}
+
+__attribute__((constructor))
+static void ldpip_init_section( void ) {
+  /* setting to use mmap in malloc, instead of sbrk */
+  __morecore = ldpip_morecore;
+}
+
 static void ldpip_libc_setup( pip_spawn_args_t *args ) {
+  /* extern void *(*__morecore)(ptrdiff_t __size) in malloc.h */
   char	**progname;
   char	**progfull;
-
+  
   if( ( progname = ldpip_dlsym( RTLD_DEFAULT, "__progname"      ) ) != NULL ) {
     *progname = args->prog;
   }
@@ -623,6 +528,8 @@ static size_t ldpip_stack_size( void ) {
   return sz;
 }
 
+static int ldpip_search_symbol( char*, void** );
+
 int __ldpip_load_prog( pip_root_t *root, 
 		       pip_task_t *task, 
 		       pip_spawn_args_t *args,
@@ -631,11 +538,12 @@ int __ldpip_load_prog( pip_root_t *root,
   extern char **environ;
   pip_clone_mostly_pthread_t libc_clone;
   char **envv = args->envvec.vec;
+  char *start_func;
   void *loaded;
   void *start;
   size_t stack_size;
   pid_t pid;
-  int narena, i, err = 0;
+  int narena, i, rv, err = 0;
 
   ldpip_root = root;
   ldpip_task = task;
@@ -658,25 +566,53 @@ int __ldpip_load_prog( pip_root_t *root,
     goto error;
   }
   ldpip_print_maps( "dlopen", loaded );
+  /* in the following code, we cannot call dlsym() because the */
+  /* dlsym() call in some glibc versions aborts, not returning */
+  /* an error, when a symbol is not found. this happens when   */
+  /* calling dlsym() from dlmopen()ed new symbol space         */ 
   if( args->funcname == NULL ) {
-    if( ( start = ldpip_dlsym( loaded, "main" ) ) == NULL ) {
-      ldpip_error( "'%s': Unable to find main "	
-		   "(possibly not linked with '-rdynamic' option)",
-		   args->prog );
-      *err_mesg = ldpip_err_mesg;
-      err = ENOEXEC;
-    } else {
-      args->func_main = start;
-    }
+    start_func = "main";
   } else {
-    if( ( start = ldpip_dlsym( loaded, args->funcname ) ) == NULL ) {
-      ldpip_error( "'%s': Unable to find start function (%s)",
-		   args->prog, args->funcname );
-      *err_mesg = ldpip_err_mesg;
-      err = ENOEXEC;
+    start_func = args->funcname;
+  }
+  rv = ldpip_search_symbol( start_func, &start );
+  switch( rv ) {
+  case LDPIP_ELF_GLOBAL:
+    if( args->funcname == NULL ) {
+      args->func_main = start;
     } else {
       args->func_user = start;
     }
+    break;
+  case LDPIP_ELF_LOCAL:
+    if( args->funcname == NULL ) {
+      args->func_main = start;
+      ldpip_warning( "%s: main function is a local symbol. "
+		   "(possibly, not compiled with '-rdynamic' option)",
+		   args->prog );
+    } else {
+      args->func_user = start;
+      ldpip_warning( "%s: function '%s' is a local symbol",
+		     args->prog, args->funcname );
+    }
+    *warn_mesg = ldpip_warn_mesg;
+    break;
+  case LDPIP_ELF_MULTI_LOCAL:
+    ldpip_error( "%s: symbol '%s' has multiple definitions",
+		 args->prog, start_func );
+    *err_mesg = ldpip_err_mesg;
+    err = ENOEXEC;
+    break;
+  default:
+    if( args->funcname == NULL ) {
+      ldpip_error( "%s: Unable to find main", args->prog );
+    } else {
+      ldpip_error( "%s: Unable to find start function (%s)",
+		   args->prog, args->funcname );
+    }
+    *err_mesg = ldpip_err_mesg;
+    err = ENOEXEC;
+    break;
   }
   if( err ) goto error;
 
@@ -727,6 +663,168 @@ int __ldpip_load_prog( pip_root_t *root,
 
  error:
   return err;
+}
+
+/* ---------------------------------------------------- */
+
+static int ldpip_read_elf64_header( int fd, Elf64_Ehdr *ehdr ) {
+  if( read( fd, ehdr, sizeof(Elf64_Ehdr) ) != sizeof(Elf64_Ehdr) ) {
+    return -1;
+  } else if( ehdr->e_ident[EI_MAG0] != ELFMAG0 ||
+	     ehdr->e_ident[EI_MAG1] != ELFMAG1 ||
+	     ehdr->e_ident[EI_MAG2] != ELFMAG2 ||
+	     ehdr->e_ident[EI_MAG3] != ELFMAG3 ) {
+    return -1;
+  } else if( ehdr->e_ident[EI_CLASS] != ELFCLASS64 ) {
+    return -1;
+  }
+  return 0;
+}
+
+static int ldpip_read_elf64_section_header( int fd,
+					    int nth,
+					    Elf64_Ehdr *ehdr,
+					    Elf64_Shdr *shdr ) {
+  off_t off = ehdr->e_shoff + ( ehdr->e_shentsize * nth );
+  if( pread( fd, shdr, sizeof(Elf64_Shdr), off ) != sizeof(Elf64_Shdr) ) {
+    return -1;
+  }
+  return 0;
+}
+
+static int ldpip_read_elf64_dynamic_section( int fd,
+					     off_t offset,
+					     size_t size,
+					     Elf64_Dyn *dyns ) {
+  if( pread( fd, dyns, size, offset ) != size ) return -1;
+  return 0;
+}
+
+static int ldpip_read_elf64_symbol_value( int fd,
+					  Elf64_Ehdr *ehdr,
+					  Elf64_Sym *sym,
+					  intptr_t *valp ) {
+  Elf64_Shdr 	shdr;
+  intptr_t 	val;
+  int 		err = 0;
+  
+  ldpip_read_elf64_section_header( fd, sym->st_shndx, ehdr, &shdr );
+  if( pread( fd, &val, sym->st_size, shdr.sh_offset+sym->st_value ) !=
+      sym->st_size ) {
+    err = -1;
+  } else {
+    *valp = val;
+  }
+  return err;
+}
+
+typedef struct {
+  char	*symbol;
+  void	*addr; 
+  int 	status;
+} ldpip_search_symbol_arg_t;
+
+static int ldpip_read_elf64( struct dl_phdr_info *info, size_t size, void *varg ) {
+  ldpip_search_symbol_arg_t *arg = (ldpip_search_symbol_arg_t*) varg;
+  Elf64_Ehdr 	ehdr;
+  Elf64_Shdr	shdr;
+  Elf64_Sym	*symtab, *sym;
+  const char 	*fname = info->dlpi_name;
+  char		*p, *strtab;
+  intptr_t	val;
+  void		*addr;
+  int		fd, i, j, nsyms, ith_sec, retv;
+
+  ENTERF( "%s", fname );
+  p = strrchr( fname, '/' );
+  if( p != NULL ) {
+    /* ldpip itself has also main. so ignore this */
+    if( strcmp( p+1, LDPIP_NAME  ) == 0 ) RETURN_NE( 0 );
+    if( strcmp( p+1, PIPLIB_NAME ) == 0 ) RETURN_NE( 0 );
+  }
+  if( ( fd = open( fname, O_RDONLY ) )     <  0 ) RETURN_NE( 0 );
+  if( ldpip_read_elf64_header( fd, &ehdr ) != 0 ) RETURN_NE( 0 );
+
+  symtab = NULL;
+  strtab = NULL;
+  retv   = 0;
+  nsyms  = 0;
+  for( i=0; i<ehdr.e_shnum; i++ ) {
+    if( ldpip_read_elf64_section_header( fd, i, &ehdr, &shdr ) != 0 ) {
+      goto try_next;
+    }
+    if( shdr.sh_type != SHT_SYMTAB ) continue;
+    
+    nsyms  = shdr.sh_size / sizeof(Elf64_Sym);
+    symtab = (Elf64_Sym*) malloc( shdr.sh_size );
+    if( pread( fd, symtab, shdr.sh_size, shdr.sh_offset ) !=
+	shdr.sh_size ) {
+      goto try_next;
+    }
+    if( ldpip_read_elf64_section_header( fd,
+					 shdr.sh_link,
+					 &ehdr,
+					 &shdr ) != 0 ) {
+      goto try_next;
+    }
+    strtab = (char*) malloc( shdr.sh_size );
+    if( pread( fd, strtab, shdr.sh_size, shdr.sh_offset ) != shdr.sh_size ) {
+      goto try_next;
+    }
+    break;
+  }
+  ASSERTD( symtab != NULL && strtab != NULL );
+
+  sym = symtab;
+  for( j=0; j<nsyms; j++,sym++ ) {
+    if( ELF64_ST_TYPE(sym->st_info) != STT_FUNC ) continue;
+    char *name = strtab + sym->st_name;
+    if( *name == '\0' ) continue;
+    //DBGF( "%s : '%s' : %d", fname, name, ELF64_ST_TYPE(sym->st_info) );
+    if( strcmp( name, arg->symbol ) != 0 ) continue;
+    val  = (intptr_t) sym->st_value;
+    addr = (void*) info->dlpi_addr + val;
+      
+    switch( ELF64_ST_BIND(sym->st_info) ) {
+    case STB_GLOBAL:
+      //DBGF( "%s : '%s' : GLOBAL (%p)", fname, name, (void*)val );
+      arg->addr   = addr;
+      arg->status = LDPIP_ELF_GLOBAL;
+      retv = 1;		/* discontinue */
+      break;
+    case STB_LOCAL:
+      //DBGF( "%s : '%s' : LOCAL", fname, name );
+      if( arg->status == LDPIP_ELF_LOCAL ) {
+	/* another symbol found */
+	arg->addr   = NULL;
+	arg->status = LDPIP_ELF_MULTI_LOCAL;
+	retv = 1;		/* discontinue */
+      } else {
+	arg->addr   = addr;
+	arg->status = LDPIP_ELF_LOCAL;
+	/* continue to check if multiple defined */
+      }
+      break;
+    default:
+      DBGF( "%s : '%s' : (something else)", fname, name );
+    }
+    if( retv ) break;;
+  }
+ try_next:
+  free( symtab );
+  free( strtab );
+  (void) close( fd );
+  RETURN_NE( retv );
+}
+
+static int ldpip_search_symbol( char *symbol, void **addrp ) {
+  ldpip_search_symbol_arg_t arg;
+  arg.symbol = symbol;
+  arg.addr   = NULL;
+  arg.status = 0;
+  dl_iterate_phdr( ldpip_read_elf64, (void*) &arg );
+  if( arg.status > 0 ) *addrp = arg.addr;
+  return arg.status;
 }
 
 int main() {

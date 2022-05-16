@@ -35,64 +35,7 @@
 
 #include <pip/pip_internal.h>
 
-typedef struct {
-  char			*dsoname;
-  char			**exclude;
-  pip_got_patch_list_t	*patch_list;
-} pip_got_patch_args;
-
-typedef struct {
-  void 			**got_entry;
-  void			*old_addr;
-} pip_got_undo_list_t;
-
-static pip_got_undo_list_t	*pip_got_undo_list = NULL;
-static int			pip_got_undo_size  = 0;
-static int			pip_got_undo_currp = 0;
-
-static void pip_unprotect_page( void *addr ) {
-  ssize_t pgsz = sysconf( _SC_PAGESIZE );
-  void   *page;
-
-  ASSERT( pgsz > 0 );
-  page = (void*) ( (uintptr_t)addr & ~( pgsz - 1 ) );
-  ASSERT( mprotect( page, (size_t) pgsz, PROT_READ | PROT_WRITE ) == 0 );
-}
-
-static void pip_undo_got_patch( void ) {
-  int i;
-  for( i=0; i<pip_got_undo_currp; i++ ) {
-    void **got_entry = pip_got_undo_list[i].got_entry;
-    void *old_addr   = pip_got_undo_list[i].old_addr;
-    *got_entry = old_addr;
-  }
-  free( pip_got_undo_list );
-  pip_got_undo_list  = NULL;
-  pip_got_undo_size  = 0;
-  pip_got_undo_currp = 0;
-}
-
-static void pip_add_got_patch( void **got_entry, void *old_addr ) {
-  if( pip_got_undo_list == NULL ) {
-    size_t pgsz = sysconf(_SC_PAGESIZE);
-    pip_page_alloc( pgsz, (void**) &pip_got_undo_list );
-    pip_got_undo_size  = pgsz / sizeof(pip_got_undo_list_t);
-    pip_got_undo_currp = 0;
-  } else if( pip_got_undo_currp == pip_got_undo_size ) {
-    pip_got_undo_list_t *expanded;
-    int			 newsz = pip_got_undo_size * 2;
-    pip_page_alloc( newsz*sizeof(pip_got_undo_list_t), (void**) &expanded );
-    memcpy( expanded, pip_got_undo_list, pip_got_undo_currp );
-    free( pip_got_undo_list );
-    pip_got_undo_list = expanded;
-    pip_got_undo_size = newsz;
-  }
-  pip_got_undo_list[pip_got_undo_currp].got_entry = got_entry;
-  pip_got_undo_list[pip_got_undo_currp].old_addr  = old_addr;
-  pip_got_undo_currp ++;
-}
-
-static ElfW(Dyn) *pip_get_dynseg( struct dl_phdr_info *info ) {
+static ElfW(Dyn) *pip_get_dyn_seg( struct dl_phdr_info *info ) {
   int i;
   for( i=0; i<info->dlpi_phnum; i++ ) {
     /* search DYNAMIC ELF section */
@@ -102,112 +45,6 @@ static ElfW(Dyn) *pip_get_dynseg( struct dl_phdr_info *info ) {
   }
   return NULL;
 }
-
-static int pip_get_dynent_val( ElfW(Dyn) *dyn, int type ) {
-  int i;
-  for( i=0; dyn[i].d_tag!=0||dyn[i].d_un.d_val!=0; i++ ) {
-    if( dyn[i].d_tag == type ) return dyn[i].d_un.d_val;
-  }
-  return 0;
-}
-
-static void *pip_get_dynent_ptr( ElfW(Dyn) *dyn, int type ) {
-  int i;
-  for( i=0; dyn[i].d_tag!=0||dyn[i].d_un.d_val!=0; i++ ) {
-    if( dyn[i].d_tag == type ) return (void*) dyn[i].d_un.d_ptr;
-  }
-  return NULL;
-}
-
-static int pip_replace_got_itr( struct dl_phdr_info *info,
-				size_t size,
-				void *got_args ) {
-  pip_got_patch_args *args = (pip_got_patch_args*) got_args;
-  char	       *dsoname = args->dsoname;
-  char        **exclude = args->exclude;
-  pip_got_patch_list_t *list = args->patch_list;
-  pip_got_patch_list_t *patch;
-  char	*fname, *bname, *symname;
-  void	*new_addr;
-  int	i, j;
-
-  fname = (char*) info->dlpi_name;
-  if( fname == NULL ) return 0;
-
-  if( ( bname = strrchr( fname, '/' ) ) != NULL ) {
-    bname ++;		/* skp '/' */
-  } else {
-    bname = fname;
-  }
-
-  if( exclude != NULL && *bname != '\0' ) {
-    for( i=0; exclude[i]!=NULL; i++ ) {
-      if( strncmp( exclude[i], bname, strlen(exclude[i]) ) == 0 ) {
-	return 0;
-      }
-    }
-  }
-  if( dsoname == NULL || *dsoname == '\0' ||
-      strncmp( dsoname, bname, strlen(dsoname) ) == 0 ) {
-    ElfW(Dyn) 	*dynseg = pip_get_dynseg( info );
-    ElfW(Rela) 	*rela   = (ElfW(Rela)*) pip_get_dynent_ptr( dynseg, DT_JMPREL );
-    ElfW(Rela) 	*irela;
-    ElfW(Sym)	*symtab = (ElfW(Sym)*)  pip_get_dynent_ptr( dynseg, DT_SYMTAB );
-    char	*strtab = (char*)       pip_get_dynent_ptr( dynseg, DT_STRTAB );
-    int		nrela   = pip_get_dynent_val(dynseg,DT_PLTRELSZ)/sizeof(ElfW(Rela));
-
-    for( i=0; ; i++ ) {
-      patch = &list[i];
-      symname  = patch->name;
-      new_addr = patch->addr;
-      DBGF( "symname: '%s'  addr: %p", symname, new_addr );
-      if( symname == NULL ) break;
-
-      irela = rela;
-      for( j=0; j<nrela; j++,irela++ ) {
-	int symidx;
-	if( sizeof(void*) == 8 ) {
-	  symidx = ELF64_R_SYM(irela->r_info);
-	} else {
-	  symidx = ELF32_R_SYM(irela->r_info);
-	}
-	char *sym = strtab + symtab[symidx].st_name;
-	if( strcmp( sym, symname ) == 0 ) {
-	  void	*secbase    = (void*) info->dlpi_addr;
-	  void	**got_entry = (void**) ( secbase + irela->r_offset );
-	  
-	  DBGF( "%s:GOT[%d] '%s'  GOT:%p", bname, j, sym, got_entry );
-	  pip_unprotect_page( (void*) got_entry );
-	  *got_entry = new_addr;
-	  pip_add_got_patch( got_entry, *got_entry );
-	  break;
-	}
-      }
-    }
-  }
-  return 0;
-}
-
-int pip_patch_GOT( char *dsoname, 
-		   char **exclude, 
-		   pip_got_patch_list_t *patch_list ) {
-  pip_got_patch_args got_args;
-
-  ENTER;
-  got_args.dsoname    = dsoname;
-  got_args.exclude    = exclude;
-  got_args.patch_list = patch_list;
-
-  RETURN_NE( dl_iterate_phdr( pip_replace_got_itr, (void*) &got_args ) );
-}
-
-void pip_undo_patch_GOT( void ) {
-  ENTER;
-  pip_undo_got_patch();
-  RETURNV;
-}
-
-/* ---------------------------------------------------- */
 
 static pip_libc_ftab_t  *pip_libc_ftab_last_resort;
 
@@ -229,11 +66,11 @@ typedef struct pip_find_syms_arg {
   pip_libc_ftab_t 	*ftab;
 } pip_find_syms_arg_t;
 
-static void pip_find_faddr( pip_libc_func_t *funcs, 
-			    off_t base, 
-			    ElfW(Sym) *symtab, 
-			    char *strtab,
-			    void *libc_ftabp ) {
+static void pip_find_faddr_seg( pip_libc_func_t *funcs, 
+				off_t base, 
+				ElfW(Sym) *symtab, 
+				char *strtab,
+				void *libc_ftabp ) {
   pip_libc_func_t *func;
   int 	c, i;
 
@@ -247,7 +84,6 @@ static void pip_find_faddr( pip_libc_func_t *funcs,
       /* FIXME: no way to stop this loop if not found !! */
       if( strcmp( func->name, name ) == 0  ) {
 	void *faddr = ((void*)symtab[i].st_value) + base;
-	DBGF( "%s : %p", name, faddr );
 	c --;
 	*((void**)(libc_ftabp + func->offset)) = faddr;
 	break;
@@ -256,10 +92,10 @@ static void pip_find_faddr( pip_libc_func_t *funcs,
   }
 }
 
-static void pip_search_funcs( pip_libc_func_t *funcs, 
-			      off_t secbase, 
-			      ElfW(Dyn) *dyn,
-			      pip_libc_ftab_t *libc_ftab ) {
+static void pip_search_funcs_seg( pip_libc_func_t *funcs, 
+				  off_t secbase, 
+				  ElfW(Dyn) *dyn,
+				  pip_libc_ftab_t *libc_ftab ) {
   ElfW(Sym)	*symtab = NULL;
   char		*strtab = NULL;
   int 		i;
@@ -274,56 +110,14 @@ static void pip_search_funcs( pip_libc_func_t *funcs,
       break;
     }
     if( symtab != NULL && strtab != NULL ) {
-      pip_find_faddr( funcs, secbase, symtab, strtab, libc_ftab );
+      pip_find_faddr_seg( funcs, secbase, symtab, strtab, libc_ftab );
       break;
     }
   }
 }
 
-#ifdef AH
-/* Do not try to find a symbol which may not exsi in the DSO file !! */
-static void pip_find_dso_symbols( pip_libc_dso_syms_t *dsos[], 
-				  pip_libc_ftab_t *libc_ftab ) {
-  pip_libc_dso_syms_t	*dso;
-  Dl_info 		info;
-  struct link_map 	*lm;
-  void	*loaded;
-  void	*any_func = pip_find_dso_symbols;
-  int   i;
-
-  /* we cannot call dlopen() here since it is already wrapped */
-  ASSERT( dladdr1( any_func, &info, &loaded, RTLD_DL_LINKMAP ) > 0 );
-  lm = (struct link_map*) loaded;
-  while( lm != NULL ) {
-    char *bname, *fname = (char*) lm->l_name;
-
-    DBGF( "DSO: '%s' @ %p", fname, (void*) lm->l_addr );
-    if( fname != NULL && *fname != '\0' ) {
-      if( ( bname = strrchr( fname, '/' ) ) != NULL ) {
-	bname ++;		/* skp '/' */
-      } else {
-	bname = fname;
-      }
-      for( i=0; dsos[i]!=NULL; i++ ) {
-	dso = dsos[i];
-	if( strncmp( dso->dso, bname, strlen(dso->dso) ) == 0 &&
-	    ( bname[strlen(dso->dso)] == '.' ||
-	      bname[strlen(dso->dso)] == '-' ) ) {
-	  pip_search_funcs( dso->funcs, 
-			    (off_t) lm->l_addr, 
-			    lm->l_ld, 
-			    libc_ftab );
-	  break;
-	}
-      }
-    }
-    lm = lm->l_next;
-  }
-}
-#endif
-
 static int 
-pip_find_symbols( struct dl_phdr_info *info, size_t size, void *varg ) {
+pip_find_symbols_seg( struct dl_phdr_info *info, size_t size, void *varg ) {
   pip_find_syms_arg_t *arg = (pip_find_syms_arg_t*) varg;
   pip_libc_dso_syms_t *dso;
   const char *fname = info->dlpi_name;
@@ -343,13 +137,11 @@ pip_find_symbols( struct dl_phdr_info *info, size_t size, void *varg ) {
       DBGF( "DSO: %s  %s", bname, dso->dso );
       if( strncmp( dso->dso, bname, strlen(dso->dso) ) == 0 &&
 	  ( bname[strlen(dso->dso)] == '.' ||
-	    bname[strlen(dso->dso)] == '-' ) ) {
-	DBG;
-	pip_search_funcs( dso->funcs, 
-			  (off_t) info->dlpi_addr, 
-			  pip_get_dynseg( info ), 
-			  arg->ftab );
-	DBG;
+	  bname[strlen(dso->dso)] == '-' ) ) {
+	pip_search_funcs_seg( dso->funcs, 
+			      (off_t) info->dlpi_addr, 
+			      pip_get_dyn_seg( info ), 
+			      arg->ftab );
 	break;
       }
     }
@@ -357,10 +149,10 @@ pip_find_symbols( struct dl_phdr_info *info, size_t size, void *varg ) {
   return 0;
 }
 
-static void pip_find_dso_symbols( pip_libc_dso_syms_t **dsos, 
-				  pip_libc_ftab_t *libc_ftab ) {
+static void pip_find_dso_symbols_seg( pip_libc_dso_syms_t **dsos, 
+				      pip_libc_ftab_t *libc_ftab ) {
   pip_find_syms_arg_t arg = { dsos, libc_ftab };
-  dl_iterate_phdr( pip_find_symbols, (void*) &arg );
+  dl_iterate_phdr( pip_find_symbols_seg, (void*) &arg );
 }
 
 static pip_libc_dso_syms_t pip_dso_libc =
@@ -410,7 +202,7 @@ static void pip_setup_libc_ftab( pip_libc_ftab_t *libc_ftab ) {
   int i, c = 0;
 
   if( libc_ftab->fflush == NULL ) { /* check the first one */
-    pip_find_dso_symbols( pip_libc_dsos, libc_ftab );
+    pip_find_dso_symbols_seg( pip_libc_dsos, libc_ftab );
   }
   int n = sizeof(pip_libc_ftab_t)/sizeof(void*);
   for( i=0; i<n; i++ ) {

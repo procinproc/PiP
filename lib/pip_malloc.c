@@ -42,7 +42,7 @@
 
 int	pip_dont_wrap_malloc PIP_PRIVATE = 1;
 
-//#define PIP_MALLOC
+#define PIP_MALLOC
 #ifdef PIP_MALLOC
 
 typedef struct pip_malloc_info {
@@ -51,8 +51,10 @@ typedef struct pip_malloc_info {
 } pip_malloc_info_t;
 
 void *__libc_malloc(size_t);
+void  __libc_free(void*);
 void *__libc_calloc(size_t nmemb, size_t size);
 void *__libc_realloc(void *ptr, size_t size);
+void *__libc_memalign(size_t, size_t);
 
 #define PIP_MALLOC_MAGIC	(0xA5B6C7D8U)
 
@@ -255,50 +257,66 @@ void *realloc( void *ptr, size_t size ) {
   return pip_realloc( ptr, size );
 }
 
-int pip_posix_memalign( void **memptr, size_t alignment, size_t size ) {
-  int rv = 0;
+void *pip_memalign( size_t alignment, size_t size ) {
+  void	*rv;
 
-  if( size == 0 ) {
-    *memptr = NULL;
-    return 0;
-  }
-  if( !pip_initialized ) {
-    rv = pip_libc_ftab(NULL)->posix_memalign( memptr, alignment, size );
-
+  if( pip_dont_wrap_malloc ) {
+    rv = __libc_memalign( alignment, size );
   } else {
-    pip_malloc_info_t 	info;
-    size_t		sz;
-
     pip_free_all();
-    rv = pip_libc_ftab(NULL)->posix_memalign( memptr, 
-					      alignment, 
-					      size + sizeof(info) );
-    if( rv == 0 && *memptr != NULL ) {
-      info.magic = PIP_MALLOC_MAGIC;
-      info.pipid = pip_get_pipid_curr();
-      sz = pip_malloc_usable_size_orig( *memptr );
-      memcpy( *memptr + sz - sizeof(info), &info, sizeof(info) );
+    if( pip_root == NULL || pip_task == NULL ) {
+      rv = __libc_memalign( alignment, size );
+    } else {
+      pip_malloc_info_t	info;
+      size_t		sz;
+
+      rv = __libc_memalign( alignment, size + sizeof(info) );
+      if( rv != NULL ) {
+	info.magic = PIP_MALLOC_MAGIC;
+	info.pipid = pip_get_pipid_curr();
+	sz = pip_malloc_usable_size_orig( rv );
+	memcpy( rv + sz - sizeof(info), &info, sizeof(info) );
+      }
     }
   }
   return rv;
 }
 
-int posix_memalign( void **memptr, size_t alignment, size_t size ) {
-  return pip_posix_memalign( memptr, alignment, size );
+void *memalign( size_t alignment, size_t size ) {
+  return pip_memalign( alignment, size );
 }
 
 void *aligned_alloc( size_t alignment, size_t size ) {
-  void *p;
-  int rv = pip_posix_memalign( &p, alignment, size );
-  if( rv != 0 ) {
-    errno = rv;
-    return NULL;
-  }
-  return p;
+  return pip_memalign( alignment, size );
 }
 
-void *memalign( size_t alignment, size_t size ) {
-  return aligned_alloc( alignment, size );
+int pip_posix_memalign( void **memptr, size_t alignment, size_t size ) {
+  size_t al;
+  int bc;
+  int err = 0;
+
+  for( al=alignment,bc=0; al>0; al>>=1 ) {
+    if( al & 1 ) {
+      bc ++;
+      if( bc > 1 ) break;
+    }
+  }
+
+  if( bc == 0 || bc > 1 ) {
+    err = EINVAL;
+  } else {
+    void *addr = pip_memalign( alignment, size );
+    if( addr == NULL ) {
+      err = ENOMEM;
+    } else {
+      *memptr = addr;
+    }
+  }
+  return err;
+}
+
+int posix_memalign( void **memptr, size_t alignment, size_t size ) {
+  return pip_posix_memalign( memptr, alignment, size );
 }
 
 #else  /* PIP_MALLOC */

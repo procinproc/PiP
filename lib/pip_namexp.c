@@ -46,21 +46,19 @@ struct pip_named_exptab;
 typedef struct pip_namexp_wait {
   pip_list_t			list;
   pip_sem_t			semaphore;
-  void				*address;
-  int				err;
+  volatile void			*address;
+  volatile int			err;
 } pip_namexp_wait_t;
 
 typedef struct pip_namexp_entry {
-  pip_list_t			list; /* hash collision list */
-  struct pip_named_exptab	*namexp;
+  pip_list_t			list; /* collision list */
   pip_hash_t			hashval;
   char				*name;
-  void				*address;
-  int				flag_exported;
-  int				flag_canceled;
+  volatile void			*address;
+  char				flag_exported;
+  char				flag_canceled;
   pip_sem_t			semaphore;
   pip_list_t			list_wait; /* waiting list */
-  pip_list_t			queue_others;
 } pip_namexp_entry_t;
 
 typedef struct pip_namexp_list {
@@ -141,18 +139,18 @@ pip_find_namexp( pip_namexp_list_t *head, pip_hash_t hash, char *name ) {
   pip_list_t		*entry;
   pip_namexp_entry_t	*name_entry;
 
-  DBGF( "head:%p  name:%s", head, name );
+  DBGF( "head:%p  name:'%s'", head, name );
   PIP_LIST_FOREACH( (pip_list_t*) &head->list, entry ) {
     name_entry = (pip_namexp_entry_t*) entry;
-    DBGF( "entry:%p  hash:0x%lx/0x%lx  name:%s/%s",
-	  name_entry, name_entry->hashval, hash, name_entry->name, name );
+    //DBGF( "entry:%p  hash:0x%lx/0x%lx  name:%s/%s",
+    //name_entry, name_entry->hashval, hash, name_entry->name, name );
     if( name_entry->hashval == hash &&
 	strcmp( name_entry->name, name ) == 0 ) {
-      DBGF( "FOUND -- head:%p  name='%s'", head, name );
+      DBGF( "FOUND -- head:%p  name:'%s'", head, name );
       return name_entry;
     }
   }
-  DBGF( "NOT found -- head:%p  name='%s'", head, name );
+  DBGF( "NOT found -- head:%p  name:'%s'", head, name );
   return NULL;
 }
 
@@ -166,7 +164,6 @@ pip_new_entry( pip_named_exptab_t *namexp, char *name, pip_hash_t hash ) {
   DBGF( "entry:%p  %s@0x%lx", entry, name, hash );
   PIP_LIST_INIT( &entry->list );
   PIP_LIST_INIT( &entry->list_wait );
-  PIP_LIST_INIT( &entry->queue_others );
   pip_sem_init( &entry->semaphore );
   entry->hashval = hash;
   entry->name    = name;
@@ -177,6 +174,8 @@ int pip_named_export( void *exp, const char *format, ... ) {
   pip_named_exptab_t *namexp;
   pip_namexp_entry_t *entry, *new;
   pip_namexp_list_t  *head = NULL;
+  pip_list_t	     *list, *next;
+  pip_namexp_wait_t  *waitp;
   va_list 	ap;
   pip_hash_t 	hash;
   char 		*name = NULL;
@@ -188,7 +187,7 @@ int pip_named_export( void *exp, const char *format, ... ) {
   va_start( ap, format );
   hash = pip_name_hash( &name, format, ap );
   ASSERTD( name != NULL );
-  DBGF( "pipid:%d  name:%s  exp:%p", pip_task->pipid, name, exp );
+  DBGF( "pipid:%d  name:'%s'  exp:%p", pip_task->pipid, name, exp );
 
   namexp = (pip_named_exptab_t*) pip_task->named_exptab;
   ASSERTD( namexp != NULL );
@@ -211,21 +210,29 @@ int pip_named_export( void *exp, const char *format, ... ) {
 	/* already exported */
 	err = EBUSY;
       } else {
-	/* this is a query entry */
+	/* the found entry is a query entry, so create new one */
 	new = pip_new_entry( namexp, name, hash );
 	if( new == NULL ) {
 	  err = ENOMEM;
 	} else {
 	  name = NULL;		/* not to free since name is in use */
-	  /* replace the quesy entry with the exported entry */
-	  PIP_LIST_DEL( (pip_list_t*) entry );
 	  entry->address     = exp;
 	  new->address       = exp;
 	  new->flag_exported = 1;
+	  /* replace the query entry with the exported entry */
+	  PIP_LIST_DEL( (pip_list_t*) entry );
+	  pip_add_namexp_entry( head, new );
 	  /* note: we cannot free this entry since it might be created by */
 	  /* another PiP task and this PiP task must free it in this case */
-	  pip_add_namexp_entry( head, new );
-	  /* resume suspended PiP tasks on this entry */
+
+	  /* resume waiting imports if any*/
+	  PIP_LIST_FOREACH_SAFE( &entry->list_wait, list, next ) {
+	    PIP_LIST_DEL( list );
+	    waitp = (pip_namexp_wait_t*) list;
+	    waitp->err     = err;
+	    waitp->address = exp;
+	    pip_sem_post( &waitp->semaphore );
+	  }
 	  pip_sem_post( &entry->semaphore );
 	}
       }
@@ -247,10 +254,8 @@ static int pip_do_named_import( int pipid,
   pip_named_exptab_t 	*namexp;
   pip_namexp_entry_t 	*entry;
   pip_namexp_list_t  	*head;
-  pip_namexp_wait_t	*waitp;
-  pip_list_t		*list, *next;
   pip_hash_t 		hash;
-  void			*address = NULL;
+  volatile void		*address = NULL;
   char 			*name = NULL;
   int 			err = 0;
 
@@ -265,7 +270,7 @@ static int pip_do_named_import( int pipid,
   hash = pip_name_hash( &name, format, ap );
   if( name == NULL ) RETURN( ENOMEM );
 
-  DBGF( "pipid:%d  name:%s  hash:0x%lx", pipid, name, hash );
+  DBGF( "pipid:%d  name:'%s'  hash:0x%lx", pipid, name, hash );
   head = pip_lock_hashtab_head( namexp, hash );
   {
     if( ( entry = pip_find_namexp( head, hash, name ) ) != NULL ) {
@@ -280,10 +285,12 @@ static int pip_do_named_import( int pipid,
 	  memset( &wait, 0, sizeof(wait) );
 	  PIP_LIST_INIT( &wait.list );
 	  PIP_LIST_ADD( &entry->list_wait, &wait.list );
+
 	  pip_sem_init( &wait.semaphore );
 	  pip_unlock_hashtab_head( head );
 	  pip_sem_wait( &wait.semaphore );
-	  /* now, it is exported */
+	  pip_sem_fin(  &wait.semaphore );
+	  /* exported and resumed */
 	  err     = wait.err;
 	  address = wait.address;
 	  DBGF( "address:%p  err:%d", address, err );
@@ -298,6 +305,7 @@ static int pip_do_named_import( int pipid,
       } else if( flag_nblk ) {	/* no entry yet */
 	err = EAGAIN;
       } else {
+	/* create a query entry */
 	entry = pip_new_entry( namexp, name, hash );
 	if( entry == NULL ) {
 	  err = ENOMEM;
@@ -314,14 +322,6 @@ static int pip_do_named_import( int pipid,
 	    address = entry->address;
 	  }
 	  DBGF( "address:%p", address );
-
-	  PIP_LIST_FOREACH_SAFE( &entry->list_wait, list, next ) {
-	    PIP_LIST_DEL( list );
-	    waitp = (pip_namexp_wait_t*) list;
-	    waitp->err     = err;
-	    waitp->address = address;
-	    pip_sem_post( &waitp->semaphore );
-	  }
 	  free( entry->name );
 	  free( entry );
 	  goto nounlock;
@@ -334,7 +334,7 @@ static int pip_do_named_import( int pipid,
   free( name );
   if( !err ) {
     DBGF( "exp:%p", address );
-    if( expp != NULL ) *expp = address;
+    if( expp != NULL ) *expp = (void*) address;
   }
   RETURN( err );
 }

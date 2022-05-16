@@ -142,11 +142,11 @@ static int pip_check_root_and_task( pip_root_t *root, pip_task_t *task ) {
 
 pip_task_t *pip_current_task( void ) {
   /* do not put any DBG macors in this function */
-  pid_t		tid   = pip_gettid();
-  pip_root_t	*root = pip_root;
-  pip_task_t 	*task;
-  static int	curr = 0;
-  int 		i;
+  static int		curr = 0;
+  pid_t			tid   = pip_gettid();
+  pip_root_t		*root = pip_root;
+  pip_task_t 		*task = NULL;
+  int 			i;
 
   if( root != NULL ) {
     for( i=curr; i<root->ntasks+1; i++ ) {
@@ -358,10 +358,10 @@ void *__pip_start_task( pip_root_t *root,
   } else {
     (void) pip_dlerror();	/* reset error string */
     if( !err && ( err = pip_init_task( root, task, envv ) ) == 0 ) {
-      if( pip_task->onstart_script != NULL ) {
+      if( task->onstart_script != NULL ) {
 	/* PIP_STOP_ON_START (process mode only) */
-	DBGF( "ONSTART: %s", pip_task->onstart_script );
-	ASSERT( pip_raise_signal( task, SIGSTOP ) == 0 );
+	DBGF( "ONSTART: %s", task->onstart_script );
+	pip_raise_signal( task, SIGSTOP );
       }
       /* calling the before hook, if any */
       if( before != NULL ) {
@@ -391,7 +391,7 @@ void *__pip_start_task( pip_root_t *root,
 	    args->funcname, start_func, start_arg, extval );
     }
   }
-  pip_do_exit( pip_task, PIP_EXIT_RETURN, extval );
+  pip_do_exit( task, PIP_EXIT_RETURN, extval );
   /* there is a cse to reach here */
   return NULL;
 }

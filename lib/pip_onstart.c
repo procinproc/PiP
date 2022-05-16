@@ -41,62 +41,71 @@
 void pip_onstart( pip_task_t *task ) {
   extern char **environ;
   char *script = task->onstart_script;
-  pid_t tid, pid;
+  pid_t pid;
+  siginfo_t info;
+  int rv, status;
 
   ENTER;
   while( 1 ) {
-    int status;
     DBGF( "pid:%d", task->tid );
-    tid = waitpid( task->tid, &status, 
-#ifdef __WALL
-		   __WALL |
-#endif
-#ifdef __WCLONE
-		   __WCLONE |
-#endif
-		   WUNTRACED );
-    if( tid < 0 ) {
+    rv = waitid( P_PID, task->tid, &info, WSTOPPED | WEXITED | WNOWAIT );
+    if( rv < 0 ) {
       if( errno == EINTR ) continue;
-      DBGF( "waitpid():%d", errno );
+      ASSERT( 0 );
       RETURNV;
     }
-    DBGF( "status:0x%x", status );
-    if( WIFSTOPPED(  status ) ) break;
-
-    if( WIFEXITED(   status ) ) {
+    status = info.si_status;
+    switch( info.si_code ) {
+    case CLD_STOPPED:
+      goto invoke_onstart_script;
+      break;
+    case CLD_EXITED:
+    case CLD_KILLED:
+    case CLD_DUMPED:
+    case CLD_TRAPPED:
+    case CLD_CONTINUED:
+    default:
+      DBG;
       pip_set_exit_status( task, status, 0 );
       pip_annul_task( task );
-      RETURNV;
     }
-    if( WIFSIGNALED( status ) ) {
-      pip_set_exit_status( task, status, 0 );
-      pip_annul_task( task );
-      RETURNV;
-    }
+    RETURNV;
   }
+ invoke_onstart_script:
+  if( script != NULL ) {
+    if( *script == '\0' ) {
+      pip_info_mesg( "PiP task[%d] (PID=%d) is SIGSTOPed",
+		     task->pipid, task->pid );
+    } else {
+      pip_info_mesg( "PiP task[%d] (PID=%d) is SIGSTOPed and "
+		     "start execution %s script",
+		     task->pipid, task->pid, script );
+
+      if( ( pid = fork() ) == 0 ) {
+	char *argv[5];
 #define NUMARG_LEN	16
-  if( ( pid = fork() ) == 0 ) {
-    char *argv[5];
-    char pid_str[NUMARG_LEN];
-    char pipid_str[NUMARG_LEN];
-    int argc = 0;
-    
-    snprintf( pid_str,   NUMARG_LEN, "%d", task->pid );
-    snprintf( pipid_str, NUMARG_LEN, "%d", task->pipid );
-    argv[argc++] = script;
-    argv[argc++] = pid_str;
-    argv[argc++] = pipid_str;
-    argv[argc++] = task->args.prog;
-    argv[argc++] = NULL;
-    
-    execve( argv[0], argv, environ );
-    pip_warn_mesg( "Unable to exec: %s (%s)", 
-		   script, PIP_ENV_STOP_ON_START );
-  } else if( pid < 0 ) {
-    pip_warn_mesg( "Unable to fork (%s)", 
-		   PIP_ENV_STOP_ON_START );
-  } else {
-    task->pid_onstart = pid;
+	char pid_str[NUMARG_LEN];
+	char pipid_str[NUMARG_LEN];
+	int argc = 0;
+	
+	snprintf( pid_str,   NUMARG_LEN, "%d", task->pid );
+	snprintf( pipid_str, NUMARG_LEN, "%d", task->pipid );
+	argv[argc++] = script;
+	argv[argc++] = pid_str;
+	argv[argc++] = pipid_str;
+	argv[argc++] = task->args.prog;
+	argv[argc++] = NULL;
+	
+	execve( argv[0], argv, environ );
+	pip_warn_mesg( "Unable to exec: %s (%s)", 
+		       script, PIP_ENV_STOP_ON_START );
+      } else if( pid < 0 ) {
+	pip_warn_mesg( "Unable to fork (%s)", 
+		       PIP_ENV_STOP_ON_START );
+      } else {
+	task->pid_onstart = pid;
+      }
+    }
   }
   RETURNV;
 }

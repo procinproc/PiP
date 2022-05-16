@@ -63,14 +63,14 @@ CFLAGS   += $(PIC_CFLAG) $(PTHREAD_FLAG)
 MAINFLAGS = -Wl,-e,pip_main -ldl
 
 SRCS  = pip.c pip_start.c pip_main.c pip_2_backport.c pip_wait.c \
-	pip_namexp.c pip_signal.c pip_util.c pip_mesg.c \
+	pip_namexp.c pip_signal.c pip_util.c pip_mesg.c pip_errname.c \
 	pip_elf.c pip_pip_onstart.c pip_gdbif.c pip_wrapper.c pip_malloc.c \
 	xpmem.c
 
 SRC_LDPIP = ldpip.c
 
 OBJS  = pip.o pip_start.o pip_main.o pip_2_backport.o pip_wait.o \
-	pip_namexp.o pip_signal.o pip_util.o pip_mesg.o \
+	pip_namexp.o pip_signal.o pip_util.o pip_mesg.o pip_errname.o \
 	pip_elf.o pip_onstart.o pip_gdbif.o pip_wrapper.o pip_malloc.o
 
 OBJS_XPMEM   = xpmem.o
