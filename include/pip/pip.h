@@ -38,6 +38,7 @@
 
 #ifndef DOXYGEN_INPROGRESS
 
+#include <semaphore.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
@@ -113,7 +114,6 @@ typedef struct {
   char		**envv;
   char		*funcname;
   void		*arg;
-  void		*exp;
   void		*aux;
   void		*reserved[2];
 } pip_spawn_program_t;
@@ -133,6 +133,7 @@ typedef struct pip_barrier {
   int			count_init;
   volatile uint32_t	count;
   volatile int		gsense;
+  sem_t			semaphore[2];
 } pip_barrier_t;
 
 #define PIP_BARRIER_INIT(N)	{(N),(N),0}
@@ -312,7 +313,7 @@ extern "C" {
    * \#include <pip/pip.h> \n
    * void pip_spawn_from_main( pip_spawn_program_t *progp,
    *			       char *prog, char **argv, char **envv,
-   *		               void *exp, void *aux )
+   *		               void *aux )
    *
    * \description
    * This function sets up the \c pip_spawn_program_t structure for
@@ -324,7 +325,6 @@ extern "C" {
    * \param[in] argv Argument vector.
    * \param[in] envv Environment variables. If this is \c NULL, then
    * the \c environ variable is used for the spawning PiP task.
-   * \param[in] exp Export value to the spawning PiP task
    * \param[in] aux Auxiliary data to be associated with the created PiP task
    *
    * \sa pip_task_spawn
@@ -336,7 +336,7 @@ INLINE
 #endif
 void pip_spawn_from_main( pip_spawn_program_t *progp,
 			  char *prog, char **argv, char **envv,
-			  void *exp, void *aux ) {
+			  void *aux ) {
   memset( progp, 0, sizeof(pip_spawn_program_t) );
   if( prog != NULL ) {
     progp->prog   = prog;
@@ -350,7 +350,6 @@ void pip_spawn_from_main( pip_spawn_program_t *progp,
   } else {
     progp->envv = envv;
   }
-  progp->exp = exp;
   progp->aux = aux;
 }
 
@@ -364,7 +363,7 @@ void pip_spawn_from_main( pip_spawn_program_t *progp,
    * \#include <pip/pip.h> \n
    * pip_spawn_from_func( pip_spawn_program_t *progp,
    *		     char *prog, char *funcname, void *arg, char **envv,
-   *		     void *exp, void *aux );
+   *		     void *aux );
    *
    * \description
    * This function sets the required information to invoke a program,
@@ -386,7 +385,6 @@ void pip_spawn_from_main( pip_spawn_program_t *progp,
    * \param[in] arg Argument which will be passed to the start function
    * \param[in] envv Environment variables. If this is \c NULL, then
    * the \c environ variable is used for the spawning PiP task.
-   * \param[in] exp Export value to the spawning PiP task
    * \param[in] aux Auxiliary data to be associated with the created PiP task
    *
    * \sa pip_task_spawn
@@ -397,7 +395,7 @@ INLINE
 #endif
 void pip_spawn_from_func( pip_spawn_program_t *progp,
 			  char *prog, char *funcname, void *arg, char **envv,
-			  void *exp, void *aux ) {
+			  void *aux ) {
   memset( progp, 0, sizeof(pip_spawn_program_t) );
   progp->prog     = prog;
   progp->funcname = funcname;
@@ -408,7 +406,6 @@ void pip_spawn_from_func( pip_spawn_program_t *progp,
   } else {
     progp->envv = envv;
   }
-  progp->exp = exp;
   progp->aux = aux;
 }
 

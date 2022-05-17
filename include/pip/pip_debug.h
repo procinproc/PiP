@@ -196,9 +196,12 @@ static size_t ldpip_idstr(char*,size_t);
   do { int __xxx=(X);							\
     if(DBGSW) { DISABLE_WRAP_MALLOC;					\
       DBG_PRTBUF; DBG_TAG_LEAVE;					\
-      if(__xxx) { DBG_PRNT(": ERROR RETURN %d:'%s'",__xxx,strerror(__xxx)); \
-      } else { DBG_PRNT(": returns %d",__xxx); }  DBG_OUTPUT;		\
-      ENABLE_WRAP_MALLOC; } return (__xxx); } while(0)
+      if(__xxx) {							\
+	DBG_PRNT(": ERROR RETURN %d:'%s'",__xxx, pip_errname(__xxx)); } \
+      else {								\
+	DBG_PRNT(": returns %d",__xxx); }				\
+      DBG_OUTPUT; ENABLE_WRAP_MALLOC; }					\
+    return (__xxx); } while(0)
 
 #define RETURN_NE(X)							\
   do { int __xxx=(X);							\

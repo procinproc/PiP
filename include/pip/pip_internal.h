@@ -225,7 +225,6 @@ typedef struct pip_task {
   struct pip_root	*task_root;
 
   void			*export;
-  void			*import_root;
   void			*named_exptab;
   void			*aux;
 
@@ -443,9 +442,7 @@ extern void pip_page_alloc( size_t, void** );
 extern int  pip_raise_signal( pip_task_t*, int );
 extern void pip_debug_on_exceptions( pip_root_t*, pip_task_t* );
 
-extern int  pip_wrap_clone( void );
-extern int  pip_patch_GOT( char*, char**, pip_got_patch_list_t* );
-extern void pip_undo_patch_GOT( void );
+extern const char *pip_errname( int );
 
 INLINE int pip_check_pipid( int *pipidp ) {
   if( !pip_is_effective() ) RETURN( EPERM  );
