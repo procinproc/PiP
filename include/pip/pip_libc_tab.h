@@ -42,6 +42,7 @@
 #include <dlfcn.h>
 #include <malloc.h>
 #include <netdb.h>
+#include <pthread.h>
 
 typedef	int   (*libc_fflush_t)(FILE*);
 typedef void  (*libc_exit_t)(int);
@@ -55,6 +56,10 @@ typedef int   (*libc_getaddrinfo_t)(const char*,
 typedef void  (*libc_freeaddrinfo_t)(struct addrinfo*);
 typedef const char* (*libc_gai_strerror_t)(int);
 
+typedef int   (*libc_pthread_create_t)(pthread_t *thread,
+				       const pthread_attr_t *attr,
+				       void *(*start_routine) (void *),
+				       void *arg);
 typedef void  (*libc_pthread_exit_t)(void*);
 
 typedef void* (*libc_dlsym_t)(void*, const char*);
@@ -76,6 +81,7 @@ typedef struct pip_libc_ftab {
   libc_freeaddrinfo_t		freeaddrinfo;
   libc_gai_strerror_t		gai_strerror;
   /* libpthread.so */
+  libc_pthread_create_t		pthread_create;
   libc_pthread_exit_t		pthread_exit;
   /* libdl.so */
   libc_dlsym_t			dlsym;

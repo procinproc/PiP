@@ -193,6 +193,26 @@ void exit( int status ) {
   NEVER_REACH_HERE;
 }
 
+int pip_pthread_create( pthread_t *thread,
+			const pthread_attr_t *attr,
+			void *(*start_routine) (void *),
+			void *arg ) {
+  pip_libc_lock();
+  int rv = pip_libc_ftab(NULL)->pthread_create( thread,
+						attr,
+						start_routine,
+						arg );
+  pip_libc_unlock();
+  return rv;
+}
+
+int pthread_create( pthread_t *thread,
+		    const pthread_attr_t *attr,
+		    void *(*start_routine) (void *),
+		    void *arg ) {
+  return pip_pthread_create( thread, attr, start_routine, arg );
+}
+
 void pip_pthread_exit( void* ) PIP_NORETURN;
 void pip_pthread_exit( void *retval ) {
   pip_do_exit( pip_task, PIP_EXIT_PTHREAD, (uintptr_t) retval );

@@ -136,11 +136,6 @@ extern int		pip_finalized   PIP_PRIVATE;
 #define DLOPEN_FLAGS	  (RTLD_NOW)
 #endif
 
-typedef struct pip_got_patch_list {
-  char	*name;
-  void	*addr;
-} pip_got_patch_list_t;
-
 typedef	int(*main_func_t)(int,char**,char**);
 typedef	int(*start_func_t)(void*);
 
@@ -149,7 +144,6 @@ typedef int(*pip_init_t)(struct pip_root*,struct pip_task*,char**);
 typedef int(*pip_fin_t)(void);
 typedef
 int(*pip_clone_syscall_t)(int(*)(void*), void*, int, void*, pid_t*, void*, pid_t*);
-typedef int(*pip_patch_got_t)(char*, char**, pip_got_patch_list_t*);
 typedef
 int(*clone_syscall_t)(int(*)(void*), void*, int, void*, pid_t*, void*, pid_t*);
 

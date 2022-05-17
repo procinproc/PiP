@@ -52,9 +52,6 @@ typedef struct pip_libc_func {
   char 		*name;
   size_t	offset;
 } pip_libc_func_t;
-
-#define LIBC_FUNC(N)	{ #N, offsetof(pip_libc_ftab_t,N) }
-#define LIBC_FUNC_NULL	{ NULL, 0 }
   
 typedef struct pip_libc_dso_syms {
   char 			*dso;
@@ -155,6 +152,9 @@ static void pip_find_dso_symbols_seg( pip_libc_dso_syms_t **dsos,
   dl_iterate_phdr( pip_find_symbols_seg, (void*) &arg );
 }
 
+#define LIBC_FUNC(N)	{ #N, offsetof(pip_libc_ftab_t,N) }
+#define LIBC_FUNC_NULL	{ NULL, 0 }
+
 static pip_libc_dso_syms_t pip_dso_libc =
   { "libc", 
     {
@@ -173,6 +173,7 @@ static pip_libc_dso_syms_t pip_dso_libc =
 static pip_libc_dso_syms_t pip_dso_libpthread =
   { "libpthread", 
     {
+      LIBC_FUNC( pthread_create ),
       LIBC_FUNC( pthread_exit ),
       LIBC_FUNC_NULL
     }

@@ -102,6 +102,7 @@ static void ldpip_set_libc_ftab( pip_task_t *task ) {
   ldpip_libc_ftab.getaddrinfo	 	= getaddrinfo;
   ldpip_libc_ftab.freeaddrinfo 		= freeaddrinfo;
   ldpip_libc_ftab.gai_strerror 		= gai_strerror;
+  ldpip_libc_ftab.pthread_create	= pthread_create;
   ldpip_libc_ftab.pthread_exit 		= pthread_exit;
   ldpip_libc_ftab.dlsym 		= dlsym;
   ldpip_libc_ftab.dlopen 		= dlopen;

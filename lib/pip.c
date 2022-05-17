@@ -126,9 +126,8 @@ const char *pip_get_mode_str( void ) {
 }
 
 static int pip_check_opt_and_env( int *optsp ) {
-  static int(*pip_clone_mostly_pthread_ptr)
-    ( pthread_t*, int, int, size_t, void*(*)(void*), void*, pid_t* ) = 
-    NULL;
+  int(*pip_clone_mostly_pthread_ptr)
+    ( pthread_t*, int, int, size_t, void*(*)(void*), void*, pid_t* );
   int opts   = *optsp;
   int mode   = opts & PIP_MODE_MASK;
   int newmod;
@@ -198,7 +197,7 @@ static int pip_check_opt_and_env( int *optsp ) {
     }
     break;
   case PIP_MODE_PROCESS_GOT_OBS:
-    pip_err_mesg( "process:got is obsolete" );
+    pip_err_mesg( "process:got mode is obsolete" );
     RETURN( EINVAL );
     break;
   case PIP_MODE_PTHREAD:
@@ -220,9 +219,8 @@ static int pip_check_opt_and_env( int *optsp ) {
   if( desired & PIP_MODE_PROCESS_PRELOAD_BIT ) {
     newmod = PIP_MODE_PROCESS_PRELOAD;
   } else if( desired & PIP_MODE_PROCESS_PIPCLONE_BIT ) {
-    if ( pip_clone_mostly_pthread_ptr == NULL )
-      pip_clone_mostly_pthread_ptr =
-	pip_dlsym( RTLD_DEFAULT, "pip_clone_mostly_pthread" );
+    pip_clone_mostly_pthread_ptr =
+      pip_dlsym( RTLD_DEFAULT, "pip_clone_mostly_pthread" );
     if ( pip_clone_mostly_pthread_ptr != NULL ) {
       newmod = PIP_MODE_PROCESS_PIPCLONE;
     } else {
