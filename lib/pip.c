@@ -358,12 +358,12 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     root->opts         = opts;
     root->page_size    = sysconf( _SC_PAGESIZE );
     root->task_root    = &root->tasks[ntasks];
+    if( rt_expp != NULL ) {
+      root->export_root  = *rt_expp;
+    }
     for( i=0; i<ntasks+1; i++ ) {
       pip_reset_task_struct( &root->tasks[i] );
       pip_named_export_init( &root->tasks[i] );
-    }
-    if( rt_expp != NULL ) {
-      root->export_root = *rt_expp;
     }
     pipid = PIP_PIPID_ROOT;
     root->task_root->pipid      = pipid;
@@ -414,7 +414,9 @@ int pip_init( int *pipidp, int *ntasksp, void **rt_expp, int opts ) {
     DBGF( "pip_root: %p @ %p  piptask : %p @ %p", 
 	  pip_root, &pip_root, pip_task, &pip_task );
     if( ntasksp != NULL ) *ntasksp = pip_root->ntasks;
-    if( rt_expp != NULL ) *rt_expp = pip_task->import_root;
+    if( rt_expp != NULL && pip_root->export_root != NULL ) {
+      *rt_expp = pip_root->export_root;
+    }
   }
   /* root and child task */
   if( pipidp != NULL ) *pipidp = pip_task->pipid;
@@ -955,12 +957,8 @@ static int pip_do_task_spawn( pip_spawn_program_t *progp,
     }
     args->start_arg = progp->arg;
   }
-  task->aux           = progp->aux;
-  if( progp->exp != NULL ) {
-    task->import_root = progp->exp;
-  } else {
-    task->import_root = pip_root->export_root;
-  }
+  task->aux         = progp->aux;
+
   pip_corebind( task, coreno );
 
   if( hookp != NULL ) {
@@ -1092,7 +1090,7 @@ int pip_spawn( char *prog,
   if( prog == NULL        ) RETURN( EINVAL );
   if( !pip_is_effective() ) RETURN( EPERM );
   if( pip_task != NULL && !PIP_ISA_ROOT( pip_task ) ) RETURN( EPERM );
-  pip_spawn_from_main( &program, prog, argv, envv, NULL, NULL );
+  pip_spawn_from_main( &program, prog, argv, envv, NULL );
   pip_spawn_hook( &hook, before, after, hookarg );
   RETURN( pip_task_spawn( &program, coreno, 0, pipidp, &hook ) );
 }
@@ -1196,18 +1194,28 @@ int pip_barrier_init( pip_barrier_t *barrp, int n ) {
   barrp->count      = n;
   barrp->count_init = n;
   barrp->gsense     = 0;
+  pip_sem_init( &barrp->semaphore[0] );
+  pip_sem_init( &barrp->semaphore[1] );
   return 0;
 }
 
 int pip_barrier_wait( pip_barrier_t *barrp ) {
   if( barrp->count_init > 1 ) {
-    int lsense = !barrp->gsense;
+    int i, lsense = ( barrp->gsense + 1 ) & 1;
     if( __sync_sub_and_fetch( &barrp->count, 1 ) == 0 ) {
       barrp->count  = barrp->count_init;
       pip_memory_barrier();
       barrp->gsense = lsense;
+      DBG;
+      for( i=0; i<barrp->count_init-1; i++ ) {
+	pip_sem_post( &barrp->semaphore[lsense] );
+      }
     } else {
-      while( barrp->gsense != lsense ) pip_pause();
+      while( barrp->gsense != lsense ) {
+	DBG;
+	pip_sem_wait( &barrp->semaphore[lsense] );
+	DBG;
+      }
     }
   }
   return 0;
@@ -1216,6 +1224,8 @@ int pip_barrier_wait( pip_barrier_t *barrp ) {
 int pip_barrier_fin( pip_barrier_t *barrp ) {
   if( !pip_is_effective()               ) return EPERM;
   if( barrp->count != barrp->count_init ) return EBUSY;
+  pip_sem_fin( &barrp->semaphore[0] );
+  pip_sem_fin( &barrp->semaphore[1] );
   return 0;
 }
 
