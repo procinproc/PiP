@@ -77,9 +77,9 @@ documents:
 		echo ""; \
 		) | doxygen - >> doxygen-man713.log 2>&1; \
 	done
-	-@(grep -e "warning" -e "error" doxygen-man713.log && ( echo "Doxygen failed"; exit 1; ) ) || echo -n
+	-@(grep -e "warning" -e "error" doxygen-man713.log && ( echo "Doxygen failed"; exit 1; ) ) || true
 	@echo ==== mandb =====; \
-	if which mandb; then mandb ./man -c -u; fi
+	if type -p mandb; then mandb ./man -c -u; fi
 	@echo ==== README.md =====;
 	./markdown.sh "# Commands"  1 "-" > commands.in
 	./markdown.sh "# Functions" 3 "-" > functions.in
@@ -97,7 +97,7 @@ documents:
 		printf "INPUT = README-man.md"; \
 		echo ""; \
 	) | doxygen - >> doxygen-readme.log 2>&1
-	-@(grep -e "warning" -e "error" doxygen-readme.log && ( echo "Doxygen failed"; exit 1; ) ) || echo -n
+	-@(grep -e "warning" -e "error" doxygen-readme.log && ( echo "Doxygen failed"; exit 1; ) ) || true
 	$(MAKE) -C latex-inuse
 	$(CP) README.md $(top_srcdir)
 	@echo ==== html =====;
@@ -118,7 +118,7 @@ documents:
 		done <$$file; \
 	done | tr '\012' ' '; \
 	) | doxygen - >> doxygen-html.log 2>&1;
-	-@(grep -e "warning" -e "error" doxygen-html.log && ( echo "Doxygen failed"; exit 1; ) ) || echo -n
+	-@(grep -e "warning" -e "error" doxygen-html.log && ( echo "Doxygen failed"; exit 1; ) ) || true
 	-echo "Done"
 
 .PHONY: doxygen

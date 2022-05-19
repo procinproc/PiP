@@ -1,1 +1,62 @@
-.so man3/PiP-5-exit.3
+.TH "pip_exit" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_exit \- pip_exit
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "void \fBpip_exit\fP (int status)"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "void pip_exit (int status)"
+
+.PP
+\fBDescription\fP
+.RS 4
+When the main function or the start function of a PiP task returns with an integer value, then it has the same effect of calling \fBpip_exit\fP with the returned value\&.
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fIstatus\fP This status is returned to PiP root\&.
+.RE
+.PP
+\fBNote\fP
+.RS 4
+This function can be used regardless to the PiP execution mode\&. \fCexit(3)\fP is called in the process mode and \fCpthread_exit(3)\fP is called in the pthread mode\&.
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBpip_wait\fP 
+.PP
+\fBpip_trywait\fP 
+.PP
+\fBpip_wait_any\fP 
+.PP
+\fBpip_trywait_any\fP 
+.PP
+exit(Linux 3) 
+.PP
+pthread_exit(Linux 3)
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

@@ -16,7 +16,7 @@
 %global debug_package		%{nil}
 
 Name: process-in-process
-Version: 2.4.0
+Version: 2.4.1
 Release: 0%{?dist}
 Epoch: 1
 Source: %{pip_tarname}-%{version}.tar.gz

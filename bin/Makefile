@@ -38,12 +38,13 @@ srcdir = .
 include $(top_srcdir)/build/var.mk
 
 PROGRAM = pip-exec
-PROGRAMS = $(PROGRAM) printpipmode pip-unpie pipcc pipfc pip-tgkill
-PROGRAMS_TO_INSTALL = $(PROGRAMS) pip-mode pip-check pip-man pips 
+PROGRAMS = $(PROGRAM) printpipmode pip-unpie pipcc pipfc pips pip-tgkill
+PROGRAMS_TO_INSTALL = $(PROGRAMS) pips pip-mode pip-check pip-man 
 EXTRA_PROGRAMS = pip-exec.to-install printpipmode.to-install
 
-MAN1_SRCS = pip-exec.c pipcc pipfc pip-mode.in pip-check.in pip-man.in \
-	pips-doxygen.c printpipmode.c 
+MAN1_CHEAT_DOXYGEN = pipcc.py pipfc.py pip-mode.py pip-check.py pip-man.py
+MAN1_SRCS = pip-exec.c printpipmode.c pip-tgkill.c pips.py \
+	$(MAN1_CHEAT_DOXYGEN)
 
 CPPFLAGS += $(PIP_CPPFLAGS) $(DBGFLAG)
 
@@ -55,7 +56,7 @@ debug:
 include $(top_srcdir)/build/rule.mk
 
 FORCE:
-	chmod +x pip-check pip-mode pip-man pips
+	chmod +x pip-check pip-mode pip-man
 .PHONY: FORCE
 
 pip-exec: pip-exec.c $(DEPS) Makefile
@@ -83,14 +84,38 @@ pipfc: pipcc.in
 	sed -e s/\=LANG\=/Fortran/g -e s/\=PROG\=/pipfc/g -e s/\=CC\=/FC/g < pipcc.in > pipfc
 	chmod +x pipfc
 
+pips: pips.py
+	$(CP) $< $@
+	chmod +x $@
+
 pip-unpie: pip-unpie.c
 	$(CC) -g -O2 -Wall $< -o $@
 
 pip-tgkill: pip-tgkill.c
 	$(CC) -g -O2 -Wall $< -o $@
 
+## Cheating DOXYGEN
+
+pipcc.py: pipcc
+	if ! [ -f $@ ]; then ln -s $< $@; fi
+
+pipfc.py: pipfc
+	if ! [ -f $@ ]; then ln -s $< $@; fi
+
+pip-mode.py: pip-mode
+	if ! [ -f $@ ]; then ln -s $< $@; fi
+
+pip-check.py: pip-check
+	if ! [ -f $@ ]; then ln -s $< $@; fi
+
+pip-man.py: pip-man
+	if ! [ -f $@ ]; then ln -s $< $@; fi
+
+## Clean
+
 post-clean-hook:
 	$(RM) *.E *.log
+	for sl in $(MAN1_CHEAT_DOXYGEN); do unlink $$sl; done
 
 post-veryclean-hook: post-clean-hook
 	$(RM) pipcc pipfc pip-mode pip-check pip-man pips $(EXTRA_PROGRAMS)

@@ -234,28 +234,3 @@ double pip_gettime( void ) {
   gettimeofday( &tv, NULL );
   return ((double)tv.tv_sec + (((double)tv.tv_usec) * 1.0e-6));
 }
-
-void pip_print_loaded_solibs( FILE *file ) {
-  void *handle = NULL;
-  char idstr[PIPIDLEN];
-  int err;
-
-  /* pip_init() must be called in advance */
-  (void) pip_idstr( idstr, PIPIDLEN );
-  if( file == NULL ) file = stderr;
-
-  if( ( err = pip_get_dlmopen_info( PIP_PIPID_MYSELF, &handle, NULL ) ) != 0 ) {
-    fprintf( file, "%s (no solibs found: %d)\n", idstr, err );
-  } else {
-    struct link_map *map = (struct link_map*) handle;
-    for( ; map!=NULL; map=map->l_next ) {
-      char *fname;
-      if( *map->l_name == '\0' ) {
-	fname = "(noname)";
-      } else {
-	fname = map->l_name;
-      }
-      fprintf( file, "%s %s at %p\n", idstr, fname, (void*)map->l_addr );
-    }
-  }
-}

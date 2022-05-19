@@ -1,1 +1,57 @@
-.so man3/PiP-4-query.3
+.TH "pip_get_pipid" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_get_pipid \- pip_get_pipid
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "int \fBpip_get_pipid\fP (int *pipidp)"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "int pip_get_pipid (int * pipidp)"
+
+.PP
+\fBDescription\fP
+.RS 4
+obtain PIPID of the calling PiP task
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fIpipidp\fP This parameter points to the variable which will be set to the PiP ID of the calling task
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+Return 0 on success\&. Return an error code on error\&. 
+.RE
+.PP
+\fBReturn values\fP
+.RS 4
+\fIEPERM\fP PiP library is not initialized yet
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBpip_init\fP
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

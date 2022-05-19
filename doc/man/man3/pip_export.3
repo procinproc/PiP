@@ -1,1 +1,70 @@
-.so man3/PiP-2-export.3
+.TH "pip_export" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_export \- pip_export
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "int \fBpip_export\fP (void *exp)"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "int pip_export (void * exp)"
+
+.PP
+\fBDescription\fP
+.RS 4
+Pass an address of a memory region to the other PiP task\&. This is a very naive implementation in PiP v1 and deprecated\&. Once a task export an address, there is no way to change the exported address or undo export\&. You cannot export \fBNULL\fP\&.
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fIexp\fP An addresss
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+Return 0 on success\&. Return an error code on error\&. 
+.RE
+.PP
+\fBReturn values\fP
+.RS 4
+\fIEPERM\fP PiP library is not initialized yet 
+.br
+\fIEINVAL\fP tried to export \fBNULL\fP 
+.RE
+.PP
+\fBNote\fP
+.RS 4
+This function was introduced from the first PiP version and is deprecated\&.
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBpip_named_export\fP 
+.PP
+\fBpip_named_import\fP 
+.PP
+\fBpip_named_tryimport\fP 
+.PP
+\fBpip_import\fP
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

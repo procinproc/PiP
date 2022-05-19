@@ -1,1 +1,71 @@
-.so man3/PiP-1-spawn.3
+.TH "pip_spawn_hook" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_spawn_hook \- pip_spawn_hook
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "void \fBpip_spawn_hook\fP (pip_spawn_hook_t *hook, pip_spawnhook_t before, pip_spawnhook_t after, void *hookarg)"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "void pip_spawn_hook (pip_spawn_hook_t * hook, pip_spawnhook_t before, pip_spawnhook_t after, void * hookarg)"
+
+.PP
+\fBDescription\fP
+.RS 4
+The \fIbefore\fP and \fIafter\fP functions are introduced to follow the programming model of the \fCfork\fP and \fCexec\fP\&. \fIbefore\fP function does the prologue found between the \fCfork\fP and \fCexec\fP\&. \fIafter\fP function is to free the argument if it is \fCmalloc()ed\fP, for example\&. 
+.RE
+.PP
+\fBPrecondition\fP
+.RS 4
+It should be noted that the \fIbefore\fP and \fIafter\fP functions are called in the \fIcontext\fP of PiP root, although they are running as a part of PiP task (i\&.e\&., having PID of the spawning PiP task)\&. Conversely speaking, those functions cannot access the variables defined in the spawning PiP task\&. 
+.PP
+The before and after hook functions should have the function prototype as shown below; 
+.PP
+.nf
+int hook_func( void *hookarg )
+
+.fi
+.PP
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fIhook\fP Pointer to the \fCpip_spawn_hook_t\fP structure in which the invocation hook information will be set 
+.br
+\fIbefore\fP Just before the executing of the spawned PiP task, this function is called so that file descriptors inherited from the PiP root, for example, can deal with\&. This is only effective with the PiP process mode\&. This function is called with the argument \fIhookarg\fP described below\&. 
+.br
+\fIafter\fP This function is called when the PiP task terminates for the cleanup purpose\&. This function is called with the argument \fIhookarg\fP described below\&. 
+.br
+\fIhookarg\fP The argument for the \fIbefore\fP and \fIafter\fP function call\&.
+.RE
+.PP
+\fBNote\fP
+.RS 4
+Note that the file descriptors and signal handlers are shared between PiP root and PiP tasks in the pthread execution mode\&.
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBpip_task_spawn\fP
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

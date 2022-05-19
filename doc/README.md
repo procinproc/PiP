@@ -345,12 +345,13 @@ Difference between Shared Memory and Shared Address Space in HPC Communication,"
 In Proceedings of Supercomputing Asia 2022, Springer LNCS 13214 2022.
 
 # Commands
-- pipcc
 - pip-check
 - pip-exec
-- pipfc
 - pip-man
 - pip-mode
+- pip-tgkill
+- pipcc
+- pipfc
 - pips
 - printpipmode
 
@@ -364,7 +365,6 @@ In Proceedings of Supercomputing Asia 2022, Springer LNCS 13214 2022.
 - pip\_export
 - pip\_fin
 - pip\_get\_aux
-- pip\_get\_dlmopen\_info
 - pip\_get\_mode
 - pip\_get\_mode\_str
 - pip\_get\_ntasks
@@ -372,14 +372,13 @@ In Proceedings of Supercomputing Asia 2022, Springer LNCS 13214 2022.
 - pip\_get\_system\_id
 - pip\_import
 - pip\_init
-- pip\_isa\_root
-- pip\_isa\_task
 - pip\_is\_initialized
 - pip\_is\_shared\_fd
 - pip\_is\_threaded
+- pip\_isa\_root
+- pip\_isa\_task
 - pip\_kill
 - pip\_kill\_all\_child\_tasks
-- pip\_kill\_all\_tasks
 - pip\_named\_export
 - pip\_named\_import
 - pip\_named\_tryimport

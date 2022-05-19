@@ -1,1 +1,52 @@
-.so man3/PiP-4-query.3
+.TH "pip_is_initialized" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_is_initialized \- pip_is_initialized
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "int \fBpip_is_initialized\fP (void)"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "int pip_is_initialized (void)"
+
+.PP
+\fBDescription\fP
+.RS 4
+query function if \fI\fBpip_init()\fP\fP is called already or not
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+Return a non-zero value if PiP is already initialized\&. Otherwise this returns zero\&.
+.RE
+.PP
+\fBNote\fP
+.RS 4
+A spawned PiP task is initialized implicitly and this function returns true until it calles \fCpip_fun\fP\&.
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBpip_init\fP
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

@@ -1,1 +1,61 @@
-.so man3/PiP-5-exit.3
+.TH "pip_kill" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_kill \- pip_kill
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "int \fBpip_kill\fP (int pipid, int signal)"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "int pip_kill (int pipid, int signal)"
+
+.PP
+\fBDescription \fP
+.RS 4
+deliver a signal to PiP task
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fIpipid\fP PiP ID of a target PiP task to deliver the signal 
+.br
+\fIsignal\fP signal number to be delivered
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+Return 0 on success\&. Return an error code on error\&. 
+.RE
+.PP
+\fBReturn values\fP
+.RS 4
+\fIEPERM\fP PiP library is not yet initialized 
+.br
+\fIEINVAL\fP An invalid signal number or invalid PiP ID is specified
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+tkill(Luinux 2)
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

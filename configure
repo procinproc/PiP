@@ -3166,7 +3166,7 @@ LDFLAGS="${LDFLAGS_SAVE}"
 
 # Checks for library functions.
 
-ac_config_files="$ac_config_files build/config.mk release/version.conf package/redhat/process-in-process.spec bin/pipcc.in bin/pips bin/pip-mode bin/pip-check bin/pip-man doc/latex-inuse/libpip-manpages.tex"
+ac_config_files="$ac_config_files build/config.mk release/version.conf package/redhat/process-in-process.spec bin/pipcc.in bin/pips.py bin/pip-mode bin/pip-check bin/pip-man doc/config-common.doxy doc/latex-inuse/libpip-manpages.tex"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -3864,10 +3864,11 @@ do
     "release/version.conf") CONFIG_FILES="$CONFIG_FILES release/version.conf" ;;
     "package/redhat/process-in-process.spec") CONFIG_FILES="$CONFIG_FILES package/redhat/process-in-process.spec" ;;
     "bin/pipcc.in") CONFIG_FILES="$CONFIG_FILES bin/pipcc.in" ;;
-    "bin/pips") CONFIG_FILES="$CONFIG_FILES bin/pips" ;;
+    "bin/pips.py") CONFIG_FILES="$CONFIG_FILES bin/pips.py" ;;
     "bin/pip-mode") CONFIG_FILES="$CONFIG_FILES bin/pip-mode" ;;
     "bin/pip-check") CONFIG_FILES="$CONFIG_FILES bin/pip-check" ;;
     "bin/pip-man") CONFIG_FILES="$CONFIG_FILES bin/pip-man" ;;
+    "doc/config-common.doxy") CONFIG_FILES="$CONFIG_FILES doc/config-common.doxy" ;;
     "doc/latex-inuse/libpip-manpages.tex") CONFIG_FILES="$CONFIG_FILES doc/latex-inuse/libpip-manpages.tex" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;

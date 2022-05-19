@@ -33,6 +33,33 @@
  * $
  */
 
+/** \addtogroup PiP-Commands PiP Commands
+ * @{ */
+/** \defgroup pip-tgkill pip-tgkill
+ * @{ */
+/** 
+ * \brief send a signal to a taks/thread/process
+ *
+ * \synopsis
+ * pip-tgkill &lt;SIGNAL&gt; &lt;PID&gt; &lt;TID&gt;
+ *
+ * \description
+ * \p pip-tgkill sends a specified signal to the thread (or process)
+ * specified by the pair of PID and TID.
+ *
+ * \param "SIGNAL" signal number or name
+ * \param "PID" PID of the target thread/process
+ * \param "TID" TID of the target thread/process
+ *
+ * \sa pips
+ *
+ * \author Atsushi Hori
+ */
+/** @} */
+/** @} */
+
+#ifndef DOXYGEN_INPROGRESS
+
 #define _GNU_SOURCE 
 #include <sys/syscall.h>
 #include <signal.h>
@@ -132,3 +159,5 @@ int main( int argc, char **argv ) {
   }
   return err;
 }
+
+#endif

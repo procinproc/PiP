@@ -1,1 +1,70 @@
-.so man3/PiP-6-signal.3
+.TH "pip_sigmask" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_sigmask \- pip_sigmask
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "int \fBpip_sigmask\fP (int how, const sigset_t *sigmask, sigset_t *oldmask)"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "int pip_sigmask (int how, const sigset_t * sigmask, sigset_t * oldmask)"
+
+.PP
+\fBDescription\fP
+.RS 4
+set signal mask of the current PiP task
+.RE
+.PP
+\fBNote\fP
+.RS 4
+This function is agnostic to the PiP execution mode\&.
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fIhow\fP see \fBsigprogmask\fP or \fBpthread_sigmask\fP 
+.br
+\fIsigmask\fP signal mask 
+.br
+\fIoldmask\fP old signal mask
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+Return 0 on success\&. Return an error code on error\&. 
+.RE
+.PP
+\fBReturn values\fP
+.RS 4
+\fIEPERM\fP PiP library is not yet initialized 
+.br
+\fIEINVAL\fP An invalid signal number or invalid PiP ID is specified
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+sigprocmask(Linux 2) 
+.PP
+pthread_sigmask(Linux 3)
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

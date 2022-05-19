@@ -1,4 +1,4 @@
-\page libpip libpip
+\page Process-in-Process
 # Process-in-Process (PiP)
 
 PiP is a user-level library to have the best of the both worlds
@@ -346,12 +346,13 @@ Difference between Shared Memory and Shared Address Space in HPC Communication,"
 In Proceedings of Supercomputing Asia 2022, Springer LNCS 13214 2022.
 
 # Commands
-\sa pipcc
 \sa pip-check
 \sa pip-exec
-\sa pipfc
 \sa pip-man
 \sa pip-mode
+\sa pip-tgkill
+\sa pipcc
+\sa pipfc
 \sa pips
 \sa printpipmode
 
@@ -365,7 +366,6 @@ In Proceedings of Supercomputing Asia 2022, Springer LNCS 13214 2022.
 \sa pip\_export
 \sa pip\_fin
 \sa pip\_get\_aux
-\sa pip\_get\_dlmopen\_info
 \sa pip\_get\_mode
 \sa pip\_get\_mode\_str
 \sa pip\_get\_ntasks
@@ -373,14 +373,13 @@ In Proceedings of Supercomputing Asia 2022, Springer LNCS 13214 2022.
 \sa pip\_get\_system\_id
 \sa pip\_import
 \sa pip\_init
-\sa pip\_isa\_root
-\sa pip\_isa\_task
 \sa pip\_is\_initialized
 \sa pip\_is\_shared\_fd
 \sa pip\_is\_threaded
+\sa pip\_isa\_root
+\sa pip\_isa\_task
 \sa pip\_kill
 \sa pip\_kill\_all\_child\_tasks
-\sa pip\_kill\_all\_tasks
 \sa pip\_named\_export
 \sa pip\_named\_import
 \sa pip\_named\_tryimport

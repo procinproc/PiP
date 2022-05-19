@@ -1,1 +1,80 @@
-.so man3/PiP-2-export.3
+.TH "pip_named_tryimport" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_named_tryimport \- pip_named_tryimport
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "int \fBpip_named_tryimport\fP (int pipid, void **expp, const char *format,\&.\&.\&.) __attribute__((format(printf"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "int pip_named_tryimport (int pipid, void ** expp, const char * format,  \&.\&.\&.)"
+
+.PP
+\fBDescription\fP
+.RS 4
+Import an address exported by the specified PiP task and having the specified name\&. If it is not exported yet, this returns \fCEAGAIN\fP\&.
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fIpipid\fP The PiP ID to import the exposed address 
+.br
+\fIexpp\fP The starting address of the exposed region of the PiP task specified by the \fIpipid\fP\&. 
+.br
+\fIformat\fP a \fCprintf\fP format to give the exported address a name
+.RE
+.PP
+\fBNote\fP
+.RS 4
+The addresses exported by \fBpip_export\fP cannot be imported by calling \fBpip_named_import\fP, and vice versa\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+Zero is returned if this function succeeds\&. On error, an error number is returned\&. 
+.RE
+.PP
+\fBReturn values\fP
+.RS 4
+\fIEPERM\fP \fCpip_init\fP is not yet called\&. 
+.br
+\fIEINVAL\fP The specified \fCpipid\fP is invalid 
+.br
+\fIENOMEM\fP Not enough memory 
+.br
+\fIECANCELED\fP The target task is terminated 
+.br
+\fIEAGAIN\fP Target is not exported yet
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBpip_named_export\fP 
+.PP
+\fBpip_named_import\fP 
+.PP
+\fBpip_export\fP 
+.PP
+\fBpip_import\fP
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

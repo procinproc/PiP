@@ -1,1 +1,104 @@
-.so man3/PiP-1-spawn.3
+.TH "pip_task_spawn" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_task_spawn \- pip_task_spawn
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "int \fBpip_task_spawn\fP (pip_spawn_program_t *progp, uint32_t coreno, uint32_t opts, int *pipidp, pip_spawn_hook_t *hookp)"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "int pip_task_spawn (pip_spawn_program_t * progp, uint32_t coreno, uint32_t opts, int * pipidp, pip_spawn_hook_t * hookp)"
+
+.PP
+\fBDescription\fP
+.RS 4
+This function spawns a PiP task specified by \fCprogp\fP argument\&.
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fIprogp\fP Pointer to the \fCpip_spawn_hook_t\fP structure in which the invocation hook information is set 
+.br
+\fIcoreno\fP CPU core number for the PiP task to be bound to\&. By default, \fCcoreno\fP is set to zero, for example, then the calling task will be bound to the first core available\&. This is in mind that the available core numbers are not contiguous\&. To specify an absolute core number, \fCcoreno\fP must be bitwise-ORed with \fCPIP_CPUCORE_ABS\fP\&. If \fCPIP_CPUCORE_ASIS\fP is specified, then the core binding will not take place\&. 
+.br
+\fIopts\fP option flags 
+.br
+\fIpipidp\fP Specify PiP ID of the spawned PiP task\&. If \fCPIP_PIPID_ANY\fP is specified, then the PiP ID of the spawned PiP task is up to the PiP library and the assigned PiP ID will be returned\&. 
+.br
+\fIhookp\fP Hook information to be invoked before and after the program invokation\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+Zero is returned if this function succeeds\&. On error, an error number is returned\&. 
+.RE
+.PP
+\fBReturn values\fP
+.RS 4
+\fIEPERM\fP PiP library is not yet initialized, or PiP task tries to spawn a child task 
+.br
+\fIEINVAL\fP \fCprogp\fP is \fCNULL\fP, \fCopts\fP is invalid and/or unacceptable, the value off \fCpipidp\fP is invalid, or EINVAL the coreno is larger than or equal to \fCPIP_CPUCORE_CORENO_MAX\fP\&. 
+.br
+\fIEBUSY\fP specified PiP ID is alredy occupied 
+.br
+\fIENOMEM\fP not enough memory 
+.br
+\fIENXIO\fP \fCdlmopen\fP failss
+.RE
+.PP
+\fBNote\fP
+.RS 4
+In the process execution mode, each PiP task may have its own file descriptors, signal handlers, and so on, just like a process\&. The file descriptors having the \fCFD_CLOEXEC\fP flag is closed and will not be passed to the spawned PiP task\&. Contrastingly, in the pthread executionn mode, file descriptors and signal handlers are shared among PiP root and PiP tasks while maintaining the privatized variables\&. And the simulated close-on-exec will not take place in this mode\&.
+.RE
+.PP
+\fBEnvironment\fP
+.RS 4
+
+.PD 0
+
+.IP "\(bu" 2
+\fBPIP_STOP_ON_START\fP Specifying the PIP ID to stop on start to debug the specified PiP task from the beginning\&. If the before hook is specified, then the PiP task will be stopped just before calling the before hook\&.
+.PP
+.RE
+.PP
+\fBBugs\fP
+.RS 4
+In theory, there is no reason to restrict for a PiP task to spawn another PiP task\&. However, the current glibc implementation does not allow to do so\&. 
+.RE
+.PP
+\fB\fP
+.RS 4
+If the root process is multithreaded, only the main thread can call this function\&.
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBpip_spawn_from_main\fP 
+.PP
+\fBpip_spawn_from_func\fP 
+.PP
+\fBpip_spawn_hook\fP 
+.PP
+\fBpip_spawn\fP
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

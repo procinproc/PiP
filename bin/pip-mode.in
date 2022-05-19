@@ -28,27 +28,31 @@
 # THE POSSIBILITY OF SUCH DAMAGE.
 # $
 
-### \page pip-mode pip-mode
-###
-### \brief Set PiP execution mode
-###
-### \synopsis
-### pip-mode [OPTION] [PIP-COMMAND]
-###
-### \description
-### The following options are avilable. If no of them specified, then
-### the compiled output file can be used as both PiP root and PiP task.
-###
-### \param -P 'process' mode
-### \param -L 'process:preload' mode
-### \param -C 'process:clone' mode
-### \param -G 'process:got' mode
-### \param -T 'thread' mode
-### \param -u Show usage
-###
-### \sa pip-exec
-### \sa printpipmode
-###
+## \addtogroup PiP-Commands PiP Commands
+# @{
+# \defgroup pip-mode pip-mode
+# @{
+#
+# \brief set PiP execution mode
+#
+# \synopsis
+# pip-mode [OPTION] [PIP-COMMAND]
+#
+# \description
+# The following options are avilable. If no of them specified, then
+# the compiled output file can be used as both PiP root and PiP task.
+#
+# \param "-P" 'process' mode
+# \param "-T" 'thread' mode
+# \param "-u" Show usage
+#
+# \sa pip-exec
+# \sa printpipmode
+#
+# \author Atsushi Hori
+#
+# @}
+# @}
 
 INSTALLTOP=@prefix@
 SRCTOP=@srcdir_top@
@@ -62,9 +66,8 @@ cwd=`cd $dir; pwd`;
 function usage() {
     echo >&2 $prog "-p|-l|-g|-c|-t [<command> ...]";
     echo >&2 "    -P: 'process' mode";
-    echo >&2 "    -W: 'process:wrapclone' mode";
-    echo >&2 "    -L: 'process:libcclone' mode";
     echo >&2 "    -T: 'pthread' mode";
+    echo >&2 "    -u: show this usage";
     exit 2;
 }
 

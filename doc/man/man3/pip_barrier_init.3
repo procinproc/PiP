@@ -1,1 +1,63 @@
-.so man3/PiP-7-sync.3
+.TH "pip_barrier_init" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_barrier_init \- pip_barrier_init
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "int \fBpip_barrier_init\fP (pip_barrier_t *barrp, int n)"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "int pip_barrier_init (pip_barrier_t * barrp, int n)"
+
+.PP
+\fBDescription \fP
+.RS 4
+initialize barrier synchronization structure
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fIbarrp\fP pointer to a PiP barrier structure 
+.br
+\fIn\fP number of participants of this barrier synchronization
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+Return 0 on success\&. Return an error code on error\&.
+.RE
+.PP
+\fBReturn values\fP
+.RS 4
+\fIEPERM\fP PiP library is not yet initialized or already finalized 
+.br
+\fIEINAVL\fP \fCn\fP is invalid
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBpip_barrier_wait\fP 
+.PP
+\fBpip_barrier_fin\fP
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

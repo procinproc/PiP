@@ -33,15 +33,22 @@
  * $
  */
 
-/** \page printpipmode printpipmode
- *
- * \brief Print current PiP mode
+/** \addtogroup PiP-Commands PiP Commands
+ * @{ */
+/** \defgroup printpipmode printpipmode
+ * @{ */
+/**
+ * \brief print current PiP mode
  *
  * \synopsis
  * printpipmode
  *
  * \sa pip-mode
+ *
+ * \author Atsushi Hori
  */
+ /** @} */
+ /** @} */
 
 #include <pip/pip.h>
 

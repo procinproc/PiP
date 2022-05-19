@@ -139,7 +139,7 @@ Refernce Manual}\\
 
 %--- Begin generated contents ---
 \chapter{Proces-in-Process (PiP) Overview}
-\input{libpip}
+\input{../latex/libpip}
 
 \chapter{PiP Commands}
 \input{man1-inputs}

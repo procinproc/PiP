@@ -1,18 +1,26 @@
-.TH "pips" 1 "Tue Mar 29 2022" "Process-in-Process" \" -*- nroff -*-
+.TH "pips" 1 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-pips \- pips 
-List or kill running PiP tasks
+pips \- pips
+.PP
+ \- list or kill running PiP tasks  
+
+.SH SYNOPSIS
+.br
+.PP
+.SH "Detailed Description"
+.PP 
+
 .PP
 \fBSynopsis\fP
 .RS 4
-pips [a][u][x] [PIP-OPTIONS] [-] [PATTERN \&.\&.]
+pips [PIPS-OPTIONS] [-] [PATTERN \&.\&.]
 .RE
 .PP
-\fBParameters:\fP
+\fBParameters\fP
 .RS 4
-\fIa|u|x\fP similar to the aux options of the Linux ps command 
+\fI[a][u][x]\fP same with the 'aux' options of the Linux ps command 
 .br
 \fI--root\fP List PiP root(s) 
 .br
@@ -28,7 +36,7 @@ pips [a][u][x] [PIP-OPTIONS] [-] [PATTERN \&.\&.]
 .br
 \fI--top\fP Run the top Linux command\&. This option may have \fCtop\fP command option(s) separated by comma (,) 
 .br
-\fI-\fP Simply ignored\&. This option can be used to avoid the ambiguity of the options\&.
+\fI-\fP Simply ignored\&. This option can be used to avoid the ambiguity of the options and patterns\&.
 .RE
 .PP
 \fBDescription\fP
@@ -40,21 +48,20 @@ Just like the \fCps\fP command, \fCpips\fP can take the most familiar \fCps\fP o
 .PP
 .PP
 .nf
-$ pips
-PID   TID   TT       TIME     PIP COMMAND
-18741 18741 pts/0    00:00:00 RT  pip-exec
-18742 18742 pts/0    00:00:00 RG  pip-exec
-18743 18743 pts/0    00:00:00 RL  pip-exec
-18741 18744 pts/0    00:00:00 0T  a
-18745 18745 pts/0    00:00:00 0G  b
-18746 18746 pts/0    00:00:00 0L  c
-18747 18747 pts/0    00:00:00 1L  c
-18741 18748 pts/0    00:00:00 1T  a
-18749 18749 pts/0    00:00:00 1G  b
-18741 18750 pts/0    00:00:00 2T  a
-18751 18751 pts/0    00:00:00 2G  b
-18741 18752 pts/0    00:00:00 3T  a
-.fi
+ $ pips
+ PID   TID   TT       TIME     PIP COMMAND
+ 18741 18741 pts/0    00:00:00 RT  pip-exec
+ 18742 18742 pts/0    00:00:00 RG  pip-exec
+ 18743 18743 pts/0    00:00:00 RL  pip-exec
+ 18741 18744 pts/0    00:00:00 0T  a
+ 18745 18745 pts/0    00:00:00 0G  b
+ 18746 18746 pts/0    00:00:00 0L  c
+ 18747 18747 pts/0    00:00:00 1L  c
+ 18741 18748 pts/0    00:00:00 1T  a
+ 18749 18749 pts/0    00:00:00 1G  b
+ 18741 18750 pts/0    00:00:00 2T  a
+ 18751 18751 pts/0    00:00:00 2G  b
+ 18741 18752 pts/0    00:00:00 3T  a.fi
 .PP
 .PP
 here, there are 3 \fCpip-exec\fP root processes running\&. Four pip tasks running program 'a' with the ptherad mode, three PiP tasks running program 'b' with the process:got mode, and two PiP tasks running program 'c' with the process:preload mode\&.
@@ -70,12 +77,11 @@ If users want to have the other \fCps\fP command options other than 'aux', then 
 \fC--root\fP (\fC-r\fP) Only the PiP root tasks will be shown\&. 
 .PP
 .nf
-$ pips --root
-PID   TID   TT       TIME     PIP COMMAND
-18741 18741 pts/0    00:00:00 RT  pip-exec
-18742 18742 pts/0    00:00:00 RG  pip-exec
-18743 18743 pts/0    00:00:00 RL  pip-exec
-
+ $ pips --root
+ PID   TID   TT       TIME     PIP COMMAND
+ 18741 18741 pts/0    00:00:00 RT  pip-exec
+ 18742 18742 pts/0    00:00:00 RG  pip-exec
+ 18743 18743 pts/0    00:00:00 RL  pip-exec
 .fi
 .PP
 
@@ -99,9 +105,7 @@ PID   TID   TT       TIME     PIP COMMAND
 
 .fi
 .PP
-
-.PP
-.PD 0
+ 
 .IP "\(bu" 2
 \fC--family\fP (\fC-f\fP) All PiP roots and tasks of the selected PiP tasks by the \fCPATTERN\fP optional argument of \fCpips\fP\&. 
 .PP
@@ -145,9 +149,17 @@ PID   TID   TT       TIME     PIP COMMAND
 .PP
 
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
-\fCpips\fP collects PiP tasks' status by using the Linux's \fCps\fP command\&. When the \fC--ps\fP or \fC--top\fP option is specified, the \fCps\fP or \fCtop\fP command is invoked after invoking the \fCps\fP command for information gathering\&. This, however, may result some PiP tasks may not appear in the invoked \fCps\fP or \fCtop\fP command when one or more PiP tasks finished after the first \fCps\fP command invocation\&. The same situation may also happen with the \fC--kill\fP or --signal option\&. 
+\fCpips\fP collects PiP tasks' status by using the Linux's \fCps\fP command\&. When the \fC--ps\fP or \fC--top\fP option is specified, the \fCps\fP or \fCtop\fP command is invoked after invoking the \fCps\fP command for information gathering\&. This, however, may result some PiP tasks may not appear in the invoked \fCps\fP or \fCtop\fP command when one or more PiP tasks finished after the first \fCps\fP command invocation\&. The same situation may also happen with the \fC--kill\fP or --signal option\&.
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
 .RE
 .PP
 
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

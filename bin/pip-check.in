@@ -33,22 +33,30 @@
 # User ML: procinproc-users@googlegroups.com
 # $
 
-### \page pip-check pip-check
-###
-### \brief PiP binary checking program if a progarm can run sa a
-### PiP root and/or PiP task
-###
-### \synopsis
-### pip-check [ OPTION ] PIP-PROG [...]
-###
-### \param -r check if a.out can be PiP root
-### \param -t check if a.out can be PiP task
-### \param -b check if a.out can be PiP root and/or PiP task (default)
-### \param -v show reason
-### \param -h show this message
-###
-### \sa pipcc
-###
+## \addtogroup PiP-Commands PiP Commands
+# @{
+# \defgroup pip-check pip-check
+# @{
+#
+# \brief -b pip-check - checking a program if the progarm can run sa a
+# PiP root and/or PiP task
+#
+# \synopsis
+# pip-check [ OPTION ] PIP-PROG [...]
+#
+# \param "-r" check if a.out can be PiP root
+# \param "-t" check if a.out can be PiP task
+# \param "-b" check if a.out can be PiP root and/or PiP task (default)
+# \param "-v" show reason
+# \param "-h" show this message
+#
+# \sa pipcc
+# \sa pipfc
+#
+# \author Atsushi Hori
+#
+# @}
+# @}
 
 HAVE_PIPGLIBC=@have_pipglibc@
 

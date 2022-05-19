@@ -203,10 +203,11 @@ AC_CONFIG_FILES([
 	release/version.conf
 	package/redhat/process-in-process.spec
 	bin/pipcc.in
-	bin/pips
+	bin/pips.py.in
 	bin/pip-mode
 	bin/pip-check
 	bin/pip-man
+	doc/config-common.doxy
 	doc/latex-inuse/libpip-manpages.tex
 ])
 AC_OUTPUT

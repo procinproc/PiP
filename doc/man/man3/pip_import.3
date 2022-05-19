@@ -1,1 +1,70 @@
-.so man3/PiP-2-export.3
+.TH "pip_import" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_import \- pip_import
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "int \fBpip_import\fP (int pipid, void **expp)"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "int pip_import (int pipid, void ** expp)"
+
+.PP
+\fBDescription\fP
+.RS 4
+Get an address exported by the specified PiP task\&. This is a very naive implementation in PiP v1 and deprecated\&. If the address is not yet exported at the time of calling this function, then \fCNULL\fP is returned\&.
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fIpipid\fP The PiP ID to import the exported address 
+.br
+\fIexpp\fP The exported address
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+Return 0 on success\&. Return an error code on error\&. 
+.RE
+.PP
+\fBReturn values\fP
+.RS 4
+\fIEPERM\fP PiP library is not initialized yet
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBpip_export\fP 
+.PP
+\fBpip_named_export\fP 
+.PP
+\fBpip_named_import\fP 
+.PP
+\fBpip_named_tryimport\fP
+.RE
+.PP
+\fBNote\fP
+.RS 4
+This function was introduced from the first PiP version and is deprecated\&.
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

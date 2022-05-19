@@ -1,16 +1,24 @@
-.TH "pipcc" 1 "Tue Mar 29 2022" "Process-in-Process" \" -*- nroff -*-
+.TH "pipcc" 1 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-pipcc \- pipcc 
-C compiler driver for PiP
+pipcc \- pipcc
+.PP
+ \- C compiler driver for PiP\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.SH "Detailed Description"
+.PP 
+
 .PP
 \fBSynopsis\fP
 .RS 4
 pipcc [PIP-OPTIONS] [COMPILER-OPTIONS-AND-ARGS]
 .RE
 .PP
-\fBParameters:\fP
+\fBParameters\fP
 .RS 4
 \fI-piproot\fP the compile (and link) as a PiP root 
 .br
@@ -18,12 +26,12 @@ pipcc [PIP-OPTIONS] [COMPILER-OPTIONS-AND-ARGS]
 .br
 \fI-nopip\fP No PiP related settings will be applied 
 .br
-\fI&ndash;where\fP Print the path where \fBpipcc\fP exists and exit 
+\fI--where\fP Print the path where \fBpipcc\fP exists and exit 
 .br
-\fI&ndash;which\fP Print backend compiler and exit
+\fI--which\fP Print backend compiler and exit
 .RE
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 The \fB-piproot\fP and \fB-piptask\fP options can be specified at the same time\&. In this case, the compiled object can be both of PiP root and PiP task\&. This is also the default behavior when none of them is specified\&.
 .RE
@@ -33,9 +41,14 @@ The \fB-piproot\fP and \fB-piptask\fP options can be specified at the same time\
 \fC$\fP(CC) is used to specify a C compiler
 .RE
 .PP
-\fBSee Also:\fP
+\fBSee also\fP
 .RS 4
-pip-exec(1), pip-mode(1) 
+pip-exec 
+.PP
+pip-mode 
 .RE
 .PP
 
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

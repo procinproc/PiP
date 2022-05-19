@@ -1,1 +1,57 @@
-.so man3/PiP-1-spawn.3
+.TH "pip_spawn_from_main" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_spawn_from_main \- pip_spawn_from_main
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "void \fBpip_spawn_from_main\fP (pip_spawn_program_t *progp, char *prog, char **argv, char **envv, void *aux)"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "void pip_spawn_from_main (pip_spawn_program_t * progp, char * prog, char ** argv, char ** envv, void * aux)"
+
+.PP
+\fBDescription\fP
+.RS 4
+This function sets up the \fCpip_spawn_program_t\fP structure for spawning a PiP task, starting from the mmain function\&.
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fIprogp\fP Pointer to the \fCpip_spawn_program_t\fP structure in which the program invokation information will be set 
+.br
+\fIprog\fP Path to the executiable file\&. 
+.br
+\fIargv\fP Argument vector\&. 
+.br
+\fIenvv\fP Environment variables\&. If this is \fCNULL\fP, then the \fCenviron\fP variable is used for the spawning PiP task\&. 
+.br
+\fIaux\fP Auxiliary data to be associated with the created PiP task
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBpip_task_spawn\fP 
+.PP
+\fBpip_spawn_from_func\fP
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

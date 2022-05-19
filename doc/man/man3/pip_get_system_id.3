@@ -1,1 +1,61 @@
-.so man3/PiP-4-query.3
+.TH "pip_get_system_id" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_get_system_id \- pip_get_system_id
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "int \fBpip_get_system_id\fP (int pipid, pip_id_t *idp)"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "int pip_get_system_id (int pipid, pip_id_t * idp)"
+
+.PP
+\fBDescription\fP
+.RS 4
+The returned object depends on the PiP execution mode\&. In the process mode it returns TID (Thread ID, not PID) and in the thread mode it returns thread (\fCpthread_t\fP) associated with the PiP task This function can be used regardless to the PiP execution mode\&.
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fIpipid\fP PiP ID of a target PiP task 
+.br
+\fIidp\fP a pointer to store the ID value
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+Return 0 on success\&. Return an error code on error\&. 
+.RE
+.PP
+\fBReturn values\fP
+.RS 4
+\fIEPERM\fP The PiP library is not initialized yet
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+getpid(Linux 2) 
+.PP
+pthread_self(Linux 3)
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

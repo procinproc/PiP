@@ -1,1 +1,59 @@
-.so man3/PiP-6-signal.3
+.TH "pip_signal_wait" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_signal_wait \- pip_signal_wait
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "int \fBpip_signal_wait\fP (int signal)"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "int pip_signal_wait (int signal)"
+
+.PP
+\fBDescription\fP
+.RS 4
+This function is agnostic to the PiP execution mode\&.
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fIsignal\fP signal to wait
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+Return 0 on success\&. Return an error code on error\&.
+.RE
+.PP
+\fBNote\fP
+.RS 4
+This function does NOT return the \fCEINTR\fP error\&. This case is treated as normal return;
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+sigwait(Linux 3) 
+.PP
+sigsuspend(Linux 2)
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

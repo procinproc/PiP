@@ -1,11 +1,12 @@
 
 # Commands
-\sa pipcc
 \sa pip-check
 \sa pip-exec
-\sa pipfc
 \sa pip-man
 \sa pip-mode
+\sa pip-tgkill
+\sa pipcc
+\sa pipfc
 \sa pips
 \sa printpipmode
 

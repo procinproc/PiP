@@ -28,18 +28,25 @@
 # THE POSSIBILITY OF SUCH DAMAGE.
 # $
 
-### \page pip-man pip-man
-###
-### \brief show PiP man page
-###
-### \synopsis
-### pip-man [MAN-OPT] MAN-TOPIC
-###
-### \description
-### Show PiP man pages. It can also accept the man command options.
-###
-### \sa man(1)
-###
+## \addtogroup PiP-Commands PiP Commands
+# @{
+# \defgroup pip-man pip-man
+# @{
+#
+# \brief show a PiP man page
+#
+# \synopsis
+# pip-man [MAN-OPT] MAN-TOPIC
+#
+# \description
+# Show PiP man pages. It can also accept the man command options.
+#
+# \sa man(1)
+#
+# \author Atsushi Hori
+#
+# @}
+# @}
 
 prefix=@prefix@;
 mandir=${prefix}/share/man:${MANPATH}

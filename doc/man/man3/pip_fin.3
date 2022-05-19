@@ -1,1 +1,59 @@
-.so man3/PiP-0-init-fin.3
+.TH "pip_fin" 3 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+pip_fin \- pip_fin
+.SH SYNOPSIS
+.br
+.PP
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "int \fBpip_fin\fP (void)"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+
+.SH "Function Documentation"
+.PP 
+.SS "int pip_fin (void)"
+
+.PP
+\fBDescription\fP
+.RS 4
+This function finalizes the PiP library\&. After calling this, most of the PiP functions will return the error code \fCEPERM\fP\&.
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+zero is returned if this function succeeds\&. On error, error number is returned\&. 
+.RE
+.PP
+\fBReturn values\fP
+.RS 4
+\fIEPERM\fP \fCpip_init\fP is not yet called 
+.br
+\fIEBUSY\fP \fCone\fP or more PiP tasks are not yet terminated
+.RE
+.PP
+\fBNotes\fP
+.RS 4
+The behavior of calling \fBpip_init\fP after calling this \fBpip_fin\fP is not defined and recommended not to do so\&.
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBpip_init\fP
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for Process-in-Process from the source code\&.

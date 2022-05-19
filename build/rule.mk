@@ -183,7 +183,7 @@ doc-distclean:
 	-$(RM) .doxygen_*
 .PHONY: doc-distclean
 
-doc-here: doc-distclean
+doc-here: doc-distclean $(MAN1_SRCS) $(MAN3_SRCS) $(MAN7_SRCS)
 	-@case "$(MAN1_SRCS)" in \
 	'')	;; \
 	*)	for i in $(MAN1_SRCS); do echo $$i; done >>.doxygen_man1; \
