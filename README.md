@@ -77,9 +77,7 @@ above mentioned ULP can only work with the process mode.
 When the **PIP\_MODE** environment variable set to "thread"
 then
 the PiP library runs in the pthread mode, and if it is set to
-"process" then it runs in the process mode. There are also two
-implementations in the process mode; "process:wrapclone,"
-"process:libcclone." 
+"process" then it runs in the process mode. 
 
 Several function are made available by the PiP library to absorb the
 functional differences due to the execution modes.

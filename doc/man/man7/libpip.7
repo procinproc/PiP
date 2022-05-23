@@ -34,7 +34,7 @@ Process and
 .PP
 In the pthread mode, although each PiP task has its own static variables unlike thread, PiP task behaves more like PThread, having a TID, having the same file descriptor space, having the same signal delivery semantics as Pthread does, and so on\&. In the process mode, a PiP task behaves more like a process, having a PID, having an independent file descriptor space, having the same signal delivery semantics as Linux process does, and so on\&. The above mentioned ULP can only work with the process mode\&.
 .PP
-When the \fBPIP_MODE\fP environment variable set to 'thread' then the PiP library runs in the pthread mode, and if it is set to 'process' then it runs in the process mode\&. There are also two implementations in the process mode; 'process:wrapclone,' 'process:libcclone\&.'
+When the \fBPIP_MODE\fP environment variable set to 'thread' then the PiP library runs in the pthread mode, and if it is set to 'process' then it runs in the process mode\&.
 .PP
 Several function are made available by the PiP library to absorb the functional differences due to the execution modes\&.
 .SH "License"
