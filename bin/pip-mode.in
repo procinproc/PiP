@@ -64,7 +64,7 @@ dir=`dirname $0`;
 cwd=`cd $dir; pwd`;
 
 function usage() {
-    echo >&2 $prog "-p|-l|-g|-c|-t [<command> ...]";
+    echo >&2 $prog "-P|-T [<command> ...]";
     echo >&2 "    -P: 'process' mode";
     echo >&2 "    -T: 'pthread' mode";
     echo >&2 "    -u: show this usage";
@@ -82,7 +82,7 @@ for i; do
 	-l|-L|--process:preload)
 	    pip_mode="process:preload";;
 	-c|-C|--process:pipclone)
-	    if ! ${HAVE_PIPGLIBC}; then
+	    if [ x"${HAVE_PIPGLIBC}" = x ] ; then
 		echo >&2 "${prog}: No PiP-glibc";
 		exit 1;
 	    fi;
@@ -91,6 +91,9 @@ for i; do
 	    pip_mode="pthread";;
 	-u|--help)
 	    usage;;
+	-g|-G|--process:got)
+	    echo >&2 "${prog}: '--process:got' (-G) option is obsolete"
+	    exit 1;;
 	-*)
 	    echo >&2 "${prog}: Unknown option '$1'";
 	    exit 1;;
