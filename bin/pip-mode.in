@@ -1,9 +1,9 @@
 #!/bin/sh
 
 # $RIKEN_copyright: Riken Center for Computational Sceience (R-CCS),
-# System Software Development Team, 2016-2021
+# System Software Development Team, 2016-2022
 # $
-# $PIP_VERSION: Version 2.4.0$
+# $PIP_VERSION: Version 2.4.1$
 # $PIP_license: <Simplified BSD License>
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
