@@ -1,13 +1,47 @@
-.TH "pip-tgkill" 1 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.TH "pip-tgkill" 1 "Mon May 23 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
 pip-tgkill \- pip-tgkill
+.PP
+ \- send a signal to a taks/thread/process  
+
 .SH SYNOPSIS
 .br
 .PP
 .SH "Detailed Description"
 .PP 
+
+.PP
+\fBSynopsis\fP
+.RS 4
+pip-tgkill <SIGNAL> <PID> <TID>
+.RE
+.PP
+\fBDescription\fP
+.RS 4
+\fCpip-tgkill\fP sends a specified signal to the thread (or process) specified by the pair of PID and TID\&.
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fISIGNAL\fP signal number or name 
+.br
+\fIPID\fP PID of the target thread/process 
+.br
+\fITID\fP TID of the target thread/process
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+pips
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
 
 .SH "Author"
 .PP 

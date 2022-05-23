@@ -36,8 +36,8 @@
 /** \addtogroup PiP-Commands PiP Commands
  * @{ */
 /** \defgroup printpipmode printpipmode
- * @{ */
-/**
+ * @{ 
+ *
  * \brief print current PiP mode
  *
  * \synopsis

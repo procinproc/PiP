@@ -1,13 +1,49 @@
-.TH "pip-exec" 1 "Thu May 19 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
+.TH "pip-exec" 1 "Mon May 23 2022" "Version 2.4.1" "Process-in-Process" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
 pip-exec \- pip-exec
+.PP
+ \- run program(s) as PiP tasks  
+
 .SH SYNOPSIS
 .br
 .PP
 .SH "Detailed Description"
 .PP 
+
+.PP
+\fBSynopsis\fP
+.RS 4
+pip-exec [OPTIONS] <program> \&.\&.\&. [ : \&.\&.\&. ]
+.RE
+.PP
+\fBDescription\fP
+.RS 4
+Run a program as PiP task(s)\&. Mutiple programs can be specified by separating them with colon (:)\&. The \fCpip-exec\fP process becomes the PiP root process and the processes derived from the user-specified programs share the same virtual address space with the \fCpip-exec\fP process\&.
+.RE
+.PP
+\fBParameters\fP
+.RS 4
+\fI-n <N>\fP number of tasks 
+.br
+\fI-f <FUNC>\fP function name to start, defaul 'main' 
+.br
+\fI-c <CORE>\fP specify the CPU core number to bind
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+pipcc 
+.PP
+pipfc
+.RE
+.PP
+\fBAuthor\fP
+.RS 4
+Atsushi Hori 
+.RE
+.PP
 
 .SH "Author"
 .PP 

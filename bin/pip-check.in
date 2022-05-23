@@ -38,7 +38,7 @@
 # \defgroup pip-check pip-check
 # @{
 #
-# \brief -b pip-check - checking a program if the progarm can run sa a
+# \brief pip-check - checking a program if the progarm can run sa a
 # PiP root and/or PiP task
 #
 # \synopsis

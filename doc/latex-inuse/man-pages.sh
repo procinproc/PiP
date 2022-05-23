@@ -14,7 +14,6 @@ for man1 in $man1_tex; do
     if [ $bn == "PiP-Commands" ]; then continue; fi
     if [ -f ../latex/group__${bn}.tex ]; then
 	tex=${bn};
-	echo "\section{$tex}" >> $man1_input;
 	echo "\input{../latex/group__${bn}}" >> $man1_input;
     else
 	echo "$prog: $bn not found"

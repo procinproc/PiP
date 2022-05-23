@@ -37,10 +37,11 @@ LIBPIP = libpip-manpages
 pdf: all
 
 all :
+	cp ../latex/*.sty .
 	./man-pages.sh
-	-pdflatex $(LIBPIP) > /dev/null 2>&1
-	makeindex $(LIBPIP).idx > /dev/null 2>&1
-	-pdflatex $(LIBPIP) > /dev/null 2>&1
+	-pdflatex $(LIBPIP)
+	makeindex $(LIBPIP).idx
+	-pdflatex $(LIBPIP)
 	rerun_count=10 ; \
 	while egrep -s 'Rerun (LaTeX|to get cross-references right)' $(LIBPIP).log; \
 	    do \
@@ -56,8 +57,7 @@ all :
 
 clean:
 	$(RM) -f *.ps *.dvi *.aux *.toc *.idx *.ind *.ilg *.log *.out *.brf *.blg *.bbl
-	$(RM) -f libpip.tex
-	$(RM) -f *-inputs.tex
+	$(RM) -f *-inputs.tex *.sty
 	$(RM) -f \#*\# *~
 
 veryclean: clean

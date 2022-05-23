@@ -100,7 +100,7 @@
 # The number is the least\-significant
 # digit of the PiP ID of that PiP task. The second letter represents
 # the PiP execution mode which is common with PiP root and task. 'L' is
-# 'process:preload,' 'C' is 'process:pipclone,', 'G' is 'process:got,'
+# 'process:preload,' 'C' is 'process:pipclone,', 'G' is 'process:got' (this is obsolete)
 # and 'T' is 'thread.'
 # 
 # The last 'COMMAND' column of the
@@ -130,7 +130,7 @@
 # be shown. If both of \c \-\-root and \c \-\-task are specified,
 # then firstly PiP roots are shown and then PiP tasks will be
 # shown.
-# \code
+# \verbatim
 # $ pips --tasks
 # PID   TID   TT       TIME     PIP COMMAND
 # 18741 18744 pts/0    00:00:00 0T  a
@@ -142,10 +142,10 @@
 # 18741 18750 pts/0    00:00:00 2T  a
 # 18751 18751 pts/0    00:00:00 2G  b
 # 18741 18752 pts/0    00:00:00 3T  a
-# \endcode
+# \endverbatim
 # \li \c \-\-family (\c \-f) All PiP roots and tasks of the selected
 # PiP tasks by the \c PATTERN optional argument of \c pips.
-# \code
+# \verbatim
 # $ pips - a
 # PID   TID   TT       TIME     PIP COMMAND
 # 18741 18744 pts/0    00:00:00 0T  a
@@ -157,7 +157,7 @@
 # 18741 18744 pts/0    00:00:00 0T  a
 # 18741 18748 pts/0    00:00:00 1T  a
 # 18741 18750 pts/0    00:00:00 2T  a
-# \endcode
+# \endverbatim
 # In this example, "pips - a" (the \- is needed not to confused the
 # command name \c a as the \c pips option) shows the PiP tasks which
 # is derived
@@ -180,13 +180,13 @@
 # tasks to be selected and shown. This pattern can be a command name (only
 # the first 14 characters are effective), PID, TID, or a Unix (Linux)
 # filename matching pattern (if the fnmatch Python module is available).
-# \code
+# \verbatim
 # $ pips - *-*
 # PID   TID   TT       TIME     PIP COMMAND
 # 18741 18741 pts/0    00:00:00 RT  pip-exec
 # 18742 18742 pts/0    00:00:00 RG  pip-exec
 # 18743 18743 pts/0    00:00:00 RL  pip-exec
-# \endcode
+# \endverbatim
 # 
 # \note
 # \c pips collects PiP tasks' status by using the Linux's \c ps
@@ -197,7 +197,9 @@
 # finished after the first \c ps command invocation.
 # The same situation may also happen with the \c \-\-kill or \-\-signal
 # option.
-# 
+#
+# \sa pip-exec
+#
 #  \author Atsushi Hori
 # @}
 # @}

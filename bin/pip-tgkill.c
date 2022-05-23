@@ -36,8 +36,8 @@
 /** \addtogroup PiP-Commands PiP Commands
  * @{ */
 /** \defgroup pip-tgkill pip-tgkill
- * @{ */
-/** 
+ * @{ 
+ *
  * \brief send a signal to a taks/thread/process
  *
  * \synopsis

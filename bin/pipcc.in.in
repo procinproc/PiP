@@ -37,7 +37,7 @@
 # @{
 # \defgroup =PROG= =PROG=
 # @{
-# \brief =LANG= compiler driver for PiP
+# \brief =LANG= compile driver for PiP
 #
 # \synopsis
 # =PROG= [PIP-OPTIONS] [COMPILER-OPTIONS-AND-ARGS]
@@ -53,10 +53,12 @@
 # none of them is specified.
 #
 # \environment
-# \p \$(=CC=) is used to specify a =LANG= compiler
+# \p =CC= is used to specify a =LANG= compiler
 #
 # \sa pip-exec
 # \sa pip-mode
+#
+# \author Atsushi Hori
 #
 # @}
 # @}

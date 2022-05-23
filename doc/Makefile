@@ -55,7 +55,8 @@ documents:
 			echo $$top_srcdir/$$dir; \
 		done <$$file; done | sort -u | tr '\012' ' ' ); \
 	( echo "man7"; \
-	  echo "man1"; \
+	  echo "man1c"; \
+	  echo "man1p"; \
 	  echo "man3"; \
 	  echo "latex"; \
 	) | while read type; do \
@@ -70,16 +71,14 @@ documents:
 		find .. -name .doxygen_$$type -print | while read file; do \
 			dir=$$(dirname $$file); \
 			while read src; do \
-				[ -f $$dir/$$src ] && echo $$dir/$$src || \
-				echo $$top_srcdir/$$dir/$$src; \
-			done <$$file; \
+			[ -f $$dir/$$src ] && echo $$dir/$$src || \
+			echo $$top_srcdir/$$dir/$$src; \
+		done <$$file; \
 		done | tr '\012' ' '; \
 		echo ""; \
 		) | doxygen - >> doxygen-man713.log 2>&1; \
 	done
 	-@(grep -e "warning" -e "error" doxygen-man713.log && ( echo "Doxygen failed"; exit 1; ) ) || true
-	@echo ==== mandb =====; \
-	if type -p mandb; then mandb ./man -c -u; fi
 	@echo ==== README.md =====;
 	./markdown.sh "# Commands"  1 "-" > commands.in
 	./markdown.sh "# Functions" 3 "-" > functions.in
@@ -100,6 +99,9 @@ documents:
 	-@(grep -e "warning" -e "error" doxygen-readme.log && ( echo "Doxygen failed"; exit 1; ) ) || true
 	$(MAKE) -C latex-inuse
 	$(CP) README.md $(top_srcdir)
+	$(MV) man/man7/md_doc_README_man.7 man/man7/libpip.7
+	@echo ==== mandb =====; \
+	if type -p mandb; then mandb ./man -c -u; else echo "mandb not found"; fi
 	@echo ==== html =====;
 	cat README-html.doxy README.md.in commands.in functions.in Author-html.md > README-html.md
 	echo -n "" > doxygen-html.log

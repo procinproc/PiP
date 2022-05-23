@@ -36,8 +36,8 @@
 /** \addtogroup PiP-Commands PiP Commands
  * @{ */
 /** \defgroup pip-exec pip-exec
- * @{ */
-/**
+ * @{ 
+ * 
  * \brief run program(s) as PiP tasks
  *
  * \synopsis
@@ -46,14 +46,15 @@
  * \description
  * Run a program as PiP task(s).  Mutiple programs can be specified
  * by separating them with colon (:). The \p pip-exec process becomes the PiP root
- * process and the specified user programs share the same virtual
- * address space with the \p pip-exec process.
+ * process and the processes derived from the user-specified programs
+ * share the same virtual address space with the \p pip-exec process.
  *
- * \param "-n N" number of tasks
- * \param "-f FUNC" function name to start, defaul 'main'
- * \param "-c CORE" specify the CPU core number to bind core(s)
+ * \param "-n <N>" number of tasks
+ * \param "-f <FUNC>" function name to start, defaul 'main'
+ * \param "-c <CORE>" specify the CPU core number to bind
  *
  * \sa pipcc
+ * \sa pipfc
  *
  * \author Atsushi Hori
  */

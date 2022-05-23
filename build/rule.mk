@@ -183,11 +183,13 @@ doc-distclean:
 	-$(RM) .doxygen_*
 .PHONY: doc-distclean
 
-doc-here: doc-distclean $(MAN1_SRCS) $(MAN3_SRCS) $(MAN7_SRCS)
-	-@case "$(MAN1_SRCS)" in \
+doc-here: doc-distclean $(MAN1C_SRCS) $(MAN1P_SRCS) $(MAN3_SRCS) $(MAN7_SRCS)
+	-@case "$(MAN1C_SRCS) $(MAN1P_SRCS)" in \
 	'')	;; \
-	*)	for i in $(MAN1_SRCS); do echo $$i; done >>.doxygen_man1; \
-		for i in $(MAN1_SRCS); do echo $$i; done >>.doxygen_latex;; \
+	*)	for i in $(MAN1C_SRCS); do echo $$i; done >>.doxygen_man1c; \
+		for i in $(MAN1P_SRCS); do echo $$i; done >>.doxygen_man1p; \
+		for i in $(MAN1C_SRCS); do echo $$i; done >>.doxygen_latex; \
+		for i in $(MAN1P_SRCS); do echo $$i; done >>.doxygen_latex;; \
 	esac
 	-@case "$(MAN3_SRCS)" in \
 	'')	;; \

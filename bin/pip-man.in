@@ -41,7 +41,7 @@
 # \description
 # Show PiP man pages. It can also accept the man command options.
 #
-# \sa man(1)
+# \sa man(Linux 1)
 #
 # \author Atsushi Hori
 #

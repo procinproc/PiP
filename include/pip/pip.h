@@ -830,7 +830,7 @@ void pip_spawn_hook( pip_spawn_hook_t *hook,
    * \sa pip_trywait
    * \sa pip_wait_any
    * \sa pip_trywait_any
-   * \sa wait(Linux 2)
+   * \sa wait(Linux 3)
    *
    * \author Atsushi Hori
    */

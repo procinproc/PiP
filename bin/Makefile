@@ -43,8 +43,8 @@ PROGRAMS_TO_INSTALL = $(PROGRAMS) pips pip-mode pip-check pip-man
 EXTRA_PROGRAMS = pip-exec.to-install printpipmode.to-install
 
 MAN1_CHEAT_DOXYGEN = pipcc.py pipfc.py pip-mode.py pip-check.py pip-man.py
-MAN1_SRCS = pip-exec.c printpipmode.c pip-tgkill.c pips.py \
-	$(MAN1_CHEAT_DOXYGEN)
+MAN1C_SRCS = pip-exec.c printpipmode.c pip-tgkill.c
+MAN1P_SRCS = pips.py $(MAN1_CHEAT_DOXYGEN)
 
 CPPFLAGS += $(PIP_CPPFLAGS) $(DBGFLAG)
 
