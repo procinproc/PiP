@@ -782,17 +782,20 @@ static void pip_colon_sep_path( char *colon_sep_path,
 
 static int pip_check_pie( char *prog ) {
   Elf64_Ehdr elfh;
-  char *magic;
   ssize_t sz;
   int fd, err = 0;
-	/* check ELF header */
+  /* check ELF header */
   if( ( fd = open( prog, O_RDONLY ) ) < 0 ) {
     err = errno;
   } else {
+    memset( &elfh, 0, sizeof(elfh) );
     sz = read( fd, &elfh, sizeof(elfh) );
     close( fd );
     
-    if( sz != sizeof(elfh) ) {
+    if( strncmp( (char*)((void*) &elfh), "#!", 2 ) == 0 ) {
+      pip_err_mesg( "'%s' is a shell script ('shebang', starting with '#!')", prog );
+      err = ELIBSCN;
+    } else if( sz != sizeof(elfh) ) {
       err = EUNATCH;
       pip_err_mesg( "Unable to read ELF header (%s)", prog );
     } else if( elfh.e_ident[EI_MAG0] != ELFMAG0 ||
@@ -800,12 +803,7 @@ static int pip_check_pie( char *prog ) {
 	       elfh.e_ident[EI_MAG2] != ELFMAG2 ||
 	       elfh.e_ident[EI_MAG3] != ELFMAG3 ) {
       err = ELIBBAD;
-      magic = (char*)((void*) &elfh);
-      if( strcmp( magic, "#!" ) == 0 ) {
-	pip_err_mesg( "'%s' is a script (shebang, starting with '#!')", prog );
-      } else {
-	pip_err_mesg( "'%s' is not ELF", prog );
-      }
+      pip_err_mesg( "'%s' is not ELF", prog );
     } else if( elfh.e_type != ET_DYN ) {
       err = ELIBEXEC;
       pip_err_mesg( "'%s' is not PIE", prog );

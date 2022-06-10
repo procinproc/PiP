@@ -1130,6 +1130,22 @@ void pip_spawn_hook( pip_spawn_hook_t *hook,
    */
   int pip_is_shared_fd( int *flagp );
   /** @} */
+
+  /**
+   * \defgroup pip_gettime pip_gettime
+   * @{ */
+  /**
+   * \description
+   * returning the result of \b gettimeofday in double.
+   *
+   * \return The current time in double [sec].
+   *
+   * \sa gettimeofday(Linux 3)
+   *
+   * \author Atsushi Hori
+   */
+  double pip_gettime( void );
+  /** @} */
   /** @} */
 
   /**

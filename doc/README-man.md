@@ -369,6 +369,7 @@ In Proceedings of Supercomputing Asia 2022, Springer LNCS 13214 2022.
 \sa pip\_get\_ntasks
 \sa pip\_get\_pipid
 \sa pip\_get\_system\_id
+\sa pip\_gettime
 \sa pip\_import
 \sa pip\_init
 \sa pip\_is\_initialized

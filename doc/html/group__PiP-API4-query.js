@@ -9,5 +9,6 @@ var group__PiP_API4_query =
     [ "pip_isa_root", "group__pip__isa__root.html", "group__pip__isa__root" ],
     [ "pip_isa_task", "group__pip__isa__task.html", "group__pip__isa__task" ],
     [ "pip_is_threaded", "group__pip__is__threaded.html", "group__pip__is__threaded" ],
-    [ "pip_is_shared_fd", "group__pip__is__shared__fd.html", "group__pip__is__shared__fd" ]
+    [ "pip_is_shared_fd", "group__pip__is__shared__fd.html", "group__pip__is__shared__fd" ],
+    [ "pip_gettime", "group__pip__gettime.html", "group__pip__gettime" ]
 ];

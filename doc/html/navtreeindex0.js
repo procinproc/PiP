@@ -39,6 +39,8 @@ var NAVTREEINDEX0 =
 "group__pip__get__pipid.html#ga4e715bb8c325e9acc81af0745908dc0e":[10,5,0,0],
 "group__pip__get__system__id.html":[10,5,5],
 "group__pip__get__system__id.html#gadf3d9e96b46d7a58bf4ce6dda173091a":[10,5,5,0],
+"group__pip__gettime.html":[10,5,10],
+"group__pip__gettime.html#ga0dd8b92cd199ecfb693f9563f443c90b":[10,5,10,0],
 "group__pip__import.html":[10,3,4],
 "group__pip__import.html#ga6d7ac596a9da824e40d7c06528f42e5f":[10,3,4,0],
 "group__pip__init.html":[10,1,0],
