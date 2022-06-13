@@ -740,12 +740,16 @@ static int ldpip_read_elf64( struct dl_phdr_info *info, size_t size, void *varg 
   p = strrchr( fname, '/' );
   if( p != NULL ) {
     /* ldpip itself has also main. so ignore this */
-    if( strcmp( p+1, LDPIP_NAME  ) == 0 ) RETURN_NE( 0 );
-    if( strcmp( p+1, PIPLIB_NAME ) == 0 ) RETURN_NE( 0 );
+    if( strcmp( p+1, LDPIP_NAME  ) == 0 ||
+	strcmp( p+1, PIPLIB_NAME ) == 0 ) {
+      RETURN_NE( 0 );
+    }
   }
-  if( ( fd = open( fname, O_RDONLY ) )     <  0 ) RETURN_NE( 0 );
-  if( ldpip_read_elf64_header( fd, &ehdr ) != 0 ) RETURN_NE( 0 );
-
+  if( ( fd = open( fname, O_RDONLY ) )     <  0 ||
+      ldpip_read_elf64_header( fd, &ehdr ) != 0 ) {
+    arg->status = LDPIP_ELF_ERROR;
+    RETURN_NE( 0 );
+  }
   symtab = NULL;
   strtab = NULL;
   retv   = 0;
@@ -758,6 +762,7 @@ static int ldpip_read_elf64( struct dl_phdr_info *info, size_t size, void *varg 
     
     nsyms  = shdr.sh_size / sizeof(Elf64_Sym);
     symtab = (Elf64_Sym*) malloc( shdr.sh_size );
+    ASSERT( symtab != NULL );
     if( pread( fd, symtab, shdr.sh_size, shdr.sh_offset ) !=
 	shdr.sh_size ) {
       goto try_next;
@@ -769,12 +774,16 @@ static int ldpip_read_elf64( struct dl_phdr_info *info, size_t size, void *varg 
       goto try_next;
     }
     strtab = (char*) malloc( shdr.sh_size );
+    ASSERT( strtab != NULL );
     if( pread( fd, strtab, shdr.sh_size, shdr.sh_offset ) != shdr.sh_size ) {
       goto try_next;
     }
     break;
   }
-  ASSERTD( symtab != NULL && strtab != NULL );
+  if( symtab == NULL || strtab == NULL ) {
+    arg->status = LDPIP_ELF_ERROR;
+    goto try_next;
+  }
 
   sym = symtab;
   for( j=0; j<nsyms; j++,sym++ ) {
