@@ -101,11 +101,11 @@ static void print_item( int item ) {
 
 static void print_usage( char *argv0 ) {
   int i;
-  fprintf( stderr, "%s ", argv0 );
+  printf( "%s ", argv0 );
   for( i=0; opttab[i].name != NULL; i++ ) {
-    fprintf( stderr, "[--%s]", opttab[i].name );
+    printf( "[--%s]", opttab[i].name );
   }
-  fprintf( stderr, "\n" );
+  printf( "\n" );
 }
 
 static int parse_cmdline( char ***argvp ) {
