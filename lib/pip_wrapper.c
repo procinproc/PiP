@@ -151,17 +151,6 @@ void *dlvsym(void *__restrict handle, const char *symbol, const char *version) {
 
 /* misc. */
 
-void *pip_sbrk( intptr_t inc ) {
-  pip_libc_lock();
-  void *rv = pip_libc_ftab(NULL)->sbrk( inc );
-  pip_libc_unlock();
-  return rv;
-}
-
-void *sbrk( intptr_t inc ) {
-  return pip_sbrk( inc );
-}
-
 #include <sys/socket.h>
 #include <netdb.h>
 
