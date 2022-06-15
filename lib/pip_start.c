@@ -308,6 +308,33 @@ static int pip_init_task( pip_root_t *root, pip_task_t *task, char **envv ) {
   RETURN( err );
 }
 
+static int pip_is_coefd( int fd ) {
+  int flags = fcntl( fd, F_GETFD );
+  return( flags > 0 && ( flags & FD_CLOEXEC ) );
+}
+
+static void pip_close_on_exec( void ) {
+  DIR *dir;
+  struct dirent *direntp;
+  int fd;
+
+#define PROCFD_PATH		"/proc/self/fd"
+  if( ( dir = opendir( PROCFD_PATH ) ) != NULL ) {
+    int fd_dir = dirfd( dir );
+    while( ( direntp = readdir( dir ) ) != NULL ) {
+      if( direntp->d_name[0] != '.' &&
+	  ( fd = strtol( direntp->d_name, NULL, 10 ) ) >= 0 &&
+	  fd != fd_dir &&
+	  pip_is_coefd( fd ) ) {
+	(void) close( fd );
+	DBGF( "FD:%d is closed (CLOEXEC)", fd );
+      }
+    }
+    (void) closedir( dir );
+    (void) close( fd_dir );
+  }
+}
+
 static void pip_libc_init( void ) {
   extern void __ctype_init( void );
   __ctype_init();
@@ -370,6 +397,7 @@ void *__pip_start_task( pip_root_t *root,
 	}
       }
     }
+    if( !( root->opts & PIP_MODE_PTHREAD ) ) pip_close_on_exec();
     if( err ) {
       DBG;
       extval = err;

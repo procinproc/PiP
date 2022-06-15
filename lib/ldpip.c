@@ -231,33 +231,6 @@ static void ldpip_error( const char *format, ... ) {
   va_end( ap );
 }
 
-static int ldpip_is_coefd( int fd ) {
-  int flags = fcntl( fd, F_GETFD );
-  return( flags > 0 && ( flags & FD_CLOEXEC ) );
-}
-
-static void ldpip_close_on_exec( void ) {
-  DIR *dir;
-  struct dirent *direntp;
-  int fd;
-
-#define PROCFD_PATH		"/proc/self/fd"
-  if( ( dir = opendir( PROCFD_PATH ) ) != NULL ) {
-    int fd_dir = dirfd( dir );
-    while( ( direntp = readdir( dir ) ) != NULL ) {
-      if( direntp->d_name[0] != '.' &&
-	  ( fd = strtol( direntp->d_name, NULL, 10 ) ) >= 0 &&
-	  fd != fd_dir &&
-	  ldpip_is_coefd( fd ) ) {
-	(void) close( fd );
-	DBGF( "FD:%d is closed (CLOEXEC)", fd );
-      }
-    }
-    (void) closedir( dir );
-    (void) close( fd_dir );
-  }
-}
-
 static pip_clone_syscall_t	pip_clone_orig;
 static pip_spinlock_t 		pip_lock_clone;
 
@@ -460,8 +433,6 @@ static void *ldpip_load( void *vargs ) {
       ldpip_warning( "Unable to bind CPU core:%d (%d)", coreno, err );
     }
   }
-  if( !( ldpip_root->opts & PIP_MODE_PTHREAD ) ) ldpip_close_on_exec();
-
   ASSERT( ( start_task = (pip_start_task_t) 
 	    ldpip_dlsym( ldpip_task->loaded, "__pip_start_task" ) ) != NULL );
 
