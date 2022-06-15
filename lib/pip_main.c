@@ -100,6 +100,7 @@ static void print_item( int item ) {
 }
 
 static void print_usage( char *argv0 ) {
+  /* do not use fprintf(). */
   int i;
   printf( "%s ", argv0 );
   for( i=0; opttab[i].name != NULL; i++ ) {
