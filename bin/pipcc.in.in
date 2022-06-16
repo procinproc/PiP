@@ -77,6 +77,7 @@ HAVE_PIPGLIBC=@have_pipglibc@
 
 FCOMP=@FC@
 CCOMP=@CC@
+CXXCOMP=@CXX@
 
 glibc_incdir=@glibc_incdir@
 glibc_libdir=@glibc_libdir@
@@ -156,25 +157,37 @@ while [ "$1" != "" ]; do
     shift;
 done
 
-if [ x"${compiler}" != x ]; then
-    COMPILER=${compiler}
+if [ "${cmd}" == "pipfc" ]; then
+    if [ x"${FC}" != x ]; then
+	COMPILER=${FC}
+    elif [ x"${FCOMP}" != x ]; then
+	COMPILER=${FCOMP}
+    else
+        echo >&2 "${cmd}: No Fotran compiler. Set the FC environment variable."
+        exit 1;
+    fi
 else
-    if [ "${cmd}" == "pipfc" ]; then
-        if [ x"${FC}" != x ]; then
-	    COMPILER=${FC}
-        elif [ x"${FCOMP}" != x ]; then
-	    COMPILER=${FCOMP}
+    CXXLANG=false
+    for src in $opts; do
+	case $src in
+	    *.C|*.cc|*.cpp|*.cxx) CXXLANG=true;;
+	esac
+    done
+    if ! $CXXLANG; then 
+        if [ x"${CC}" != x ]; then
+	    COMPILER=${CC}
+        elif [ x"${CCOMP}" != x ]; then
+	    COMPILER=${CCOMP}
         else
-            echo >&2 "${cmd}: No Fotran compiler. Set the FC environment variable."
-            exit 1;
+	    COMPILER=cc
         fi
     else
-        if [ x"${CC}" != x ]; then
-            COMPILER=${CC}
-        elif [ x"${CCOMP}" != x ]; then
-            COMPILER=${CCOMP}
+        if [ x"${CXX}" != x ]; then
+	    COMPILER=${CXX}
+        elif [ x"${CXXOMP}" != x ]; then
+	    COMPILER=${CXXCOMP}
         else
-            COMPILER=cc
+	    COMPILER=g++
         fi
     fi
 fi

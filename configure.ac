@@ -110,14 +110,17 @@ if test -x $getconf; then
 fi
 
 # Checks for programs.
-AC_PROG_CC
 AC_PROG_INSTALL
 
+AC_PROG_CC
+AC_SUBST(CC)
+AC_SUBST(CFLAGS)
 if test "$GCC" = yes; then
   CFLAGS="$CFLAGS -Wall"
 fi
-AC_SUBST(CC)
-AC_SUBST(CFLAGS)
+
+AC_PROG_CXX
+AC_SUBST(CXX)
 
 AC_ARG_VAR([FC], [Fortran compiler command])
 AC_CHECK_PROGS([FC],[gfortran g95 g77])
@@ -203,7 +206,7 @@ AC_CONFIG_FILES([
 	release/version.conf
 	package/redhat/process-in-process.spec
 	bin/pipcc.in
-	bin/pips.py.in
+	bin/pips.py
 	bin/pip-mode
 	bin/pip-check
 	bin/pip-man
