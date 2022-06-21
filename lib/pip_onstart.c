@@ -78,7 +78,7 @@ void pip_onstart( pip_task_t *task ) {
 		     task->pipid, task->pid );
     } else {
       pip_info_mesg( "PiP task[%d] (PID=%d) is SIGSTOPed and "
-		     "start execution %s script",
+		     "executing '%s' script",
 		     task->pipid, task->pid, script );
 
       if( ( pid = fork() ) == 0 ) {
@@ -93,15 +93,17 @@ void pip_onstart( pip_task_t *task ) {
 	argv[argc++] = script;
 	argv[argc++] = pid_str;
 	argv[argc++] = pipid_str;
-	argv[argc++] = task->args.prog;
+	argv[argc++] = task->args.prog_full;
 	argv[argc++] = NULL;
 	
 	execve( argv[0], argv, environ );
-	pip_warn_mesg( "Unable to exec: %s (%s)", 
-		       script, PIP_ENV_STOP_ON_START );
+	pip_warn_mesg( "Unable to exec: %s (%s) [err:%s]", 
+		       script, PIP_ENV_STOP_ON_START, strerror(errno) );
+	(void) pip_raise_signal( task, SIGCONT );
       } else if( pid < 0 ) {
 	pip_warn_mesg( "Unable to fork (%s)", 
 		       PIP_ENV_STOP_ON_START );
+	(void) pip_raise_signal( task, SIGCONT );
       } else {
 	task->pid_onstart = pid;
       }

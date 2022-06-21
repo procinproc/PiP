@@ -159,8 +159,6 @@ void pip_debug_info( void ) {
   if( env != NULL && strcasecmp( env, "on" ) == 0 ) {
     pip_show_maps();
   }
-
-  
   if( pip_root                              != NULL &&
       ( prefix = pip_root->prefixdir )      != NULL &&
       ( env = getenv( PIP_ENV_SHOW_PIPS ) ) != NULL &&
