@@ -79,6 +79,7 @@ make DESTDIR="$RPM_BUILD_ROOT" doc
 # devel
 %{_prefix}/include
 %{_libdir}/libpip.so
+%{_libdir}/libxpmem.so
 #doc
 %{_mandir}
 %{_docdir}
