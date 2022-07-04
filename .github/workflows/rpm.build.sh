@@ -1,6 +1,7 @@
 #!/bin/sh
 
 set -x
+sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-Linux-*
 yum -y install rpmdevtools &&
 rpmdev-setuptree &&
 rpm -Uvh $RPM_SRPM &&
