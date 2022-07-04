@@ -63,7 +63,9 @@
     PIP_MODE_PROCESS_GOT_OBS |				\
     PIP_MODE_PROCESS_PIPCLONE )
 
+#ifdef PIP_PRELOAD
 #define PIP_ENV_PRELOAD			"PIP_PRELOAD"
+#endif
 #define PIP_ENV_MODE			"PIP_MODE"
 #define PIP_ENV_MODE_THREAD		"thread"
 #define PIP_ENV_MODE_PTHREAD		"pthread"
@@ -82,7 +84,11 @@
 
 #define PIP_ENV_QUIET			"PIP_QUIET"
 
-#define PIP_ENV_STACKSZ			"PIP_STACKSZ"
+#define PIP_ENV_STACKSZ			"PIP_STACKSIZE"
+
+#define PIP_STACK_SIZE			(16*1024*1024LU) /* 8 MiB */
+#define PIP_STACK_SIZE_MIN		(4*1024*1024LU) /* 1 MiB */
+#define PIP_STACK_SIZE_MAX		(1014*1024*1024*1024LU) /* 1 TiB */
 
 #define PIP_MAGIC_NUM			(-747) /* "PIP" P=7, I=4 */
 
@@ -210,15 +216,17 @@ extern "C" {
    * \environment
    * \arg \b PIP_MODE Specifying the PiP execution mmode. Its value can be
    * either \c thread, \c pthread, or \c process.
-   * \arg \b PIP_STACKSZ Sepcifying the stack size (in bytes). The
-   * \b KMP_STACKSIZE and \b OMP_STACKSIZE are also effective. The 't',
-   * 'g', 'm', 'k' and 'b' posfix character can be used, as
+   * \arg \b PIP_STACKSIZE Sepcifying the stack size (in bytes). The
+   * \b KMP_STACKSIZE, \b GOMP_STACKSIZE and \b OMP_STACKSIZE are also
+   * effective. The 'T',  
+   * 'G', 'M', 'K' and 'B' posfix character can be used, as
    * abbreviations of Tera, Giga, Mega, Kilo and Byte, respectively.
    * \arg \b PIP_STOP_ON_START Specifying the PIP ID to stop on start
    * to debug the specified PiP task from the beginning. If the
    * before hook is specified, then the PiP task will be stopped just
    * before calling the before hook.
-   * \arg \b PIP_GDB_PATH If thisenvironment is set to the path pointing to the PiP-gdb
+   * \arg \b PIP_GDB_PATH If thisenvironment is set to the path
+   * pointing to the PiP-gdb 
    * executable file, then PiP-gdb is automatically attached when an
    * excetion signal (SIGSEGV and SIGHUP by default) is delivered. The signals which
    * triggers the PiP-gdb invokation can be specified the

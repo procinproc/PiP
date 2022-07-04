@@ -133,6 +133,15 @@ static void *ldpip_dlopen( const char *filename, int flag ) {
   ldpip_libc_lock();
   handle = dlopen( filename, flag );
   ldpip_libc_unlock();
+  if( 0 ) {
+    int i = 0;
+    int print_loaded( struct dl_phdr_info *info, size_t size, void *varg ) {
+      int *ip = (int*) varg;
+      printf( "[%d] %s\n", (*ip)++, info->dlpi_name );
+      return 0;
+    }
+    dl_iterate_phdr( print_loaded, &i );
+  }
   return handle;
 }
 
@@ -286,6 +295,7 @@ ldpip_colon_sep_path( char *colon_sep_path,
   EXPAND_PATH_LIST_BODY(colon_sep_path,for_each_path,argp,flag,pathp,errp);
 }
 
+#ifdef PIP_PRELOAD
 static int ldpip_foreach_preload( char *path, 
 				  void **unused_argp, 
 				  int unused_flag, 
@@ -301,12 +311,10 @@ static int ldpip_foreach_preload( char *path,
 	     !( st.st_mode & S_IRGRP ) &&
 	     !( st.st_mode & S_IROTH ) ) {
     ldpip_warning( "Specified preload object (%s) is not readable", path );
-  } else if( ldpip_dlopen( path, RTLD_LAZY ) == NULL ) {
-    ldpip_warning( "Specified preload object (%s) is not loadable", path );
+  } else if( ldpip_dlopen( path, DLOPEN_FLAGS|RTLD_DEEPBIND ) == NULL ) {
+    ldpip_warning( "Unable to load preload object (%s): %s", path, dlerror() );
   } else {
-    if( ldpip_dlopen( path, RTLD_LAZY ) == NULL ) {
-      ldpip_warning( "Unable to load preload object (%s): ", path, dlerror() );
-    }
+    printf( "### %s is preloaded\n", path );
   }
   return 0;
 }
@@ -316,6 +324,7 @@ static void ldpip_preload( char *env ) {
     ldpip_colon_sep_path( env, ldpip_foreach_preload, NULL, 1, NULL, NULL );
   }
 }
+#endif
 
 static void ldpip_libc_init( void ) {
   extern void __ctype_init( void );
@@ -450,9 +459,10 @@ static size_t ldpip_stack_size( void ) {
   ssize_t 	s, sz, scale, smax;
   struct rlimit rlimit;
 
-  if( ( env = getenv( PIP_ENV_STACKSZ ) ) == NULL &&
-      ( env = getenv( "KMP_STACKSIZE" ) ) == NULL &&
-      ( env = getenv( "OMP_STACKSIZE" ) ) == NULL ) {
+  if( ( env = getenv( PIP_ENV_STACKSZ  ) ) == NULL &&
+      ( env = getenv( "KMP_STACKSIZE"  ) ) == NULL &&
+      ( env = getenv( "GOMP_STACKSIZE" ) ) == NULL &&
+      ( env = getenv( "OMP_STACKSIZE"  ) ) == NULL ) {
     sz = PIP_STACK_SIZE;	/* default */
   } else {
     if( ( sz = (ssize_t) strtoll( env, &endptr, 10 ) ) <= 0 ) {
@@ -484,7 +494,6 @@ static size_t ldpip_stack_size( void ) {
 	sz *= scale;
 	break;
       case 'B': case 'b':
-	for( s=PIP_STACK_SIZE_MIN; s<sz && s<smax; s*=2 );
 	break;
       default:
 	sz = PIP_STACK_SIZE;
@@ -493,8 +502,17 @@ static size_t ldpip_stack_size( void ) {
 		       env, sz );
 	break;
       }
-      sz = ( sz < PIP_STACK_SIZE_MIN ) ? PIP_STACK_SIZE_MIN : sz;
-      sz = ( sz > smax               ) ? smax               : sz;
+      if( sz < PIP_STACK_SIZE_MIN ) {
+	sz = PIP_STACK_SIZE_MIN;
+	ldpip_warning( "stacksize: '%s' is too samll and "
+		       "minimum size (%ldB) is used instead",
+		       env, sz );
+      } else if( sz > smax ) {
+	sz = smax;
+	ldpip_warning( "stacksize: '%s' is too large and "
+		       "maximum size (%ldB) is used instead",
+		       env, sz );
+      }
     }
   }
   return sz;
@@ -525,18 +543,19 @@ int __ldpip_load_prog( pip_root_t *root,
   /* from now on, getenv() can be called */
   SETUP_MALLOC_ARENA_ENV( root->ntasks );
   /* from now on, malloc() can be called */
-  
   ldpip_libc_setup( args );
-  ldpip_print_maps( "LDPIP", ldpip_task->loaded );
   ldpip_set_libc_ftab( ldpip_task );
+  ldpip_print_maps( "LDPIP", ldpip_task->loaded );
+#ifdef PIP_PRELOAD
   ldpip_preload( getenv( PIP_ENV_PRELOAD ) );
+#endif
   ASSERT( ( loaded = ldpip_load_libpip() ) != NULL );
-  ldpip_task->loaded = loaded;
   if( ( loaded =
 	ldpip_dlopen( args->prog_full, DLOPEN_FLAGS ) ) == NULL ) {
     err = ELIBEXEC;
     goto error;
   }
+  ldpip_task->loaded = loaded;
   ldpip_print_maps( "dlopen", loaded );
   /* in the following code, we cannot call dlsym() because the */
   /* dlsym() call in some glibc versions aborts, not returning */

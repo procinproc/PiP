@@ -114,11 +114,6 @@ extern int		pip_finalized   PIP_PRIVATE;
 #define PIP_EXIT_EXIT		(1)
 #define PIP_EXIT_PTHREAD	(2)
 
-#define PIP_STACK_SIZE		(8*1024*1024LU) /* 8 MiB */
-#define PIP_STACK_SIZE_MIN	(4*1024*1024LU) /* 1 MiB */
-#define PIP_STACK_SIZE_MAX	(16*1024*1024*1024LU) /* 16 GiB */
-#define PIP_STACK_ALIGN		(256)
-
 #define PIP_MINSIGSTKSZ 	(MINSIGSTKSZ*16)
 
 #define PIP_CLONE_LOCK_UNLOCKED		(0)
@@ -131,9 +126,9 @@ extern int		pip_finalized   PIP_PRIVATE;
 #define PIP_NORETURN		__attribute__((noreturn))
 
 #ifdef RTLD_DEEPBIND
-#define DLOPEN_FLAGS	  (RTLD_NOW | RTLD_DEEPBIND)
+#define DLOPEN_FLAGS		  (RTLD_NOW | RTLD_DEEPBIND)
 #else
-#define DLOPEN_FLAGS	  (RTLD_NOW)
+#define DLOPEN_FLAGS		  (RTLD_NOW)
 #endif
 
 typedef	int(*main_func_t)(int,char**,char**);
