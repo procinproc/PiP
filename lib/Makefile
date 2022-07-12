@@ -41,19 +41,19 @@ include $(top_srcdir)/build/var.mk
 SO_MAJOR = 0
 LIBNAME  = libpip.so
 LIBRARY  = $(LIBNAME).$(SO_MAJOR)
-
-LDPIP    = ldpip.so
+LDPIPNAME = ldpip.so
+LDPIP     = $(LDPIPNAME).$(SO_MAJOR)
 
 LDFLAGS_PIP = -shared -Wl,-soname -Wl,$(LIBRARY) $(PTHREAD_FLAG)
 
-SO_MAJOR_XPMEM = 0
+SO_XPMEM = 0
 LIBNAME_XPMEM = libxpmem.so
-LIBRARY_XPMEM = $(LIBNAME_XPMEM).$(SO_MAJOR_XPMEM)
+LIBRARY_XPMEM = $(LIBNAME_XPMEM).$(SO_MAJOR)
 
 LIBRARIES = $(LIBRARY) $(LDPIP) $(LIBRARY_XPMEM)
 
 CPPFLAGS += $(PIP_CPPFLAGS) \
-	-DLDPIP_NAME=\"$(LDPIP)\" \
+	-DLDPIP_NAME=\"$(LDPIPNAME)\" \
 	-DPIPLIB_NAME=\"$(LIBNAME)\" \
 	-DPIP_INSTALL_GLIBCDIR=\"$(glibc_libdir)\" \
 	-DLDLINUX=\"$(dynamic_linker)\" \
@@ -95,6 +95,8 @@ $(LDPIP): $(SRC_LDPIP) $(DEPINCS) $(DEPCONFIG) Makefile
 	$(PIE_LDFLAG) $(RDYNAMIC_FLAG)
 	make -C ../bin pip-unpie
 	../bin/pip-unpie $(LDPIP)
+	$(RM) $(LDPIPNAME)
+	ln -s $(LDPIP) $(LDPIPNAME)
 
 $(LIBRARY_XPMEM): $(OBJS_XPMEM) $(DEPINCS) $(DEPCONFIG) Makefile
 	$(CC) $(OBJS_XPMEM) -shared -o $@
@@ -107,8 +109,10 @@ install:
 		$(DESTDIR)$(libdir)/$(LDPIP) \
 		$(DESTDIR)$(libdir)/$(LIBRARY_XPMEM)
 	$(RM) $(DESTDIR)$(libdir)/$(LIBNAME) \
+		$(DESTDIR)$(libdir)/$(LDPIPNAME) \
 		$(DESTDIR)$(libdir)/$(LIBNAME_XPMEM)
 	ln -s $(LIBRARY) $(DESTDIR)$(libdir)/$(LIBNAME)
+	ln -s $(LDPIP) $(DESTDIR)$(libdir)/$(LDPIPNAME)
 	ln -s $(LIBRARY_XPMEM) $(DESTDIR)$(libdir)/$(LIBNAME_XPMEM)
 
 debug:
