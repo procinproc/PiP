@@ -418,6 +418,8 @@ static int ldpip_search_libpip_itr( struct dl_phdr_info *info,
 
 static void *ldpip_load( void *vargs ) {
   pip_spawn_args_t *args = vargs;
+  pip_root_t *root = args->pip_root;
+  pip_task_t *task = args->pip_task;
   pip_start_task_t start_task;
   void	*retv;
   char  **envv = args->envvec.vec;
@@ -426,12 +428,12 @@ static void *ldpip_load( void *vargs ) {
 
   ENTER;
   ldpip_libc_init();
-  ldpip_task->thread = pthread_self();
-  ldpip_task->pid    = getpid();
-  ldpip_task->tid    = ldpip_gettid();
-  ldpip_set_name( ldpip_root, ldpip_task );
+  task->thread = pthread_self();
+  task->pid    = getpid();
+  task->tid    = ldpip_gettid();
+  ldpip_set_name( root, task );
   /* resume root after setting above variables */
-  pip_sem_post( &ldpip_root->sync_spawn );
+  pip_sem_post( &root->sync_spawn );
   {
     /* here, do not call pthread_setaffinity(). This MAY fail */
     /* because pd->tid is NOT set yet.  I do not know why.    */
@@ -442,15 +444,13 @@ static void *ldpip_load( void *vargs ) {
       ldpip_warning( "Unable to bind CPU core:%d (%d)", coreno, err );
     }
   }
-  ASSERT( ( start_task = (pip_start_task_t) 
-	    ldpip_dlsym( ldpip_task->loaded, "__pip_start_task" ) ) != NULL );
 
-  retv = start_task( ldpip_root, 
-		     ldpip_task, 
-		     args, 
-		     err, 
-		     ldpip_err_mesg, 
-		     ldpip_warn_mesg );
+  retv = task->start_task( root, 
+			   task, 
+			   args, 
+			   err, 
+			   ldpip_err_mesg, 
+			   ldpip_warn_mesg );
   return retv;
 }
 
@@ -527,6 +527,7 @@ int __ldpip_load_prog( pip_root_t *root,
 		       char **err_mesg ) {
   extern char **environ;
   pip_clone_mostly_pthread_t libc_clone;
+  pip_start_task_t start_task;
   char **envv = args->envvec.vec;
   char *start_func;
   void *loaded;
@@ -550,13 +551,16 @@ int __ldpip_load_prog( pip_root_t *root,
   ldpip_preload( getenv( PIP_ENV_PRELOAD ) );
 #endif
   ASSERT( ( loaded = ldpip_load_libpip() ) != NULL );
+  ASSERT( ( start_task = (pip_start_task_t) 
+	    ldpip_dlsym( loaded, "__pip_start_task" ) ) != NULL );
+  ldpip_task->start_task = start_task;
   if( ( loaded =
 	ldpip_dlopen( args->prog_full, DLOPEN_FLAGS ) ) == NULL ) {
     err = ELIBEXEC;
     goto error;
   }
-  ldpip_task->loaded = loaded;
   ldpip_print_maps( "dlopen", loaded );
+  ldpip_task->loaded = loaded;
   /* in the following code, we cannot call dlsym() because the */
   /* dlsym() call in some glibc versions aborts, not returning */
   /* an error, when a symbol is not found. this happens when   */
@@ -606,6 +610,9 @@ int __ldpip_load_prog( pip_root_t *root,
     break;
   }
   if( err ) goto error;
+
+  args->pip_root = root;
+  args->pip_task = task;
 
   ldpip_clone_orig = ldpip_dlsym( RTLD_NEXT, CLONE_SYSCALL );
   ASSERT( ldpip_clone_orig != NULL );

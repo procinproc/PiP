@@ -82,6 +82,7 @@
 
 struct pip_root;
 struct pip_task;
+struct pip_spawn_args;
 
 #include <pip/pip_config.h>
 #include <pip/pip.h>
@@ -145,6 +146,13 @@ int(*clone_syscall_t)(int(*)(void*), void*, int, void*, pid_t*, void*, pid_t*);
 typedef int (*pip_clone_mostly_pthread_t) 
 (pthread_t*, int, int, size_t, void*(*)(void *), void*, pid_t*);
 
+typedef void*(*pip_start_task_t)( struct pip_root*, 
+				  struct pip_task*, 
+				  struct pip_spawn_args*, 
+				  int,
+				  char*,
+				  char* );
+
 typedef struct pip_symbols {
   main_func_t		main;	      /* main function address */
   start_func_t		start;	      /* strat function instead of main */
@@ -176,7 +184,9 @@ typedef struct pip_spawn_args {
   void			*start_arg;
   pip_char_vec_t	argvec;
   pip_char_vec_t	envvec;
-  void			*__reserved__[16]; /* reserved for future use */
+  struct pip_root	*pip_root;
+  struct pip_task	*pip_task;
+  void			*__reserved__[14]; /* reserved for future use */
 } pip_spawn_args_t;
 
 /* The following env vars must be copied */
@@ -244,7 +254,8 @@ typedef struct pip_task {
 
   sigset_t		*debug_signals;
   /* reserved for future use */
-  void			*__reserved__[16];
+  pip_start_task_t 	start_task;
+  void			*__reserved__[15];
 } pip_task_t;
 
 #define PIP_FILLER_SZ	(PIP_CACHE_SZ-sizeof(pip_spinlock_t))
@@ -369,13 +380,6 @@ typedef struct pip_root {
   /* tasks */
   pip_task_t		tasks[];
 } pip_root_t;
-
-typedef void*(*pip_start_task_t)( pip_root_t*, 
-				  pip_task_t*, 
-				  pip_spawn_args_t*, 
-				  int,
-				  char*,
-				  char* );
 
 #ifndef __W_EXITCODE
 #define __W_EXITCODE(retval,signal)	( (retval) << 8 | (signal) )
