@@ -1,4 +1,4 @@
-#!@python@
+#!/bin/sh
 # -*- mode:python -*-
 
 # $PIP_license: <Simplified BSD License>
@@ -27,7 +27,7 @@
 # $RIKEN_copyright: Riken Center for Computational Sceience (R-CCS),
 # System Software Development Team, 2016-2022
 # $
-# PIP_VERSION: Version @PACKAGE_VERSION@
+# PIP_VERSION: Version 2.4.1
 #
 # $Author: Atsushi Hori
 # Query:   procinproc-info@googlegroups.com
@@ -204,7 +204,20 @@
 # @}
 # @}
 
-"pips: Show status of runnning PiP tasks"
+# This file is bilingual. The following shell code finds our preferred python.
+# Following line is a shell no-op, and starts a multi-line Python comment.
+# See https://stackoverflow.com/a/47886254
+""":"
+#pips: Show status of runnning PiP tasks
+# Find a suitable python interpreter (adapt for your specific needs) 
+for cmd in python3 python2 python; do
+   command -v > /dev/null $cmd && exec $cmd $0 "$@"
+done
+echo "==> Error: pips could not find a python interpreter!" >&2
+exit 1
+":"""
+# Line above is a shell no-op, and ends a python multi-line comment.
+# The code above runs this file with our preferred python interpreter.
 
 from __future__ import print_function
 import os
@@ -895,3 +908,4 @@ if check_gen is not None or check_out is not None:
 
 if error:
     sys.exit( 1 )
+sys.exit( 0 )
