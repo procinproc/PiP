@@ -126,13 +126,6 @@ AC_ARG_VAR([FC], [Fortran compiler command])
 AC_CHECK_PROGS([FC],[gfortran g95 g77])
 AC_SUBST(FC)
 
-AC_CHECK_PROGS([PYTHON],[python3 python36 python38 python2 python],[false])
-if test x"${PYTHON}" == x"false" ; then
-  AC_MSG_ERROR([can't find python.])
-fi
-python=`type -P ${PYTHON} 2>/dev/null`
-AC_SUBST(python)
-
 AC_ARG_VAR([CFLAG_PIC], [PIC compiler flag (default -fPIC)])
 if test x"${CFLAG_PIC}" = "xno" ; then
    CFLAG_PIC=""
@@ -206,7 +199,6 @@ AC_CONFIG_FILES([
 	release/version.conf
 	package/redhat/process-in-process.spec
 	bin/pipcc.in
-	bin/pips.py
 	bin/pip-mode
 	bin/pip-check
 	bin/pip-man
