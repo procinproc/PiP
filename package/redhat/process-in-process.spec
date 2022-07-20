@@ -73,11 +73,12 @@ make DESTDIR="$RPM_BUILD_ROOT" doc
 %attr(0755,root,root) %{_bindir}/printpipmode
 # libs
 %defattr(-,root,root)
-%attr(0755,root,root) %{_libdir}/ldpip.so
+%attr(0755,root,root) %{_libdir}/ldpip.so.%{libpip_version}
 %attr(0755,root,root) %{_libdir}/libpip.so.%{libpip_version}
 %attr(0755,root,root) %{_libdir}/libxpmem.so.%{libxpmem_version}
 # devel
 %{_prefix}/include
+%{_libdir}/ldpip.so
 %{_libdir}/libpip.so
 %{_libdir}/libxpmem.so
 #doc
